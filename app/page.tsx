@@ -9,7 +9,7 @@ export default function HomePage() {
           </h1>
           <p className="mt-6 text-lg md:text-xl text-gray-300">
             Explore a intersecção entre design e tecnologia. Uma experiência web
-            imersiva construída com Next.js, Tailwind CSS e Three.js.
+            imersiva construída WebGL.
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <button className="px-6 py-3 font-semibold text-white bg-blue-600 rounded-lg shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-105">
