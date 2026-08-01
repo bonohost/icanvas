@@ -1,7 +1,6 @@
-// Este arquivo é necessário para que o TypeScript entenda as tags customizadas do A-Frame
-// como elementos JSX válidos.
+import * as React from 'react';
 
-declare global {
+declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
       'a-scene': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { [key: string]: any }, HTMLElement>;

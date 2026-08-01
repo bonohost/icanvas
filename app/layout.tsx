@@ -1,23 +1,23 @@
-
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import Scene from "./components/canvas/Scene";
 import Header from "./components/ui/Header";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-mono',
 });
 
 export const metadata: Metadata = {
-  title: "Meu Portfólio 3D",
-  description: "Uma vitrine interativa construída com Next.js e Three.js",
+  title: "iCanvas - Visualização 3D de Próxima Geração",
+  description: "Simuladores interativos WebGL para canecas, móveis e ambientes 360.",
 };
 
 export default function RootLayout({
@@ -26,7 +26,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-br" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="pt-br" className={`dark ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+      </head>
       <body>
         <Header />
         {/* O conteúdo da página (children) é renderizado aqui */}

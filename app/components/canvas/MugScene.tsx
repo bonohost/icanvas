@@ -1,28 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Environment, Center } from '@react-three/drei';
-import { Mesh, CanvasTexture, SRGBColorSpace } from 'three';
+import { useMemo, useRef, useState } from 'react';
+import { useFrame, useLoader } from '@react-three/fiber';
+import { OrbitControls, Environment, Center } from '@react-three/drei';
+import { CanvasTexture, Group, SRGBColorSpace } from 'three';
+import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 
-// Simples placeholder para o modelo da caneca
 function Mug(props: any) {
-  const meshRef = useRef<Mesh>(null!);
-  // Substitua 'mug.glb' pelo caminho do seu modelo
-  // const { nodes } = useGLTF('/models/mug.glb');
+  const groupRef = useRef<Group>(null!);
+  const collada = useLoader(ColladaLoader, '/3dmodels/mug/caneca.dae');
 
   useFrame((state, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.5;
+    if (groupRef.current) {
+      groupRef.current.rotation.y += delta * 0.5;
     }
   });
 
   return (
-    // <mesh geometry={nodes.Mug.geometry} {...props} ref={meshRef} />
-    // Usando um cilindro como placeholder:
-    <mesh {...props} ref={meshRef}>
-      <cylinderGeometry args={[1, 1, 2, 64]} />
-    </mesh>
+    <group {...props} ref={groupRef}>
+      <primitive object={collada.scene} dispose={null} />
+    </group>
   );
 }
 

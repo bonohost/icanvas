@@ -1,14 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Viewer360Scene() {
+  const [aframeLoaded, setAframeLoaded] = useState(false);
+
   useEffect(() => {
     // A-Frame não é um módulo ES padrão. Importamos dinamicamente
     // aqui para garantir que ele só seja executado no lado do cliente,
     // após a montagem do componente. Isso evita o erro "require() is forbidden".
-    import('aframe');
+    import('aframe').then(() => {
+      setAframeLoaded(true);
+    });
   }, []);
+
+  if (!aframeLoaded) {
+    return null; // Aguarda o A-Frame carregar antes de montar as tags
+  }
 
   return (
     // A-Frame assume o controle total deste container.
@@ -19,8 +27,8 @@ export default function Viewer360Scene() {
         vr-mode-ui="enabled: false" // Desabilita o botão de VR se não for necessário
         cursor="rayOrigin: mouse; fuse: false"
       >
-        {/* Imagem 360° de alta resolução. Coloque-a em /public/360/panorama.jpg */}
-        <a-sky src="/360/panorama.jpg" rotation="0 -130 0"></a-sky>
+        {/* Imagem 360° de alta resolução. O asset está em /public/textures/360/room.jpg */}
+        <a-sky src="/textures/360/room.jpg" rotation="0 -130 0"></a-sky>
 
         {/* Exemplo de Hotspot interativo */}
         <a-box
@@ -33,7 +41,7 @@ export default function Viewer360Scene() {
         ></a-box>
 
         {/* Câmera com controles de giroscópio para mobile e arrastar para desktop */}
-        <a-camera look-controls-enabled="true" wasd-controls-enabled="false"></a-camera>
+        <a-camera look-controls="enabled: true" wasd-controls="enabled: false"></a-camera>
       </a-scene>
     </div>
   );
