@@ -4,7 +4,7 @@ export default function HomePage() {
   return (
     <>
       {/* Main Content */}
-      <main className="flex-grow z-10 pt-24 md:pt-32 px-margin-mobile md:px-margin-desktop flex flex-col items-center">
+      <main className="flex-grow z-10 relative pt-24 md:pt-32 px-margin-mobile md:px-margin-desktop flex flex-col items-center">
         
         {/* Hero Section */}
         <section className="text-center max-w-4xl mx-auto py-20 md:py-32 flex flex-col items-center">
