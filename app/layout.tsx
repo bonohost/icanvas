@@ -1,7 +1,8 @@
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Scene from "./components/canvas/Scene";
-import LayoutCanvas from "./components/canvas/LayoutCanvas";
+import Header from "./components/ui/Header";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,13 +28,12 @@ export default function RootLayout({
   return (
     <html lang="pt-br" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
+        <Header />
         {/* O conteúdo da página (children) é renderizado aqui */}
         {children}
 
         {/* O Canvas 3D é gerenciado por um Client Component para evitar erros */}
-        <LayoutCanvas>
-          <Scene />
-        </LayoutCanvas>
+        <Scene />
       </body>
     </html>
   );

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <>
@@ -12,12 +14,12 @@ export default function HomePage() {
             imersiva construída WebGL.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <button className="px-6 py-3 font-semibold text-white bg-blue-600 rounded-lg shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-105">
-              Começar Projeto
-            </button>
-            <button className="px-6 py-3 font-semibold text-gray-200 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition-colors">
+            <Link href="/mug-simulator" className="px-6 py-3 font-semibold text-white bg-blue-600 rounded-lg shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-105">
+              Começar a Explorar
+            </Link>
+            <a href="https://github.com/seu-usuario" target="_blank" rel="noopener noreferrer" className="px-6 py-3 font-semibold text-gray-200 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-700/50 transition-colors">
               Ver GitHub
-            </button>
+            </a>
           </div>
         </div>
 

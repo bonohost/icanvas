@@ -1,39 +1,51 @@
 'use client';
 
-import { useFrame } from '@react-three/fiber';
-import { Icosahedron } from '@react-three/drei';
-import { useRef } from 'react';
-import { Mesh } from 'three';
+import { Suspense, lazy, ReactElement } from 'react';
+import { usePathname } from 'next/navigation';
+import { Preload } from '@react-three/drei';
+import { Canvas } from '@react-three/fiber';
 
-function HeroObject() {
-  const meshRef = useRef<Mesh>(null!);
+// Carregamento sob demanda (Lazy Loading) dos componentes de cena
+const HomeScene = lazy(() => import('./HomeScene'));
+const MugScene = lazy(() => import('./MugScene'));
+const SofaScene = lazy(() => import('./SofaScene'));
+const Viewer360Scene = lazy(() => import('./Viewer360Scene'));
 
-  // useFrame para animar o objeto em cada frame
-  useFrame((state, delta) => {
-    // Rotação contínua
-    meshRef.current.rotation.y += delta * 0.2;
-    // Movimento sutil de "flutuação" usando o tempo do estado
-    meshRef.current.position.y = Math.sin(state.clock.elapsedTime) * 0.2;
-  });
+const scenes = {
+  '/': <HomeScene />,
+  '/mug-simulator': <MugScene />,
+  '/sofa-customizer': <SofaScene />,
+  '/360-viewer': <Viewer360Scene />,
+} as const;
+
+export default function Scene(): ReactElement | null {
+  const pathname = usePathname();
+
+  // Seleciona a cena com base na rota atual, com fallback para a HomeScene
+  const CurrentSceneComponent = scenes[pathname as keyof typeof scenes] || <HomeScene />;
+
+  // A-Frame manipula o DOM diretamente e não pode ser renderizado dentro de um Canvas R3F.
+  // Portanto, tratamos como um caso especial, renderizando-o em sua própria div.
+  if (pathname === '/360-viewer') {
+    return (
+      <div className="fixed top-0 left-0 w-full h-full -z-10">
+        <Suspense fallback={null}>
+          <Viewer360Scene />
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
-    // Usamos um Icosaedro para um visual mais "tech"
-    <Icosahedron ref={meshRef} args={[1.5, 0]} position={[0, 0, 0]}>
-      {/* O material wireframe é ótimo para um look de "planta baixa" 3D */}
-      <meshStandardMaterial color="#0077ff" wireframe />
-    </Icosahedron>
-  );
-}
-
-export default function Scene() {
-  return (
-    <>
-      {/* Luzes são essenciais para que os materiais sejam visíveis */}
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1.5} />
-      <pointLight position={[-5, -5, -5]} intensity={0.5} color="blue" />
-
-      <HeroObject />
-    </>
+    // Para todas as outras cenas, usamos o Canvas do React Three Fiber.
+    // A div externa desabilita os eventos de ponteiro para não bloquear o conteúdo da página.
+    <div className="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none">
+      <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+        <Suspense fallback={null}>
+          {CurrentSceneComponent}
+          <Preload all />
+        </Suspense>
+      </Canvas>
+    </div>
   );
 }
