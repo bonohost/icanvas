@@ -172,7 +172,6 @@ export default function Viewer360Scene() {
           position="-1 1.5 -3"
           rotation="0 45 0"
           color="#4CC3D9"
-          shadow
           draggable="planeY: 1.5"
         ></a-box>
 
@@ -180,7 +179,6 @@ export default function Viewer360Scene() {
           position="-1 0 -3"
           rotation="0 45 0"
           color="#21a196"
-          shadow
           draggable="planeY: 0"
         ></a-box>
 

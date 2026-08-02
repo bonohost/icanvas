@@ -10,6 +10,10 @@ function Mug(props: any) {
   const groupRef = useRef<Group>(null!);
   const collada = useLoader(ColladaLoader, '/3dmodels/mug/caneca.dae');
 
+  if (!collada) {
+    return null;
+  }
+
   useFrame((state, delta) => {
     if (groupRef.current) {
       groupRef.current.rotation.y += delta * 0.5;
