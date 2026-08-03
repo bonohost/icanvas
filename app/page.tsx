@@ -9,10 +9,10 @@ export default function HomePage() {
         {/* Hero Section */}
         <section className="text-center max-w-4xl mx-auto py-20 md:py-32 flex flex-col items-center">
           <h1 className="font-display-lg text-display-lg font-bold text-on-background mb-6 tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
-            Visualização 3D de Próxima Geração
+            WEGBL 3D para o seu produto ou serviço. Seu cliente simula, seu cliente compra.
           </h1>
           <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto mb-12 text-lg">
-            Simuladores interativos WebGL para canecas, móveis e ambientes 360. Transforme a experiência do seu produto com renderização em tempo real de altíssima fidelidade.
+            De ao seu cliente a oportunidade de visualizar e interagir com seu produto em 3D, diretamente no navegador. Experimente a imersão total com o iCanvas.
           </p>
           <Link href="/mug-simulator" className="bg-primary-container text-on-primary-container font-button-md text-button-md px-8 py-4 rounded-lg hover:opacity-90 transition-opacity active:scale-95 shadow-[0_0_30px_rgba(37,99,235,0.3)] flex items-center gap-2">
             Começar Agora

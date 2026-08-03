@@ -17,9 +17,25 @@ export default function Viewer360Scene() {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      const entity = entityRef.current;
+
       if (event.ctrlKey && event.key.toLowerCase() === 'j') {
         event.preventDefault();
         setDebugVisible((current) => !current);
+      }
+
+      if (!entity?.object3D) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        entity.object3D.rotation.y -= (10 * Math.PI) / 180;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        entity.object3D.rotation.y += (10 * Math.PI) / 180;
       }
     };
 
@@ -110,13 +126,15 @@ export default function Viewer360Scene() {
       const { x, y, z } = entity.object3D.position;
       const { x: rx, y: ry, z: rz } = entity.object3D.rotation;
 
+      const toDegrees = (value: number) => Number((value * (180 / Math.PI)).toFixed(2));
+
       setEntityPose({
         x: Number(x.toFixed(2)),
         y: Number(y.toFixed(2)),
         z: Number(z.toFixed(2)),
-        rx: Number(rx.toFixed(2)),
-        ry: Number(ry.toFixed(2)),
-        rz: Number(rz.toFixed(2)),
+        rx: toDegrees(rx),
+        ry: toDegrees(ry),
+        rz: toDegrees(rz),
       });
     };
 
@@ -154,8 +172,9 @@ export default function Viewer360Scene() {
         >
           <strong>Debug pose</strong>
           <div>position: x {entityPose.x} / y {entityPose.y} / z {entityPose.z}</div>
-          <div>rotation: x {entityPose.rx} / y {entityPose.ry} / z {entityPose.rz}</div>
+          <div>rotation: x {entityPose.rx} / y {entityPose.ry} / z {entityPose.rz}°</div>
           <div>Ctrl+J: alterna o painel</div>
+          <div>← / →: gira 10° no eixo Y</div>
         </div>
       )}
 
@@ -189,7 +208,7 @@ export default function Viewer360Scene() {
           rotation="0 -45 0"
           draggable="planeY: 0"
           scale="1 1 1"
-          visible="true"
+          visible="true"  
         ></a-entity>
 
 
