@@ -216,10 +216,10 @@ export default function StudioPage() {
       </header>
 
       {/* Main Studio Area (Catalog + 3D Viewport + Properties) */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative min-h-0 h-full">
         <CatalogSidebar onAdd={handleAdd} />
 
-        <main className="relative flex-1 bg-[#020617] overflow-hidden">
+        <main className="relative flex-1 bg-[#0b0f19] overflow-hidden h-full min-h-0">
           <ThreeViewport
             room={room}
             furniture={furniture}

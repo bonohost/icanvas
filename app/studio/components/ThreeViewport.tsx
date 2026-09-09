@@ -54,6 +54,7 @@ export default function ThreeViewport({
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
 
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const topLightRef = useRef<THREE.DirectionalLight | null>(null);
 
   const createTextSprite = (message: string) => {
@@ -61,7 +62,7 @@ export default function ThreeViewport({
     const context = canvas.getContext('2d')!;
     canvas.width = 256;
     canvas.height = 64;
-    context.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    context.fillStyle = 'rgba(15, 23, 42, 0.95)';
     context.fillRect(0, 0, 256, 64);
     context.strokeStyle = '#2563eb';
     context.lineWidth = 4;
@@ -134,76 +135,62 @@ export default function ThreeViewport({
 
   // Initialize Scene, Camera, Renderer, Lights, Controls
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const scene = new THREE.Scene();
-
-    // Studio Background
-    const skyGeo = new THREE.SphereGeometry(40, 64, 64);
-    const skyMat = new THREE.ShaderMaterial({
-      uniforms: {
-        topColor: { value: new THREE.Color('#0b0f19') },
-        bottomColor: { value: new THREE.Color('#020617') },
-        offset: { value: 0 },
-        exponent: { value: 0.6 },
-      },
-      vertexShader: `
-        varying vec3 vWorldPosition;
-        void main() {
-          vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
-          vWorldPosition = worldPosition.xyz;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 topColor;
-        uniform vec3 bottomColor;
-        uniform float offset;
-        uniform float exponent;
-        varying vec3 vWorldPosition;
-        void main() {
-          float h = normalize( vWorldPosition + offset ).y;
-          gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h + 0.5, 0.0 ), exponent ), 0.0 ) ), 1.0 );
-        }
-      `,
-      side: THREE.BackSide,
-    });
-    scene.add(new THREE.Mesh(skyGeo, skyMat));
+    scene.background = new THREE.Color('#0b0f19');
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(cameraSettings.fov, 1, 0.1, 1000);
+    const width = Math.max(container.clientWidth, 400);
+    const height = Math.max(container.clientHeight, 300);
+
+    const camera = new THREE.PerspectiveCamera(cameraSettings.fov, width / height, 0.1, 1000);
     camera.position.set(cameraSettings.x, cameraSettings.y, cameraSettings.z);
+    camera.layers.enable(LAYER_DEFAULT);
     camera.layers.enable(LAYER_TECHNICAL);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+    renderer.toneMappingExposure = 1.25;
+    renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.target.set(0, room.height * 0.4, 0);
+    controls.update();
     controlsRef.current = controls;
 
+    // Rich Lighting
     const ambientLight = new THREE.AmbientLight('#ffffff', 0.9);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
+    const hemiLight = new THREE.HemisphereLight('#ffffff', '#1e293b', 0.7);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+    hemiLightRef.current = hemiLight;
+
     const topLight = new THREE.DirectionalLight('#ffffff', 1.8);
-    topLight.position.set(3, 10, 3);
+    topLight.position.set(4, 12, 4);
     topLight.castShadow = true;
     topLight.shadow.mapSize.set(2048, 2048);
     topLight.shadow.radius = 4;
     topLight.shadow.bias = -0.0005;
     scene.add(topLight);
     topLightRef.current = topLight;
+
+    const fillLight = new THREE.DirectionalLight('#93c5fd', 0.6);
+    fillLight.position.set(-5, 6, -5);
+    scene.add(fillLight);
 
     scene.add(furnitureGroupRef.current);
     scene.add(wallsGroupRef.current);
@@ -222,7 +209,7 @@ export default function ThreeViewport({
             const camToWall = new THREE.Vector3().subVectors(w.position, cameraRef.current!.position).normalize();
             const dot = wallNormal.dot(camToWall);
             w.material.transparent = dot > 0.15;
-            w.material.opacity = dot > 0.15 ? 0.18 : 1.0;
+            w.material.opacity = dot > 0.15 ? 0.15 : 1.0;
           }
         });
       }
@@ -233,22 +220,25 @@ export default function ThreeViewport({
     };
     animate();
 
-    const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
-      cameraRef.current.aspect = width / height;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(width, height);
-    };
-    window.addEventListener('resize', handleResize);
+    // Auto-Resize Observer
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0 && cameraRef.current && rendererRef.current) {
+          cameraRef.current.aspect = w / h;
+          cameraRef.current.updateProjectionMatrix();
+          rendererRef.current.setSize(w, h);
+        }
+      }
+    });
+    resizeObserver.observe(container);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       renderer.dispose();
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (container && renderer.domElement) {
+        container.removeChild(renderer.domElement);
       }
     };
   }, []);
@@ -258,6 +248,7 @@ export default function ThreeViewport({
     if (!sceneRef.current) return;
 
     if (ambientLightRef.current) ambientLightRef.current.intensity = room.lightIntensity * 0.9;
+    if (hemiLightRef.current) hemiLightRef.current.intensity = room.lightIntensity * 0.7;
     if (topLightRef.current) topLightRef.current.intensity = room.lightIntensity * 1.8;
 
     wallsGroupRef.current.clear();
@@ -289,7 +280,7 @@ export default function ThreeViewport({
       const geo = new THREE.BoxGeometry(w, h, WALL_THICKNESS);
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(room.walls[id].color),
-        roughness: 0.9,
+        roughness: 0.85,
       });
       applyTexture(mat, room.walls[id].textureUrl, room.walls[id].tileX, room.walls[id].tileY);
       const mesh = new THREE.Mesh(geo, mat);
@@ -630,5 +621,5 @@ export default function ThreeViewport({
     };
   }, [room, snapOn, collisionOn, onSelect, onUpdatePosition, onDropFurniture, updateRulers]);
 
-  return <div ref={containerRef} className="w-full h-full relative select-none" />;
+  return <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden" />;
 }
