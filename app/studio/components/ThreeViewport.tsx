@@ -169,27 +169,41 @@ export default function ThreeViewport({
     controls.update();
     controlsRef.current = controls;
 
-    // Rich Lighting
-    const ambientLight = new THREE.AmbientLight('#ffffff', 0.9);
+    // Ambient and Hemisphere Lighting
+    const ambientLight = new THREE.AmbientLight('#ffffff', 0.85);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    const hemiLight = new THREE.HemisphereLight('#ffffff', '#1e293b', 0.7);
+    const hemiLight = new THREE.HemisphereLight('#ffffff', '#1e293b', 0.6);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
+    // Directional Sunlight with full architectural shadows
     const topLight = new THREE.DirectionalLight('#ffffff', 1.8);
-    topLight.position.set(4, 12, 4);
+    topLight.position.set(6, 12, 5);
     topLight.castShadow = true;
     topLight.shadow.mapSize.set(2048, 2048);
-    topLight.shadow.radius = 4;
-    topLight.shadow.bias = -0.0005;
+    topLight.shadow.radius = 3;
+    topLight.shadow.bias = -0.0001;
+    topLight.shadow.normalBias = 0.02;
+
+    const d = 12;
+    topLight.shadow.camera.left = -d;
+    topLight.shadow.camera.right = d;
+    topLight.shadow.camera.top = d;
+    topLight.shadow.camera.bottom = -d;
+    topLight.shadow.camera.near = 0.5;
+    topLight.shadow.camera.far = 40;
+    topLight.shadow.camera.updateProjectionMatrix();
+
+    topLight.target.position.set(0, 0, 0);
+    scene.add(topLight.target);
     scene.add(topLight);
     topLightRef.current = topLight;
 
-    const fillLight = new THREE.DirectionalLight('#93c5fd', 0.6);
-    fillLight.position.set(-5, 6, -5);
+    const fillLight = new THREE.DirectionalLight('#93c5fd', 0.4);
+    fillLight.position.set(-6, 8, -6);
     scene.add(fillLight);
 
     scene.add(furnitureGroupRef.current);
@@ -210,6 +224,7 @@ export default function ThreeViewport({
             const dot = wallNormal.dot(camToWall);
             w.material.transparent = dot > 0.15;
             w.material.opacity = dot > 0.15 ? 0.15 : 1.0;
+            w.castShadow = false;
           }
         });
       }
@@ -243,13 +258,21 @@ export default function ThreeViewport({
     };
   }, []);
 
-  // Update Room geometry, walls, floor, grid
+  // Update Room geometry, walls, floor, grid & shadow camera bounds
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    if (ambientLightRef.current) ambientLightRef.current.intensity = room.lightIntensity * 0.9;
-    if (hemiLightRef.current) hemiLightRef.current.intensity = room.lightIntensity * 0.7;
-    if (topLightRef.current) topLightRef.current.intensity = room.lightIntensity * 1.8;
+    if (ambientLightRef.current) ambientLightRef.current.intensity = room.lightIntensity * 0.85;
+    if (hemiLightRef.current) hemiLightRef.current.intensity = room.lightIntensity * 0.6;
+    if (topLightRef.current) {
+      topLightRef.current.intensity = room.lightIntensity * 1.8;
+      const maxRoomDim = Math.max(room.width, room.depth, room.height) * 1.6 + 4;
+      topLightRef.current.shadow.camera.left = -maxRoomDim;
+      topLightRef.current.shadow.camera.right = maxRoomDim;
+      topLightRef.current.shadow.camera.top = maxRoomDim;
+      topLightRef.current.shadow.camera.bottom = -maxRoomDim;
+      topLightRef.current.shadow.camera.updateProjectionMatrix();
+    }
 
     wallsGroupRef.current.clear();
 
@@ -281,12 +304,13 @@ export default function ThreeViewport({
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(room.walls[id].color),
         roughness: 0.85,
+        metalness: 0.05,
       });
       applyTexture(mat, room.walls[id].textureUrl, room.walls[id].tileX, room.walls[id].tileY);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
       mesh.rotation.y = ry;
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.userData = { isWall: true, wallId: id, w, h };
       wallsGroupRef.current.add(mesh);
@@ -302,11 +326,11 @@ export default function ThreeViewport({
     buildWall(room.depth, room.height, hw + HALF_WALL, hh, 0, -Math.PI / 2, 'right');
 
     if (floorRef.current) sceneRef.current.remove(floorRef.current);
-    const floorGeo = new THREE.PlaneGeometry(room.width, room.depth);
+    const floorGeo = new THREE.PlaneGeometry(room.width + 4, room.depth + 4);
     const floorMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(room.floorColor),
-      roughness: 0.4,
-      metalness: 0.1,
+      roughness: 0.45,
+      metalness: 0.05,
     });
     applyTexture(floorMat, room.floorTextureUrl, room.floorTileX, room.floorTileY);
     const floor = new THREE.Mesh(floorGeo, floorMat);
