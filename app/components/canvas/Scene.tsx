@@ -24,8 +24,7 @@ export default function Scene(): ReactElement | null {
   // Seleciona a cena com base na rota atual, com fallback para a HomeScene
   const CurrentSceneComponent = scenes[pathname as keyof typeof scenes] || <HomeScene />;
 
-  // A-Frame manipula o DOM diretamente e não pode ser renderizado dentro de um Canvas R3F.
-  // Portanto, tratamos como um caso especial, renderizando-o em sua própria div.
+  // A-Frame ou Studio gerenciam seus próprios Viewports interativos.
   if (pathname === '/360-viewer') {
     return (
       <div className="fixed top-0 left-0 w-full h-full z-0">
@@ -34,6 +33,10 @@ export default function Scene(): ReactElement | null {
         </Suspense>
       </div>
     );
+  }
+
+  if (pathname === '/studio') {
+    return null;
   }
 
   return (

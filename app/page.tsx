@@ -63,6 +63,19 @@ export default function HomePage() {
               <p className="font-body-md text-body-md text-on-surface-variant relative z-10">Imersão total em ambientes virtuais. Navegação panorâmica suave otimizada para web, proporcionando uma visão completa.</p>
             </Link>
 
+            {/* Studio 3D Card */}
+            <Link href="/studio" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden md:col-span-3 lg:col-span-1">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5 bg-slate-900 flex items-center justify-center">
+                <span className="material-symbols-outlined text-6xl text-primary/60 group-hover:text-primary group-hover:scale-110 transition-all">view_in_ar</span>
+              </div>
+              <div className="flex items-center gap-3 mb-3 relative z-10">
+                <span className="material-symbols-outlined text-primary text-[24px]">architecture</span>
+                <h3 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Studio 3D</h3>
+              </div>
+              <p className="font-body-md text-body-md text-on-surface-variant relative z-10">Planejador e configurador de ambientes 3D em tempo real com catálogo modular, snap magnético e réguas dinâmicas.</p>
+            </Link>
+
           </div>
         </section>
       </main>
