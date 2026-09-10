@@ -36,6 +36,8 @@ export interface WallSettings {
   textureUrl?: string;
   tileX: number;
   tileY: number;
+  roughness?: number;
+  metalness?: number;
 }
 
 export interface RoomSettings {
@@ -46,6 +48,8 @@ export interface RoomSettings {
   floorTextureUrl?: string;
   floorTileX: number;
   floorTileY: number;
+  floorRoughness?: number;
+  floorMetalness?: number;
   walls: {
     back: WallSettings;
     front: WallSettings;

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { FurnitureInstance, RoomSettings, WallSettings } from '../types/furniture';
-import { MATERIAL_OPTIONS } from '../lib/furniture-data';
+import { MATERIAL_OPTIONS, WALL_PBR_PRESETS, FLOOR_PBR_PRESETS } from '../lib/furniture-data';
 import {
   Trash2,
   Copy,
@@ -114,11 +114,31 @@ export default function PropertiesSidebar({
           </div>
         </div>
 
-        {/* Individual Walls */}
+        {/* Individual Walls & PBR Textures */}
         <div className="space-y-3 border-t border-white/10 pt-4">
-          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-            <Layers className="size-3.5 text-primary" /> Paredes Individuais
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="size-3.5 text-primary" /> Paredes PBR
+            </span>
+            <button
+              onClick={() => {
+                const current = room.walls[activeWallTab];
+                onUpdateRoom({
+                  ...room,
+                  walls: {
+                    back: { ...current },
+                    front: { ...current },
+                    left: { ...current },
+                    right: { ...current },
+                  },
+                });
+              }}
+              className="text-[10px] text-primary hover:underline font-medium"
+              title="Aplica a textura e cor atual a todas as 4 paredes"
+            >
+              Aplicar em Todas
+            </button>
+          </div>
 
           <div className="grid grid-cols-4 gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
             {(['back', 'front', 'left', 'right'] as const).map((side) => {
@@ -139,9 +159,48 @@ export default function PropertiesSidebar({
             })}
           </div>
 
+          {/* Wall Presets */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-on-surface-variant block">Texturas &amp; Acabamentos PBR</label>
+            <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {WALL_PBR_PRESETS.map((preset) => {
+                const isSelected =
+                  room.walls[activeWallTab].textureUrl === preset.textureUrl &&
+                  (!preset.textureUrl || room.walls[activeWallTab].color === preset.color);
+
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => {
+                      updateWall(activeWallTab, {
+                        textureUrl: preset.textureUrl,
+                        color: preset.color,
+                        roughness: preset.roughness,
+                        metalness: preset.metalness,
+                        tileX: preset.tileX || 1,
+                        tileY: preset.tileY || 1,
+                      });
+                    }}
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/20 text-white shadow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    <div
+                      className="size-4 rounded border border-white/30 flex-shrink-0"
+                      style={{ backgroundColor: preset.color }}
+                    />
+                    <span className="text-[10px] font-medium leading-tight truncate">{preset.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-on-surface-variant">Cor da Parede</span>
+              <span className="text-xs text-on-surface-variant">Tonalidade / Cor</span>
               <input
                 type="color"
                 value={room.walls[activeWallTab].color}
@@ -149,23 +208,141 @@ export default function PropertiesSidebar({
                 className="w-8 h-8 rounded-lg border border-white/20 bg-transparent cursor-pointer"
               />
             </div>
+
+            <div>
+              <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                <span>Rugosidade / Fosco</span>
+                <span className="font-mono text-primary">
+                  {Math.round((room.walls[activeWallTab].roughness ?? 0.85) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.05"
+                max="1.0"
+                step="0.05"
+                value={room.walls[activeWallTab].roughness ?? 0.85}
+                onChange={(e) => updateWall(activeWallTab, { roughness: parseFloat(e.target.value) })}
+                className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                <span>Repetição de Textura (Escala)</span>
+                <span className="font-mono text-primary">
+                  {room.walls[activeWallTab].tileX || 1}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="1"
+                value={room.walls[activeWallTab].tileX || 1}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value) || 1;
+                  updateWall(activeWallTab, { tileX: v, tileY: Math.max(1, Math.round(v / 1.5)) });
+                }}
+                className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Floor Settings */}
+        {/* Floor Settings PBR */}
         <div className="space-y-3 border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-            <Palette className="size-3.5 text-primary" /> Acabamento do Piso
+            <Palette className="size-3.5 text-primary" /> Piso &amp; Revestimento PBR
           </span>
 
-          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between">
-            <span className="text-xs text-on-surface-variant">Cor do Piso</span>
-            <input
-              type="color"
-              value={room.floorColor}
-              onChange={(e) => onUpdateRoom({ ...room, floorColor: e.target.value })}
-              className="w-8 h-8 rounded-lg border border-white/20 bg-transparent cursor-pointer"
-            />
+          {/* Floor Presets */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-on-surface-variant block">Pisos &amp; Porcelanatos Fotorrealistas</label>
+            <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {FLOOR_PBR_PRESETS.map((preset) => {
+                const isSelected =
+                  room.floorTextureUrl === preset.textureUrl &&
+                  (!preset.textureUrl || room.floorColor === preset.color);
+
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => {
+                      onUpdateRoom({
+                        ...room,
+                        floorTextureUrl: preset.textureUrl,
+                        floorColor: preset.color,
+                        floorRoughness: preset.roughness,
+                        floorMetalness: preset.metalness,
+                        floorTileX: preset.tileX || 4,
+                        floorTileY: preset.tileY || 4,
+                      });
+                    }}
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/20 text-white shadow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    <div
+                      className="size-4 rounded border border-white/30 flex-shrink-0"
+                      style={{ backgroundColor: preset.color }}
+                    />
+                    <span className="text-[10px] font-medium leading-tight truncate">{preset.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-on-surface-variant">Tonalidade do Piso</span>
+              <input
+                type="color"
+                value={room.floorColor}
+                onChange={(e) => onUpdateRoom({ ...room, floorColor: e.target.value })}
+                className="w-8 h-8 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                <span>Reflexo &amp; Polimento</span>
+                <span className="font-mono text-primary">
+                  {Math.round((1 - (room.floorRoughness ?? 0.55)) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.05"
+                max="1.0"
+                step="0.05"
+                value={room.floorRoughness ?? 0.55}
+                onChange={(e) => onUpdateRoom({ ...room, floorRoughness: parseFloat(e.target.value) })}
+                className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                <span>Repetição do Piso (Tamanho da Placa)</span>
+                <span className="font-mono text-primary">{room.floorTileX || 4}x</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="12"
+                step="1"
+                value={room.floorTileX || 4}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value) || 1;
+                  onUpdateRoom({ ...room, floorTileX: v, floorTileY: v });
+                }}
+                className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 

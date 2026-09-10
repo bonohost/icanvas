@@ -240,3 +240,46 @@ export const MATERIAL_OPTIONS: Record<MaterialType, { n: string; c: string }[]> 
   ],
   gltf: [],
 };
+
+export interface PBRTexturePreset {
+  id: string;
+  name: string;
+  category: string;
+  textureUrl?: string;
+  color: string;
+  roughness: number;
+  metalness: number;
+  tileX?: number;
+  tileY?: number;
+}
+
+export const WALL_PBR_PRESETS: PBRTexturePreset[] = [
+  { id: 'paint-white', name: 'Pintura Lisa Branca', category: 'Pintura', color: '#f8fafc', roughness: 0.9, metalness: 0.0, tileX: 1, tileY: 1 },
+  { id: 'paint-gray', name: 'Pintura Cinza Moderno', category: 'Pintura', color: '#cbd5e1', roughness: 0.88, metalness: 0.0, tileX: 1, tileY: 1 },
+  { id: 'paint-dark', name: 'Pintura Grafite Noturno', category: 'Pintura', color: '#1e293b', roughness: 0.85, metalness: 0.0, tileX: 1, tileY: 1 },
+  { id: 'brick-red', name: 'Tijolo Aparente Vermelho', category: 'Tijolos', textureUrl: '/textures/brick.webp', color: '#ffffff', roughness: 0.92, metalness: 0.0, tileX: 3, tileY: 2 },
+  { id: 'brick-exposed', name: 'Tijolo Demolição Rústico', category: 'Tijolos', textureUrl: '/textures/exposed-brick.webp', color: '#ffffff', roughness: 0.94, metalness: 0.0, tileX: 3, tileY: 2 },
+  { id: 'wood-panel', name: 'Painel Ripado Carvalho', category: 'Madeira', textureUrl: '/textures/wood-panel.webp', color: '#ffffff', roughness: 0.65, metalness: 0.04, tileX: 2, tileY: 1 },
+  { id: 'subway-tile', name: 'Azulejo Metrô (Subway Tile)', category: 'Azulejos', textureUrl: '/textures/subway-tile.webp', color: '#ffffff', roughness: 0.18, metalness: 0.05, tileX: 4, tileY: 2 },
+  { id: 'concrete-wall', name: 'Concreto Aparente', category: 'Cimento', textureUrl: '/textures/concrete.webp', color: '#ffffff', roughness: 0.82, metalness: 0.02, tileX: 2, tileY: 2 },
+  { id: 'stone-wall', name: 'Pedra Natural Canjiquinha', category: 'Pedras', textureUrl: '/textures/stone.webp', color: '#ffffff', roughness: 0.95, metalness: 0.0, tileX: 3, tileY: 2 },
+  { id: 'marble-wall', name: 'Mármore Calacatta Parede', category: 'Mármores', textureUrl: '/textures/floor-marble-white.webp', color: '#ffffff', roughness: 0.12, metalness: 0.06, tileX: 2, tileY: 2 },
+];
+
+export const FLOOR_PBR_PRESETS: PBRTexturePreset[] = [
+  { id: 'light-oak', name: 'Carvalho Natural Claro', category: 'Madeiras', textureUrl: '/textures/floor-light-oak.webp', color: '#ffffff', roughness: 0.58, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'walnut', name: 'Nogueira Escura Tabaco', category: 'Madeiras', textureUrl: '/textures/floor-walnut.webp', color: '#ffffff', roughness: 0.56, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'bamboo', name: 'Bambu Natural', category: 'Madeiras', textureUrl: '/textures/floor-bamboo.webp', color: '#ffffff', roughness: 0.60, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'laminate', name: 'Piso Laminado Prime', category: 'Madeiras', textureUrl: '/textures/floor-laminate.webp', color: '#ffffff', roughness: 0.52, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'vinyl', name: 'Vinílico Amadeirado', category: 'Madeiras', textureUrl: '/textures/floor-vinyl.webp', color: '#ffffff', roughness: 0.58, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'marble-white', name: 'Mármore Calacatta Gold', category: 'Mármores', textureUrl: '/textures/floor-marble-white.webp', color: '#ffffff', roughness: 0.12, metalness: 0.08, tileX: 3, tileY: 3 },
+  { id: 'marble-dark', name: 'Mármore Negro Nero Marquina', category: 'Mármores', textureUrl: '/textures/floor-marble-dark.webp', color: '#ffffff', roughness: 0.14, metalness: 0.08, tileX: 3, tileY: 3 },
+  { id: 'porcelain', name: 'Porcelanato Polido Extra', category: 'Porcelanatos', textureUrl: '/textures/floor-porcelain.webp', color: '#ffffff', roughness: 0.15, metalness: 0.05, tileX: 4, tileY: 4 },
+  { id: 'tile-white', name: 'Cerâmica Branca Retificada', category: 'Cerâmicas', textureUrl: '/textures/floor-tile-white.webp', color: '#ffffff', roughness: 0.22, metalness: 0.04, tileX: 5, tileY: 5 },
+  { id: 'tile-gray', name: 'Cerâmica Grafite Industrial', category: 'Cerâmicas', textureUrl: '/textures/floor-tile-gray.webp', color: '#ffffff', roughness: 0.25, metalness: 0.04, tileX: 5, tileY: 5 },
+  { id: 'slate', name: 'Pedra Ardósia Negra', category: 'Pedras', textureUrl: '/textures/floor-slate.webp', color: '#ffffff', roughness: 0.85, metalness: 0.02, tileX: 4, tileY: 4 },
+  { id: 'concrete-floor', name: 'Cimento Queimado Acetinado', category: 'Cimento', textureUrl: '/textures/floor-concrete.webp', color: '#ffffff', roughness: 0.72, metalness: 0.02, tileX: 3, tileY: 3 },
+  { id: 'carpet-beige', name: 'Carpete Bouclé Bege', category: 'Carpetes', textureUrl: '/textures/floor-carpet-beige.webp', color: '#ffffff', roughness: 0.98, metalness: 0.0, tileX: 4, tileY: 4 },
+  { id: 'carpet-gray', name: 'Carpete Veludo Grafite', category: 'Carpetes', textureUrl: '/textures/floor-carpet-gray.webp', color: '#ffffff', roughness: 0.98, metalness: 0.0, tileX: 4, tileY: 4 },
+];
+

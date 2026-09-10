@@ -302,15 +302,16 @@ export default function ThreeViewport({
       ry: number,
       id: keyof RoomSettings['walls']
     ) => {
+      const wallConfig = room.walls[id];
       const geo = new THREE.BoxGeometry(w, h, WALL_THICKNESS);
       const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(room.walls[id].color),
-        roughness: 0.85,
-        metalness: 0.05,
+        color: new THREE.Color(wallConfig.color),
+        roughness: wallConfig.roughness ?? 0.85,
+        metalness: wallConfig.metalness ?? 0.02,
         transparent: true,
         opacity: 1.0,
       });
-      applyTexture(mat, room.walls[id].textureUrl, room.walls[id].tileX, room.walls[id].tileY);
+      applyTexture(mat, wallConfig.textureUrl, wallConfig.tileX || 1, wallConfig.tileY || 1);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z);
       mesh.rotation.y = ry;
@@ -333,10 +334,10 @@ export default function ThreeViewport({
     const floorGeo = new THREE.PlaneGeometry(room.width + 4, room.depth + 4);
     const floorMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(room.floorColor),
-      roughness: 0.45,
-      metalness: 0.05,
+      roughness: room.floorRoughness ?? 0.55,
+      metalness: room.floorMetalness ?? 0.02,
     });
-    applyTexture(floorMat, room.floorTextureUrl, room.floorTileX, room.floorTileY);
+    applyTexture(floorMat, room.floorTextureUrl, room.floorTileX || 4, room.floorTileY || 4);
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
