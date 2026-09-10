@@ -1,20 +1,40 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ThreeViewport from './components/ThreeViewport';
 import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
-import { FurnitureInstance, FurnitureSpec, RoomSettings } from './types/furniture';
+import ProjectManagerModal from './components/ProjectManagerModal';
+import { FurnitureInstance, FurnitureSpec, RoomSettings, StudioProject } from './types/furniture';
+import {
+  saveProject,
+  getSavedProjects,
+  getAutoSavedProject,
+  saveAutoSaveState,
+  exportProjectAsJson,
+} from './lib/project-storage';
 import {
   Grid3x3,
   Magnet,
   Trash2,
   Video,
   Monitor,
-  Sparkles,
+  FolderOpen,
+  Save,
+  Check,
+  Download,
+  Plus,
+  Edit3,
 } from 'lucide-react';
 
 export default function StudioPage() {
+  const [projectId, setProjectId] = useState<string>('proj_default');
+  const [projectName, setProjectName] = useState<string>('Cozinha & Living Integrado');
+  const [isSaved, setIsSaved] = useState<boolean>(true);
+  const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+  const isInitialMount = useRef(true);
+
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([
     {
       id: 'cab-base-2',
@@ -96,6 +116,107 @@ export default function StudioPage() {
     fov: 45,
   });
 
+  // Restore autosaved session or initial project on mount
+  useEffect(() => {
+    const autosave = getAutoSavedProject();
+    if (autosave) {
+      setProjectId(autosave.id || 'proj_default');
+      setProjectName(autosave.name || 'Projeto Studio 3D');
+      setRoom(autosave.room);
+      setFurniture(autosave.furniture || []);
+      if (autosave.cameraSettings) setCameraSettings(autosave.cameraSettings);
+    }
+  }, []);
+
+  // Continuous autosave on state changes
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setIsSaved(false);
+    const timeout = setTimeout(() => {
+      saveAutoSaveState({
+        id: projectId,
+        name: projectName,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        room,
+        furniture,
+        cameraSettings,
+      });
+    }, 800);
+
+    return () => clearTimeout(timeout);
+  }, [projectId, projectName, room, furniture, cameraSettings]);
+
+  const currentProjectObject: StudioProject = {
+    id: projectId,
+    name: projectName,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    room,
+    furniture,
+    cameraSettings,
+  };
+
+  const handleSaveCurrent = useCallback(() => {
+    saveProject(currentProjectObject);
+    setIsSaved(true);
+    setSaveToast('Projeto Salvo!');
+    setTimeout(() => setSaveToast(null), 2500);
+  }, [currentProjectObject]);
+
+  const handleLoadProject = useCallback((project: StudioProject) => {
+    setProjectId(project.id);
+    setProjectName(project.name);
+    setRoom(project.room);
+    setFurniture(project.furniture || []);
+    setSelectedUid(null);
+    if (project.cameraSettings) {
+      setCameraSettings(project.cameraSettings);
+    }
+    setIsSaved(true);
+    setSaveToast(`Projeto "${project.name}" Carregado!`);
+    setTimeout(() => setSaveToast(null), 2500);
+  }, []);
+
+  const handleNewProject = useCallback((name: string, width: number, depth: number) => {
+    const newId = `proj_${Date.now()}`;
+    const newRoom: RoomSettings = {
+      width,
+      depth,
+      height: 2.6,
+      floorColor: '#e2e8f0',
+      floorTileX: 4,
+      floorTileY: 4,
+      walls: {
+        back: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        front: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        left: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        right: { color: '#f8fafc', tileX: 2, tileY: 1 },
+      },
+      lightIntensity: 1.2,
+      reflectionOpacity: 0.05,
+    };
+    setProjectId(newId);
+    setProjectName(name);
+    setRoom(newRoom);
+    setFurniture([]);
+    setSelectedUid(null);
+    saveProject({
+      id: newId,
+      name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      room: newRoom,
+      furniture: [],
+      cameraSettings: { id: 'iso', x: 5.5, y: 4.5, z: 5.5, fov: 45 },
+    });
+    setIsSaved(true);
+  }, []);
+
   const handleAdd = useCallback(
     (spec: FurnitureSpec, position?: { x: number; z: number; by?: number; rot?: number }) => {
       const newInstance: FurnitureInstance = {
@@ -158,7 +279,7 @@ export default function StudioPage() {
     [furniture]
   );
 
-  // Global Keyboard Shortcuts (Ctrl+D / Cmd+D = Duplicate, Del/Backspace = Remove, Esc = Deselect)
+  // Global Keyboard Shortcuts (Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -169,6 +290,12 @@ export default function StudioPage() {
           target.isContentEditable)
       ) {
         return;
+      }
+
+      // Save: Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveCurrent();
       }
 
       // Duplicate: Ctrl+D or Cmd+D
@@ -195,7 +322,7 @@ export default function StudioPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedUid, handleDuplicate, handleRemove]);
+  }, [selectedUid, handleDuplicate, handleRemove, handleSaveCurrent]);
 
   const handleClearAll = () => {
     if (window.confirm('Deseja limpar todos os móveis da cena?')) {
@@ -211,18 +338,66 @@ export default function StudioPage() {
       {/* Studio Header Toolbar */}
       <header className="flex h-14 items-center justify-between border-b border-white/10 bg-surface-glass px-6 backdrop-blur-xl z-20">
         <div className="flex items-center gap-4">
-          <div className="flex flex-col">
-            <h1 className="font-headline text-base font-bold tracking-tight text-primary flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px]">view_in_ar</span>
-              iCanvas Studio 3D
-            </h1>
-            <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-mono">
-              Ambiente: {room.width.toFixed(1)}m × {room.depth.toFixed(1)}m | {furniture.length} móveis
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsManagerOpen(true)}
+              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-primary hover:bg-primary/90 text-white transition-all shadow-md active:scale-95"
+              title="Gerenciar e abrir projetos salvos"
+            >
+              <FolderOpen className="size-3.5" /> Projetos
+            </button>
+
+            <button
+              onClick={handleSaveCurrent}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${
+                isSaved
+                  ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
+                  : 'bg-green-500/20 border-green-500/40 text-green-300 hover:bg-green-500/30'
+              }`}
+              title="Salvar Projeto (Ctrl+S)"
+            >
+              {saveToast ? (
+                <>
+                  <Check className="size-3.5 text-green-400 animate-in zoom-in-50" />
+                  <span className="text-green-400 font-bold">{saveToast}</span>
+                </>
+              ) : (
+                <>
+                  <Save className="size-3.5" />
+                  <span>{isSaved ? 'Salvo' : 'Salvar'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
+
+          {/* Project Title (Editable) */}
+          <div className="flex items-center gap-2 group">
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="bg-transparent text-sm font-bold text-white hover:bg-white/5 focus:bg-white/10 px-2 py-1 rounded-md border border-transparent focus:border-primary/40 focus:outline-none transition-all max-w-[200px] sm:max-w-[320px] truncate"
+              title="Clique para renomear o projeto"
+            />
+            <Edit3 className="size-3 text-white/30 group-hover:text-primary transition-colors hidden sm:block" />
+            <span className="text-[10px] text-on-surface-variant font-mono hidden lg:inline">
+              ({room.width.toFixed(1)}m × {room.depth.toFixed(1)}m • {furniture.length} móveis)
             </span>
           </div>
         </div>
 
+        {/* Viewport & Scene Utilities */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportProjectAsJson(currentProjectObject)}
+            className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-all hidden md:flex"
+            title="Exportar arquivo JSON para download"
+          >
+            <Download className="size-3.5" /> Exportar JSON
+          </button>
+
           <button
             onClick={() => setShowGrid(!showGrid)}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
@@ -249,8 +424,8 @@ export default function StudioPage() {
 
           <button
             onClick={handleClearAll}
-            className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
-            title="Limpar Cena"
+            className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+            title="Limpar todos os móveis da cena"
           >
             <Trash2 className="size-3.5" /> Limpar
           </button>
@@ -294,7 +469,7 @@ export default function StudioPage() {
       <footer className="flex h-10 items-center justify-between border-t border-white/10 bg-surface-glass px-6 backdrop-blur-xl z-20">
         <div className="flex items-center gap-4">
           <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-1.5">
-            <Video className="size-3 text-primary" /> Visualização:
+            <Video className="size-3 text-primary" /> Câmera:
           </span>
           <div className="flex gap-1.5">
             {[
@@ -319,6 +494,7 @@ export default function StudioPage() {
 
         <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant">
           <div className="hidden md:flex items-center gap-3 text-white/50 text-[10px]">
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+S</kbd> Salvar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+D</kbd> Duplicar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Del</kbd> Excluir</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Esc</kbd> Desmarcar</span>
@@ -328,6 +504,15 @@ export default function StudioPage() {
           </span>
         </div>
       </footer>
+
+      {/* Project Manager Modal */}
+      <ProjectManagerModal
+        isOpen={isManagerOpen}
+        onClose={() => setIsManagerOpen(false)}
+        currentProject={currentProjectObject}
+        onLoadProject={handleLoadProject}
+        onNewProject={handleNewProject}
+      />
     </div>
   );
 }

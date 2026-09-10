@@ -59,3 +59,21 @@ export interface RoomSettings {
   lightIntensity: number;
   reflectionOpacity: number;
 }
+
+export interface StudioProject {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailUrl?: string;
+  room: RoomSettings;
+  furniture: FurnitureInstance[];
+  cameraSettings?: {
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    fov: number;
+  };
+}
+
