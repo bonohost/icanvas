@@ -263,14 +263,14 @@ export default function PropertiesSidebar({
           <button
             onClick={() => onDuplicate(selected.uid)}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface transition-colors"
-            title="Duplicar Objeto"
+            title="Duplicar Objeto (Ctrl+D)"
           >
             <Copy className="size-4" />
           </button>
           <button
             onClick={() => onRemove(selected.uid)}
             className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
-            title="Excluir Objeto"
+            title="Excluir Objeto (Delete)"
           >
             <Trash2 className="size-4" />
           </button>
@@ -388,15 +388,53 @@ export default function PropertiesSidebar({
         </div>
       </div>
 
-      {/* Material & Color */}
+      {/* Material & Finish */}
       <div className="space-y-3 border-t border-white/10 pt-4">
         <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-          <Palette className="size-3.5 text-primary" /> Material &amp; Cor
+          <Palette className="size-3.5 text-primary" /> Acabamento &amp; Textura PBR
         </span>
 
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-on-surface-variant capitalize">
-            Tipo: {selected.dm.t}
+        {/* Material Type Pills */}
+        <div className="grid grid-cols-3 gap-1 bg-white/5 p-1 rounded-lg">
+          {(['wood', 'fabric', 'leather', 'metal', 'ceramic'] as const).map((type) => {
+            const labels: Record<string, string> = {
+              wood: 'Madeira',
+              fabric: 'Tecido',
+              leather: 'Couro',
+              metal: 'Metal',
+              ceramic: 'Mármore',
+            };
+            const isActive = selected.dm.t === type;
+            return (
+              <button
+                key={type}
+                onClick={() => {
+                  const defaultColors: Record<string, string> = {
+                    wood: '#C4A67D',
+                    fabric: '#D4C5A9',
+                    leather: '#C4853A',
+                    metal: '#E0E0E0',
+                    ceramic: '#F0F0F0',
+                  };
+                  onUpdate(selected.uid, {
+                    dm: { t: type, c: defaultColors[type] || selected.dm.c },
+                  });
+                }}
+                className={`py-1 text-[10px] font-medium rounded-md transition-all ${
+                  isActive
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-on-surface-variant hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {labels[type]}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-on-surface-variant">
+            Cor Personalizada
           </span>
           <input
             type="color"
@@ -422,11 +460,11 @@ export default function PropertiesSidebar({
                 }
                 className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
                   selected.dm.c.toLowerCase() === opt.c.toLowerCase()
-                    ? 'border-primary bg-primary/20 text-white'
+                    ? 'border-primary bg-primary/20 text-white shadow-sm'
                     : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30'
                 }`}
               >
-                <div className="w-3.5 h-3.5 rounded-full border border-white/30" style={{ backgroundColor: opt.c }} />
+                <div className="w-3.5 h-3.5 rounded-full border border-white/30 flex-shrink-0" style={{ backgroundColor: opt.c }} />
                 <span className="text-[10px] font-medium truncate">{opt.n}</span>
               </button>
             ))}

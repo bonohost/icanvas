@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ThreeViewport from './components/ThreeViewport';
 import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
@@ -158,6 +158,45 @@ export default function StudioPage() {
     [furniture]
   );
 
+  // Global Keyboard Shortcuts (Ctrl+D / Cmd+D = Duplicate, Del/Backspace = Remove, Esc = Deselect)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Duplicate: Ctrl+D or Cmd+D
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        if (selectedUid) {
+          e.preventDefault();
+          handleDuplicate(selectedUid);
+        }
+      }
+
+      // Delete: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedUid) {
+          e.preventDefault();
+          handleRemove(selectedUid);
+        }
+      }
+
+      // Deselect: Escape
+      if (e.key === 'Escape') {
+        setSelectedUid(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedUid, handleDuplicate, handleRemove]);
+
   const handleClearAll = () => {
     if (window.confirm('Deseja limpar todos os móveis da cena?')) {
       setFurniture([]);
@@ -278,8 +317,13 @@ export default function StudioPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">
-          <span className="flex items-center gap-1.5 text-primary font-semibold">
+        <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant">
+          <div className="hidden md:flex items-center gap-3 text-white/50 text-[10px]">
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+D</kbd> Duplicar</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Del</kbd> Excluir</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Esc</kbd> Desmarcar</span>
+          </div>
+          <span className="flex items-center gap-1.5 text-primary font-semibold uppercase tracking-widest">
             <Monitor className="size-3" /> WebGL 2.0 PBR
           </span>
         </div>

@@ -3,8 +3,45 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FurnitureSpec, MaterialType } from '../types/furniture';
 
 const loader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader().setCrossOrigin('anonymous');
 
-function createTexture(type: MaterialType, color: string, size = 512) {
+const gltfCache = new Map<string, Promise<THREE.Group>>();
+const textureCache = new Map<string, THREE.Texture>();
+
+export const PBR_SETTINGS: Record<MaterialType, { roughness: number; metalness: number; opacity?: number }> = {
+  wood: { roughness: 0.65, metalness: 0.05 },
+  metal: { roughness: 0.25, metalness: 0.85 },
+  fabric: { roughness: 0.95, metalness: 0.0 },
+  leather: { roughness: 0.5, metalness: 0.08 },
+  ceramic: { roughness: 0.15, metalness: 0.05 },
+  gltf: { roughness: 0.7, metalness: 0.1 },
+};
+
+// Preset texture maps from /textures/ webp assets
+const PRESET_TEXTURES: Record<string, string> = {
+  '#c4a67d': '/textures/floor-light-oak.webp',
+  '#5c4033': '/textures/floor-walnut.webp',
+  '#b45309': '/textures/wood-panel.webp',
+  '#f0f0f0': '/textures/floor-marble-white.webp',
+  '#1c1917': '/textures/floor-marble-dark.webp',
+  '#78716c': '/textures/concrete.webp',
+  '#d4c5a9': '/textures/floor-carpet-beige.webp',
+  '#8c8578': '/textures/floor-carpet-gray.webp',
+};
+
+export function getLoadedTexture(url: string, repeatX = 1, repeatY = 1): THREE.Texture {
+  const key = `${url}_${repeatX}_${repeatY}`;
+  if (!textureCache.has(key)) {
+    const tex = textureLoader.load(url);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeatX, repeatY);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    textureCache.set(key, tex);
+  }
+  return textureCache.get(key)!;
+}
+
+export function createProceduralTexture(type: MaterialType, color: string, size = 512): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -14,7 +51,7 @@ function createTexture(type: MaterialType, color: string, size = 512) {
 
   if (type === 'wood') {
     for (let i = 0; i < 40; i++) {
-      ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
+      ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.14})`;
       ctx.lineWidth = Math.random() * 2.5 + 0.5;
       ctx.beginPath();
       let y = Math.random() * size;
@@ -26,7 +63,7 @@ function createTexture(type: MaterialType, color: string, size = 512) {
       ctx.stroke();
     }
   } else if (type === 'fabric') {
-    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.05)';
     ctx.lineWidth = 0.5;
     for (let i = 0; i < size; i += 3) {
       ctx.beginPath();
@@ -38,6 +75,13 @@ function createTexture(type: MaterialType, color: string, size = 512) {
       ctx.lineTo(size, i);
       ctx.stroke();
     }
+  } else if (type === 'leather') {
+    for (let i = 0; i < 2000; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.04})`;
+      const rx = Math.random() * size;
+      const ry = Math.random() * size;
+      ctx.fillRect(rx, ry, 2, 2);
+    }
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -46,28 +90,154 @@ function createTexture(type: MaterialType, color: string, size = 512) {
   return tex;
 }
 
-export function createMaterial(type: MaterialType, color: string) {
+export function createMaterial(type: MaterialType, color: string, textureUrl?: string): THREE.MeshStandardMaterial {
   const c = new THREE.Color(color);
-  const options: THREE.MeshStandardMaterialParameters = { color: c, roughness: 0.8, metalness: 0 };
+  const pbr = PBR_SETTINGS[type] || PBR_SETTINGS.wood;
 
-  if (type === 'fabric') {
-    options.roughness = 0.95;
-    options.map = createTexture('fabric', color);
-  } else if (type === 'leather') {
-    options.roughness = 0.5;
-    options.metalness = 0.05;
-  } else if (type === 'wood') {
-    options.roughness = 0.65;
-    options.map = createTexture('wood', color);
-  } else if (type === 'metal') {
-    options.roughness = 0.25;
-    options.metalness = 0.85;
-  } else if (type === 'ceramic') {
-    options.roughness = 0.1;
-    options.metalness = 0.05;
+  const mat = new THREE.MeshStandardMaterial({
+    color: c,
+    roughness: pbr.roughness,
+    metalness: pbr.metalness,
+  });
+
+  const matchingPreset = textureUrl || PRESET_TEXTURES[color.toLowerCase()];
+  if (matchingPreset) {
+    mat.map = getLoadedTexture(matchingPreset, 1, 1);
+  } else if (type === 'fabric' || type === 'wood' || type === 'leather') {
+    mat.map = createProceduralTexture(type, color);
   }
 
-  return new THREE.MeshStandardMaterial(options);
+  return mat;
+}
+
+export function cloneModel(source: THREE.Group): THREE.Group {
+  const clone = source.clone(true);
+  const geometries = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+  const materials = new Map<THREE.Material, THREE.Material>();
+
+  clone.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      if (!geometries.has(child.geometry)) {
+        geometries.set(child.geometry, child.geometry.clone());
+      }
+      child.geometry = geometries.get(child.geometry)!;
+
+      if (Array.isArray(child.material)) {
+        child.material = child.material.map((m) => {
+          if (!materials.has(m)) materials.set(m, m.clone());
+          return materials.get(m)!;
+        });
+      } else if (child.material) {
+        if (!materials.has(child.material)) {
+          materials.set(child.material, child.material.clone());
+        }
+        child.material = materials.get(child.material)!;
+      }
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  return clone;
+}
+
+export async function loadGLTFModel(url: string): Promise<THREE.Group> {
+  if (!gltfCache.has(url)) {
+    gltfCache.set(
+      url,
+      new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          (gltf) => resolve(gltf.scene),
+          undefined,
+          (err) => reject(err)
+        );
+      })
+    );
+  }
+  const source = await gltfCache.get(url)!;
+  return cloneModel(source);
+}
+
+/**
+ * Ported directly from OpenPlan3D:
+ * Match the complete model's footprint, center it, and place its bottom at zero (ground).
+ */
+export function fitFurnitureModel(
+  model: THREE.Group,
+  width: number,
+  height: number,
+  depth: number
+) {
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
+  model.scale.set(1, 1, 1);
+  model.updateMatrixWorld(true);
+
+  const bounds = new THREE.Box3().setFromObject(model);
+  const size = bounds.getSize(new THREE.Vector3());
+
+  if (
+    [size.x, size.y, size.z, width, height, depth].some(
+      (v) => !Number.isFinite(v) || v <= 0
+    )
+  ) {
+    return;
+  }
+
+  model.scale.multiply(
+    new THREE.Vector3(width / size.x, height / size.y, depth / size.z)
+  );
+  model.updateMatrixWorld(true);
+
+  bounds.setFromObject(model);
+  const center = bounds.getCenter(new THREE.Vector3());
+  model.position.sub(new THREE.Vector3(center.x, bounds.min.y, center.z));
+  model.updateMatrixWorld(true);
+}
+
+/**
+ * Applies custom PBR materials, roughness, metalness, and color tints directly to the 3D GLB mesh.
+ */
+export function applyPBRToModel(
+  model: THREE.Group,
+  type: MaterialType,
+  colorHex: string,
+  textureUrl?: string
+) {
+  const pbr = PBR_SETTINGS[type] || PBR_SETTINGS.wood;
+  const tintColor = new THREE.Color(colorHex);
+  const matchingPreset = textureUrl || PRESET_TEXTURES[colorHex.toLowerCase()];
+  const presetTex = matchingPreset ? getLoadedTexture(matchingPreset, 1, 1) : null;
+
+  const seen = new Set<THREE.Material>();
+
+  model.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.castShadow = true;
+    child.receiveShadow = true;
+
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.forEach((mat) => {
+      if (!mat || seen.has(mat)) return;
+      seen.add(mat);
+
+      if (mat instanceof THREE.MeshStandardMaterial) {
+        mat.roughness = pbr.roughness;
+        mat.metalness = pbr.metalness;
+
+        if (presetTex) {
+          mat.map = presetTex;
+          mat.color.set('#ffffff');
+        } else if (colorHex && colorHex !== '#ffffff') {
+          // If custom tint is given, multiply to keep details and shading
+          mat.color.set(tintColor);
+        }
+
+        mat.needsUpdate = true;
+      }
+    });
+  });
 }
 
 function addPart(
@@ -91,30 +261,14 @@ export async function buildFurniture(spec: FurnitureSpec): Promise<THREE.Group> 
 
   if (spec.modelUrl) {
     try {
-      const gltf = await new Promise<any>((resolve, reject) => {
-        loader.load(spec.modelUrl!, resolve, undefined, reject);
-      });
-      const model = gltf.scene;
+      const model = await loadGLTFModel(spec.modelUrl);
 
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      box.getSize(size);
+      // 1. Auto-fit model to exact target dimensions and center base
+      fitFurnitureModel(model, spec.w, spec.h, spec.d);
 
-      model.scale.set(spec.w / size.x, spec.h / size.y, spec.d / size.z);
+      // 2. Apply PBR material finishes & tint
+      applyPBRToModel(model, spec.dm.t, spec.dm.c);
 
-      const centeredBox = new THREE.Box3().setFromObject(model);
-      const center = new THREE.Vector3();
-      centeredBox.getCenter(center);
-      model.position.x = -center.x;
-      model.position.z = -center.z;
-      model.position.y = -centeredBox.min.y;
-
-      model.traverse((child: any) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
       group.add(model);
       return group;
     } catch (e) {
@@ -122,6 +276,7 @@ export async function buildFurniture(spec: FurnitureSpec): Promise<THREE.Group> 
     }
   }
 
+  // Procedural Fallback Builder
   const mat = createMaterial(spec.dm.t, spec.dm.c);
 
   if (spec.id.startsWith('sofa')) {
