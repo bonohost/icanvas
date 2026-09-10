@@ -386,7 +386,7 @@ export default function ThreeViewport({
         );
 
         const currentFingerprint = existing?.userData?.fingerprint;
-        const newFingerprint = `${f.id}_${f.w}_${f.h}_${f.d}_${f.pr}_${f.dm?.t}_${f.dm?.c}`;
+        const newFingerprint = `${f.id}_${f.modelUrl || ''}_${f.w}_${f.h}_${f.d}_${f.pr}_${f.dm?.t}_${f.dm?.c}`;
 
         if (!existing || currentFingerprint !== newFingerprint) {
           if (existing) {
