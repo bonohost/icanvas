@@ -485,6 +485,9 @@ export default function ThreeViewport({
           isDragging = true;
           if (controlsRef.current) controlsRef.current.enabled = false;
 
+          const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
+          plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);
+
           raycaster.ray.intersectPlane(plane, intersection);
           offset.copy(top.position).sub(intersection);
 
@@ -510,7 +513,7 @@ export default function ThreeViewport({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
-      const isWallItem = dragObject.userData.behavior === 'wall';
+      const isWallHangingItem = dragObject.userData.behavior === 'wall' && (dragObject.userData.spec?.by || 0) > 0;
       const itemW = (dragObject.userData.width || 0.8) * dragObject.scale.x;
       const itemH = (dragObject.userData.height || 0.8) * dragObject.scale.y;
       const itemD = (dragObject.userData.depth || 0.6) * dragObject.scale.z;
@@ -529,7 +532,7 @@ export default function ThreeViewport({
         return false;
       };
 
-      if (isWallItem) {
+      if (isWallHangingItem) {
         const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children);
         const validHit = wallIntersects.find(
           (hit) => ((hit.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity > 0.5
@@ -541,31 +544,8 @@ export default function ThreeViewport({
           const localHit = wall.worldToLocal(validHit.point.clone());
 
           let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHit.x));
-          let targetLocalY = Math.max(itemH / 2, Math.min(room.height - itemH / 2, localHit.y));
-
-          if (snapOn) {
-            otherObjects.forEach((other) => {
-              if (other.userData.behavior === 'wall') {
-                const oLocal = wall.worldToLocal(other.position.clone());
-                const oW = (other.userData.width || 0.8) * other.scale.x;
-                const oH = (other.userData.height || 0.8) * other.scale.y;
-
-                if (Math.abs(oLocal.z - (itemD / 2 + HALF_WALL)) < 0.1) {
-                  const myTop = targetLocalY + itemH / 2;
-                  const oTop = oLocal.y + oH / 2;
-                  if (Math.abs(myTop - oTop) < SNAP_THRESHOLD) targetLocalY = oTop - itemH / 2;
-
-                  const myLeft = targetLocalX - itemW / 2;
-                  const myRight = targetLocalX + itemW / 2;
-                  const oLeft = oLocal.x - oW / 2;
-                  const oRight = oLocal.x + oW / 2;
-
-                  if (Math.abs(myRight - oLeft) < SNAP_THRESHOLD) targetLocalX = oLeft - itemW / 2;
-                  else if (Math.abs(myLeft - oRight) < SNAP_THRESHOLD) targetLocalX = oRight + itemW / 2;
-                }
-              }
-            });
-          }
+          const targetElevation = dragObject.userData.spec?.by ?? 1.5;
+          let targetLocalY = Math.max(itemH / 2, Math.min(room.height - itemH / 2, targetElevation));
 
           const localPos = new THREE.Vector3(targetLocalX, targetLocalY, itemD / 2 + HALF_WALL);
           const worldPos = wall.localToWorld(localPos.clone());
@@ -576,6 +556,9 @@ export default function ThreeViewport({
           }
         }
       } else {
+        const targetBaseY = dragObject.userData.spec?.by ?? 0;
+        plane.set(new THREE.Vector3(0, 1, 0), -targetBaseY);
+
         if (raycaster.ray.intersectPlane(plane, intersection)) {
           const rawX = intersection.x + offset.x;
           const rawZ = intersection.z + offset.z;
@@ -599,29 +582,26 @@ export default function ThreeViewport({
             } else if (minWallDist === dRight) {
               targetRot = -Math.PI / 2; // Back against right wall, front faces left (-X)
             } else if (minWallDist === dFront) {
-              targetRot = Math.PI; // Back against front wall, front faces inward (-Z)
+              targetRot = Math.PI; // Back against front wall, front faces back (-Z)
             }
           }
 
-          // Compute effective width/depth based on rotation
+          // Effective bounding box rotated
           const isRotated90 = Math.abs(Math.sin(targetRot)) > 0.5;
           const effW = isRotated90 ? itemD : itemW;
           const effD = isRotated90 ? itemW : itemD;
 
-          let tx = Math.max(
-            -room.width / 2 + effW / 2,
-            Math.min(room.width / 2 - effW / 2, rawX)
-          );
-          let tz = Math.max(
-            -room.depth / 2 + effD / 2,
-            Math.min(room.depth / 2 - effD / 2, rawZ)
-          );
+          // Keep strictly inside room floor limits
+          const halfRoomW = room.width / 2 - effW / 2;
+          const halfRoomD = room.depth / 2 - effD / 2;
+          let tx = Math.max(-halfRoomW, Math.min(halfRoomW, rawX));
+          let tz = Math.max(-halfRoomD, Math.min(halfRoomD, rawZ));
 
-          // Wall and item snapping for Floor items
+          // Magnetic snapping to walls
           if (snapOn) {
+            const distBack = Math.abs(tz - (-room.depth / 2 + effD / 2));
             const distLeft = Math.abs(tx - (-room.width / 2 + effW / 2));
             const distRight = Math.abs(tx - (room.width / 2 - effW / 2));
-            const distBack = Math.abs(tz - (-room.depth / 2 + effD / 2));
             const distFront = Math.abs(tz - (room.depth / 2 - effD / 2));
 
             if (distBack < SNAP_THRESHOLD) {
@@ -640,35 +620,34 @@ export default function ThreeViewport({
 
             // Side-by-side snapping to neighboring floor objects along the walls
             otherObjects.forEach((other) => {
-              if (other.userData.behavior !== 'wall') {
-                const oW = (other.userData.width || 0.8) * other.scale.x;
-                const oD = (other.userData.depth || 0.6) * other.scale.z;
-                const oIsRot90 = Math.abs(Math.sin(other.rotation.y)) > 0.5;
-                const oEffW = oIsRot90 ? oD : oW;
-                const oEffD = oIsRot90 ? oW : oD;
+              const oW = (other.userData.width || 0.8) * other.scale.x;
+              const oD = (other.userData.depth || 0.6) * other.scale.z;
+              const oIsRot90 = Math.abs(Math.sin(other.rotation.y)) > 0.5;
+              const oEffW = oIsRot90 ? oD : oW;
+              const oEffD = oIsRot90 ? oW : oD;
 
-                // If on same wall along Z (back or front)
-                if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) {
-                  const snapLeftToRight = Math.abs(tx - effW / 2 - (other.position.x + oEffW / 2));
-                  const snapRightToLeft = Math.abs(tx + effW / 2 - (other.position.x - oEffW / 2));
-                  if (snapLeftToRight < SNAP_THRESHOLD) tx = other.position.x + oEffW / 2 + effW / 2;
-                  else if (snapRightToLeft < SNAP_THRESHOLD) tx = other.position.x - oEffW / 2 - effW / 2;
-                }
-                // If on same wall along X (left or right)
-                if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) {
-                  const snapBackToFront = Math.abs(tz - effD / 2 - (other.position.z + oEffD / 2));
-                  const snapFrontToBack = Math.abs(tz + effD / 2 - (other.position.z - oEffD / 2));
-                  if (snapBackToFront < SNAP_THRESHOLD) tz = other.position.z + oEffD / 2 + effD / 2;
-                  else if (snapFrontToBack < SNAP_THRESHOLD) tz = other.position.z - oEffD / 2 - effD / 2;
-                }
+              // If on same wall along Z (back or front)
+              if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) {
+                const snapLeftToRight = Math.abs(tx - effW / 2 - (other.position.x + oEffW / 2));
+                const snapRightToLeft = Math.abs(tx + effW / 2 - (other.position.x - oEffW / 2));
+                if (snapLeftToRight < SNAP_THRESHOLD) tx = other.position.x + oEffW / 2 + effW / 2;
+                else if (snapRightToLeft < SNAP_THRESHOLD) tx = other.position.x - oEffW / 2 - effW / 2;
+              }
+              // If on same wall along X (left or right)
+              if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) {
+                const snapBackToFront = Math.abs(tz - effD / 2 - (other.position.z + oEffD / 2));
+                const snapFrontToBack = Math.abs(tz + effD / 2 - (other.position.z - oEffD / 2));
+                if (snapBackToFront < SNAP_THRESHOLD) tz = other.position.z + oEffD / 2 + effD / 2;
+                else if (snapFrontToBack < SNAP_THRESHOLD) tz = other.position.z - oEffD / 2 - effD / 2;
               }
             });
           }
 
-          const targetPos = new THREE.Vector3(tx, dragObject.position.y, tz);
+          const targetPos = new THREE.Vector3(tx, targetBaseY, tz);
           if (!checkCollision3D(targetPos, effW, effD)) {
             dragObject.position.x = tx;
             dragObject.position.z = tz;
+            dragObject.position.y = targetBaseY;
             dragObject.rotation.y = targetRot;
           }
         }
@@ -680,11 +659,12 @@ export default function ThreeViewport({
 
     const handlePointerUp = () => {
       if (isDragging && dragObject) {
+        const fixedY = dragObject.userData.spec?.by ?? (dragObject.userData.behavior === 'wall' ? dragObject.position.y : 0);
         onUpdatePosition(
           dragObject.userData.uid,
           dragObject.position.x,
           dragObject.position.z,
-          dragObject.position.y,
+          fixedY,
           dragObject.rotation.y
         );
       }

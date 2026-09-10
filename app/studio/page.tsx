@@ -5,7 +5,9 @@ import ThreeViewport from './components/ThreeViewport';
 import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
 import ProjectManagerModal from './components/ProjectManagerModal';
+import TemplatesModal from './components/TemplatesModal';
 import { FurnitureInstance, FurnitureSpec, RoomSettings, StudioProject } from './types/furniture';
+import { RoomTemplatePreset } from './lib/room-templates';
 import {
   saveProject,
   getSavedProjects,
@@ -25,6 +27,7 @@ import {
   Download,
   Plus,
   Edit3,
+  Sparkles,
 } from 'lucide-react';
 
 export default function StudioPage() {
@@ -32,6 +35,7 @@ export default function StudioPage() {
   const [projectName, setProjectName] = useState<string>('Cozinha & Living Integrado');
   const [isSaved, setIsSaved] = useState<boolean>(true);
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const isInitialMount = useRef(true);
 
@@ -217,6 +221,29 @@ export default function StudioPage() {
     setIsSaved(true);
   }, []);
 
+  const handleApplyTemplate = useCallback(
+    (template: RoomTemplatePreset, mode: 'replace' | 'append') => {
+      const timestamp = Date.now();
+      const newItems: FurnitureInstance[] = template.furniture.map((item, idx) => ({
+        ...item,
+        uid: timestamp + idx,
+      }));
+
+      if (mode === 'replace') {
+        setProjectName(template.name);
+        setRoom(template.room);
+        setFurniture(newItems);
+        setSelectedUid(null);
+        setSaveToast(`Ambiente "${template.name}" Aplicado!`);
+      } else {
+        setFurniture((prev) => [...prev, ...newItems]);
+        setSaveToast(`${newItems.length} móveis adicionados à cena!`);
+      }
+      setTimeout(() => setSaveToast(null), 2500);
+    },
+    []
+  );
+
   const handleAdd = useCallback(
     (spec: FurnitureSpec, position?: { x: number; z: number; by?: number; rot?: number }) => {
       const newInstance: FurnitureInstance = {
@@ -345,6 +372,15 @@ export default function StudioPage() {
               title="Gerenciar e abrir projetos salvos"
             >
               <FolderOpen className="size-3.5" /> Projetos
+            </button>
+
+            <button
+              onClick={() => setIsTemplatesOpen(true)}
+              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all shadow-md active:scale-95"
+              title="Carregar salas, cozinhas e quartos decorados prontos"
+            >
+              <Sparkles className="size-3.5 text-amber-400" />
+              <span>Ambientes Prontos</span>
             </button>
 
             <button
@@ -512,6 +548,13 @@ export default function StudioPage() {
         currentProject={currentProjectObject}
         onLoadProject={handleLoadProject}
         onNewProject={handleNewProject}
+      />
+
+      {/* Room Templates Modal */}
+      <TemplatesModal
+        isOpen={isTemplatesOpen}
+        onClose={() => setIsTemplatesOpen(false)}
+        onApplyTemplate={handleApplyTemplate}
       />
     </div>
   );
