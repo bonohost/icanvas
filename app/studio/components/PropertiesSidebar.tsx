@@ -14,6 +14,8 @@ import {
   Palette,
   ArrowUpFromLine,
   Sliders,
+  Grid3x3,
+  Magnet,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -23,6 +25,10 @@ interface PropertiesSidebarProps {
   onUpdate: (uid: number, updates: Partial<FurnitureInstance>) => void;
   onRemove: (uid: number) => void;
   onDuplicate: (uid: number) => void;
+  showGrid?: boolean;
+  onToggleGrid?: (show: boolean) => void;
+  snapOn?: boolean;
+  onToggleSnap?: (snap: boolean) => void;
 }
 
 export default function PropertiesSidebar({
@@ -32,6 +38,10 @@ export default function PropertiesSidebar({
   onUpdate,
   onRemove,
   onDuplicate,
+  showGrid = true,
+  onToggleGrid,
+  snapOn = true,
+  onToggleSnap,
 }: PropertiesSidebarProps) {
   const [activeWallTab, setActiveWallTab] = useState<keyof RoomSettings['walls']>('back');
 
@@ -176,6 +186,61 @@ export default function PropertiesSidebar({
             onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
             className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
           />
+        </div>
+
+        {/* Visual Guides & Grid Toggle */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+            <Grid3x3 className="size-3.5 text-primary" /> Visualização &amp; Grade
+          </span>
+
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-white flex items-center gap-1.5">
+                  <Grid3x3 className="size-3.5 text-primary" /> Exibir Grade (Grid)
+                </span>
+                <span className="text-[10px] text-on-surface-variant">Linhas de apoio no chão 3D</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleGrid?.(!showGrid)}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                  showGrid ? 'bg-primary' : 'bg-white/10'
+                }`}
+                title={showGrid ? 'Ocultar Grade' : 'Exibir Grade'}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                    showGrid ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-white/5 pt-2.5">
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-white flex items-center gap-1.5">
+                  <Magnet className="size-3.5 text-primary" /> Snap Magnético
+                </span>
+                <span className="text-[10px] text-on-surface-variant">Encaixe rente a paredes e móveis</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleSnap?.(!snapOn)}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                  snapOn ? 'bg-primary' : 'bg-white/10'
+                }`}
+                title={snapOn ? 'Desativar Snap' : 'Ativar Snap'}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                    snapOn ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
     );

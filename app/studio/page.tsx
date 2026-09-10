@@ -241,6 +241,10 @@ export default function StudioPage() {
           onUpdate={handleUpdate}
           onRemove={handleRemove}
           onDuplicate={handleDuplicate}
+          showGrid={showGrid}
+          onToggleGrid={setShowGrid}
+          snapOn={snapOn}
+          onToggleSnap={setSnapOn}
         />
       </div>
 

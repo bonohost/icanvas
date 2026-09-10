@@ -33,6 +33,7 @@ export default function MugSimulatorPage() {
     setBaseColor,
     setAlcaColor,
     setInteriorColor,
+    setAllColors,
     setRoughness,
     setMetalness,
     setAutoRotate,
@@ -255,10 +256,22 @@ export default function MugSimulatorPage() {
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-on-surface">Cor da Alça</span>
-                  <div
-                    className="w-4 h-4 rounded-full border border-white/30"
-                    style={{ backgroundColor: alcaColor }}
-                  />
+                  <label className="relative cursor-pointer flex items-center gap-1 group" title="Escolher cor personalizada para alça">
+                    <div
+                      className="w-5 h-5 rounded-full border border-white/30 group-hover:scale-110 shadow-sm transition-transform flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: alcaColor }}
+                    >
+                      <span className="material-symbols-outlined text-[12px] text-white mix-blend-difference opacity-0 group-hover:opacity-100 transition-opacity">
+                        colorize
+                      </span>
+                    </div>
+                    <input
+                      type="color"
+                      value={alcaColor}
+                      onChange={(e) => setAlcaColor(e.target.value)}
+                      className="sr-only"
+                    />
+                  </label>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COLOR_PALETTE.map((c) => (
@@ -291,10 +304,22 @@ export default function MugSimulatorPage() {
               <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-on-surface">Cor do Interior</span>
-                  <div
-                    className="w-4 h-4 rounded-full border border-white/30"
-                    style={{ backgroundColor: interiorColor }}
-                  />
+                  <label className="relative cursor-pointer flex items-center gap-1 group" title="Escolher cor personalizada para interior">
+                    <div
+                      className="w-5 h-5 rounded-full border border-white/30 group-hover:scale-110 shadow-sm transition-transform flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: interiorColor }}
+                    >
+                      <span className="material-symbols-outlined text-[12px] text-white mix-blend-difference opacity-0 group-hover:opacity-100 transition-opacity">
+                        colorize
+                      </span>
+                    </div>
+                    <input
+                      type="color"
+                      value={interiorColor}
+                      onChange={(e) => setInteriorColor(e.target.value)}
+                      className="sr-only"
+                    />
+                  </label>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COLOR_PALETTE.map((c) => (
@@ -327,10 +352,22 @@ export default function MugSimulatorPage() {
               <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-medium text-on-surface">Cor Base Exterior</span>
-                  <div
-                    className="w-4 h-4 rounded-full border border-white/30"
-                    style={{ backgroundColor: baseColor }}
-                  />
+                  <label className="relative cursor-pointer flex items-center gap-1 group" title="Escolher cor personalizada para exterior">
+                    <div
+                      className="w-5 h-5 rounded-full border border-white/30 group-hover:scale-110 shadow-sm transition-transform flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: baseColor }}
+                    >
+                      <span className="material-symbols-outlined text-[12px] text-white mix-blend-difference opacity-0 group-hover:opacity-100 transition-opacity">
+                        colorize
+                      </span>
+                    </div>
+                    <input
+                      type="color"
+                      value={baseColor}
+                      onChange={(e) => setBaseColor(e.target.value)}
+                      className="sr-only"
+                    />
+                  </label>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {COLOR_PALETTE.map((c) => (
@@ -356,6 +393,87 @@ export default function MugSimulatorPage() {
                       )}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Colorir Toda a Caneca (Global Color Picker) */}
+              <div className="flex flex-col gap-2.5 border-t border-white/10 pt-3 bg-white/[0.02] -mx-2 px-2 pb-2 rounded-xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-primary text-[17px]">palette</span>
+                    <span className="text-xs font-semibold text-white">Colorir Toda a Caneca</span>
+                  </div>
+                  <span className="text-[10px] text-primary/80 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+                    Aplica a tudo
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 bg-white/5 p-2 rounded-xl border border-white/10 hover:border-primary/40 transition-colors">
+                  <label className="relative flex items-center justify-center cursor-pointer group">
+                    <div
+                      className="w-9 h-9 rounded-lg border-2 border-white/30 group-hover:border-primary shadow-inner transition-all flex items-center justify-center"
+                      style={{ backgroundColor: baseColor }}
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-white mix-blend-difference">
+                        colorize
+                      </span>
+                    </div>
+                    <input
+                      type="color"
+                      value={baseColor}
+                      onChange={(e) => setAllColors(e.target.value)}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    />
+                  </label>
+
+                  <div className="flex-1 flex flex-col justify-center">
+                    <span className="text-xs font-medium text-on-surface">Color Picker Global</span>
+                    <span className="text-[11px] font-mono text-primary font-semibold">{baseColor.toUpperCase()}</span>
+                  </div>
+
+                  <label className="cursor-pointer px-2.5 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-xs font-medium transition-all flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">tune</span>
+                    <span>Escolher</span>
+                    <input
+                      type="color"
+                      value={baseColor}
+                      onChange={(e) => setAllColors(e.target.value)}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+
+                {/* Quick Presets for All */}
+                <div className="grid grid-cols-8 gap-1">
+                  {COLOR_PALETTE.map((c) => {
+                    const isAllSelected =
+                      baseColor.toLowerCase() === c.value.toLowerCase() &&
+                      alcaColor.toLowerCase() === c.value.toLowerCase() &&
+                      interiorColor.toLowerCase() === c.value.toLowerCase();
+                    return (
+                      <button
+                        key={`all-${c.value}`}
+                        onClick={() => setAllColors(c.value)}
+                        className={`h-6 rounded-md border flex items-center justify-center transition-all ${
+                          isAllSelected
+                            ? 'border-primary ring-2 ring-primary/50 scale-110 z-10'
+                            : 'border-white/10 opacity-70 hover:opacity-100 hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: c.value }}
+                        title={`Pintar tudo de ${c.name}`}
+                      >
+                        {isAllSelected && (
+                          <span
+                            className={`material-symbols-outlined text-[11px] ${
+                              c.value === '#ffffff' ? 'text-black' : 'text-white'
+                            }`}
+                          >
+                            check
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

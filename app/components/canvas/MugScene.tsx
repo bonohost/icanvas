@@ -117,7 +117,7 @@ export default function MugScene() {
       if (isCancelled) return;
 
       // 3. Alça (Handle Area): x: 1090, y: 150, width: 900, height: 390
-      if (alcaColor && alcaColor.toLowerCase() !== '#ffffff') {
+      if (alcaColor) {
         ctx.fillStyle = alcaColor;
         ctx.fillRect(1090, 150, 900, 390);
       }
@@ -125,7 +125,7 @@ export default function MugScene() {
       // 4. Interior (Inside Cup Area):
       // - Body interior: x: 0, y: 670, width: 2048, height: 580
       // - Bottom interior: x: 590, y: 120, width: 440, height: 440
-      if (interiorColor && interiorColor.toLowerCase() !== '#ffffff') {
+      if (interiorColor) {
         ctx.fillStyle = interiorColor;
         ctx.fillRect(0, 670, 2048, 580);
         ctx.fillRect(590, 120, 440, 440);

@@ -82,6 +82,7 @@ export default function ThreeViewport({
 
   const updateRulers = useCallback((selectedObj: THREE.Object3D) => {
     rulersGroupRef.current.clear();
+    selectedObj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(selectedObj);
     const center = new THREE.Vector3();
     box.getCenter(center);
@@ -222,8 +223,9 @@ export default function ThreeViewport({
             const wallNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(w.quaternion);
             const camToWall = new THREE.Vector3().subVectors(w.position, cameraRef.current!.position).normalize();
             const dot = wallNormal.dot(camToWall);
-            w.material.transparent = dot > 0.15;
-            w.material.opacity = dot > 0.15 ? 0.15 : 1.0;
+            const isBehind = dot > 0.05;
+            w.material.opacity = isBehind ? 0.15 : 1.0;
+            w.material.depthWrite = !isBehind;
             w.castShadow = false;
           }
         });
@@ -305,6 +307,8 @@ export default function ThreeViewport({
         color: new THREE.Color(room.walls[id].color),
         roughness: 0.85,
         metalness: 0.05,
+        transparent: true,
+        opacity: 1.0,
       });
       applyTexture(mat, room.walls[id].textureUrl, room.walls[id].tileX, room.walls[id].tileY);
       const mesh = new THREE.Mesh(geo, mat);
@@ -359,34 +363,69 @@ export default function ThreeViewport({
     controlsRef.current.update();
   }, [cameraSettings, room.height]);
 
-  // Sync Furniture Group
+  // Sync Furniture Group efficiently without recreating unchanged meshes on selection/render
   useEffect(() => {
     let active = true;
 
     const syncFurniture = async () => {
-      furnitureGroupRef.current.clear();
+      const currentUids = new Set(furniture.map((f) => f.uid));
 
+      // 1. Remove objects that are no longer in state
+      const toRemove = furnitureGroupRef.current.children.filter(
+        (c) => !currentUids.has(c.userData?.uid)
+      );
+      toRemove.forEach((c) => {
+        furnitureGroupRef.current.remove(c);
+      });
+
+      // 2. Add or update objects
       for (const f of furniture) {
-        const group = await buildFurniture(f);
         if (!active) return;
+        const existing = furnitureGroupRef.current.children.find(
+          (c) => c.userData?.uid === f.uid
+        );
 
-        group.position.set(f.x, f.by, f.z);
-        group.rotation.y = f.rot;
-        group.scale.setScalar(f.scl);
-        group.userData = {
-          uid: f.uid,
-          spec: f,
-          width: f.w,
-          height: f.h,
-          depth: f.d,
-          behavior: f.pr,
-        };
+        const currentFingerprint = existing?.userData?.fingerprint;
+        const newFingerprint = `${f.id}_${f.w}_${f.h}_${f.d}_${f.pr}_${f.dm?.t}_${f.dm?.c}`;
 
-        furnitureGroupRef.current.add(group);
+        if (!existing || currentFingerprint !== newFingerprint) {
+          if (existing) {
+            furnitureGroupRef.current.remove(existing);
+          }
+          const group = await buildFurniture(f);
+          if (!active) return;
+
+          group.position.set(f.x, f.by, f.z);
+          group.rotation.y = f.rot;
+          group.scale.setScalar(f.scl);
+          group.userData = {
+            uid: f.uid,
+            spec: f,
+            width: f.w,
+            height: f.h,
+            depth: f.d,
+            behavior: f.pr,
+            fingerprint: newFingerprint,
+          };
+          furnitureGroupRef.current.add(group);
+        } else {
+          // Object already exists and geometry/materials are identical; just update transforms and metadata
+          existing.position.set(f.x, f.by, f.z);
+          existing.rotation.y = f.rot;
+          existing.scale.setScalar(f.scl);
+          existing.userData.spec = f;
+          existing.userData.width = f.w;
+          existing.userData.height = f.h;
+          existing.userData.depth = f.d;
+          existing.userData.behavior = f.pr;
+        }
       }
 
+      // 3. Update selection box helper & rulers
       if (selectedUid) {
-        const selectedObj = furnitureGroupRef.current.children.find((c) => c.userData.uid === selectedUid);
+        const selectedObj = furnitureGroupRef.current.children.find(
+          (c) => c.userData?.uid === selectedUid
+        );
         if (selectedObj) {
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
           const boxHelper = new THREE.BoxHelper(selectedObj, '#3b82f6');
@@ -447,6 +486,13 @@ export default function ThreeViewport({
 
           raycaster.ray.intersectPlane(plane, intersection);
           offset.copy(top.position).sub(intersection);
+
+          // Immediately update box helper and rulers on click
+          if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          const boxHelper = new THREE.BoxHelper(top, '#3b82f6');
+          sceneRef.current?.add(boxHelper);
+          selectionHelperRef.current = boxHelper;
+          updateRulers(top);
         }
       } else {
         onSelect(null);
@@ -469,11 +515,11 @@ export default function ThreeViewport({
       const itemD = (dragObject.userData.depth || 0.6) * dragObject.scale.z;
       const otherObjects = furnitureGroupRef.current.children.filter((o) => o !== dragObject);
 
-      const checkCollision3D = (targetPos: THREE.Vector3) => {
+      const checkCollision3D = (targetPos: THREE.Vector3, currentW = itemW, currentD = itemD) => {
         if (!collisionOn) return false;
         const testBox = new THREE.Box3().setFromCenterAndSize(
           targetPos.clone().add(new THREE.Vector3(0, itemH / 2, 0)),
-          new THREE.Vector3(itemW, itemH, itemD).subScalar(COLLISION_EPSILON)
+          new THREE.Vector3(currentW, itemH, currentD).subScalar(COLLISION_EPSILON)
         );
         for (const other of otherObjects) {
           const otherBox = new THREE.Box3().setFromObject(other);
@@ -530,32 +576,99 @@ export default function ThreeViewport({
         }
       } else {
         if (raycaster.ray.intersectPlane(plane, intersection)) {
+          const rawX = intersection.x + offset.x;
+          const rawZ = intersection.z + offset.z;
+
+          // Distance from raw center to the 4 room walls
+          const dLeft = rawX - (-room.width / 2);
+          const dRight = room.width / 2 - rawX;
+          const dBack = rawZ - (-room.depth / 2);
+          const dFront = room.depth / 2 - rawZ;
+
+          const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
+
+          let targetRot = dragObject.rotation.y;
+          const ROT_ZONE = 0.85; // Distance threshold to align with the nearest wall
+
+          if (minWallDist < ROT_ZONE) {
+            if (minWallDist === dBack) {
+              targetRot = 0; // Back against back wall, front faces forward (+Z)
+            } else if (minWallDist === dLeft) {
+              targetRot = Math.PI / 2; // Back against left wall, front faces right (+X)
+            } else if (minWallDist === dRight) {
+              targetRot = -Math.PI / 2; // Back against right wall, front faces left (-X)
+            } else if (minWallDist === dFront) {
+              targetRot = Math.PI; // Back against front wall, front faces inward (-Z)
+            }
+          }
+
+          // Compute effective width/depth based on rotation
+          const isRotated90 = Math.abs(Math.sin(targetRot)) > 0.5;
+          const effW = isRotated90 ? itemD : itemW;
+          const effD = isRotated90 ? itemW : itemD;
+
           let tx = Math.max(
-            -room.width / 2 + itemW / 2,
-            Math.min(room.width / 2 - itemW / 2, intersection.x + offset.x)
+            -room.width / 2 + effW / 2,
+            Math.min(room.width / 2 - effW / 2, rawX)
           );
           let tz = Math.max(
-            -room.depth / 2 + itemD / 2,
-            Math.min(room.depth / 2 - itemD / 2, intersection.z + offset.z)
+            -room.depth / 2 + effD / 2,
+            Math.min(room.depth / 2 - effD / 2, rawZ)
           );
 
-          // Wall Snapping for Floor items
+          // Wall and item snapping for Floor items
           if (snapOn) {
-            const distLeft = Math.abs(tx - (-room.width / 2 + itemW / 2));
-            const distRight = Math.abs(tx - (room.width / 2 - itemW / 2));
-            const distBack = Math.abs(tz - (-room.depth / 2 + itemD / 2));
-            const distFront = Math.abs(tz - (room.depth / 2 - itemD / 2));
+            const distLeft = Math.abs(tx - (-room.width / 2 + effW / 2));
+            const distRight = Math.abs(tx - (room.width / 2 - effW / 2));
+            const distBack = Math.abs(tz - (-room.depth / 2 + effD / 2));
+            const distFront = Math.abs(tz - (room.depth / 2 - effD / 2));
 
-            if (distLeft < SNAP_THRESHOLD) tx = -room.width / 2 + itemW / 2;
-            if (distRight < SNAP_THRESHOLD) tx = room.width / 2 - itemW / 2;
-            if (distBack < SNAP_THRESHOLD) tz = -room.depth / 2 + itemD / 2;
-            if (distFront < SNAP_THRESHOLD) tz = room.depth / 2 - itemD / 2;
+            if (distBack < SNAP_THRESHOLD) {
+              tz = -room.depth / 2 + effD / 2;
+              targetRot = 0;
+            } else if (distLeft < SNAP_THRESHOLD) {
+              tx = -room.width / 2 + effW / 2;
+              targetRot = Math.PI / 2;
+            } else if (distRight < SNAP_THRESHOLD) {
+              tx = room.width / 2 - effW / 2;
+              targetRot = -Math.PI / 2;
+            } else if (distFront < SNAP_THRESHOLD) {
+              tz = room.depth / 2 - effD / 2;
+              targetRot = Math.PI;
+            }
+
+            // Side-by-side snapping to neighboring floor objects along the walls
+            otherObjects.forEach((other) => {
+              if (other.userData.behavior !== 'wall') {
+                const oW = (other.userData.width || 0.8) * other.scale.x;
+                const oD = (other.userData.depth || 0.6) * other.scale.z;
+                const oIsRot90 = Math.abs(Math.sin(other.rotation.y)) > 0.5;
+                const oEffW = oIsRot90 ? oD : oW;
+                const oEffD = oIsRot90 ? oW : oD;
+
+                // If on same wall along Z (back or front)
+                if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) {
+                  const snapLeftToRight = Math.abs(tx - effW / 2 - (other.position.x + oEffW / 2));
+                  const snapRightToLeft = Math.abs(tx + effW / 2 - (other.position.x - oEffW / 2));
+                  if (snapLeftToRight < SNAP_THRESHOLD) tx = other.position.x + oEffW / 2 + effW / 2;
+                  else if (snapRightToLeft < SNAP_THRESHOLD) tx = other.position.x - oEffW / 2 - effW / 2;
+                }
+                // If on same wall along X (left or right)
+                if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) {
+                  const snapBackToFront = Math.abs(tz - effD / 2 - (other.position.z + oEffD / 2));
+                  const snapFrontToBack = Math.abs(tz + effD / 2 - (other.position.z - oEffD / 2));
+                  if (snapBackToFront < SNAP_THRESHOLD) tz = other.position.z + oEffD / 2 + effD / 2;
+                  else if (snapFrontToBack < SNAP_THRESHOLD) tz = other.position.z - oEffD / 2 - effD / 2;
+                }
+              }
+            });
           }
 
           const targetPos = new THREE.Vector3(tx, dragObject.position.y, tz);
-          if (!checkCollision3D(targetPos)) {
+          if (!checkCollision3D(targetPos, effW, effD)) {
             dragObject.position.x = tx;
             dragObject.position.z = tz;
+            dragObject.rotation.y = targetRot;
           }
         }
       }
@@ -614,14 +727,27 @@ export default function ThreeViewport({
         }
       } else {
         if (raycaster.ray.intersectPlane(plane, intersection)) {
-          const x = Math.max(-room.width / 2 + spec.w / 2, Math.min(room.width / 2 - spec.w / 2, intersection.x));
-          const z = Math.max(-room.depth / 2 + spec.d / 2, Math.min(room.depth / 2 - spec.d / 2, intersection.z));
+          const rawX = intersection.x;
+          const rawZ = intersection.z;
+
+          const dLeft = rawX - (-room.width / 2);
+          const dRight = room.width / 2 - rawX;
+          const dBack = rawZ - (-room.depth / 2);
+          const dFront = room.depth / 2 - rawZ;
+          const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
 
           let rot = 0;
-          if (Math.abs(z - (-room.depth / 2 + spec.d / 2)) < 0.5) rot = 0;
-          else if (Math.abs(z - (room.depth / 2 - spec.d / 2)) < 0.5) rot = Math.PI;
-          else if (Math.abs(x - (-room.width / 2 + spec.w / 2)) < 0.5) rot = Math.PI / 2;
-          else if (Math.abs(x - (room.width / 2 - spec.w / 2)) < 0.5) rot = -Math.PI / 2;
+          if (minWallDist === dBack) rot = 0;
+          else if (minWallDist === dLeft) rot = Math.PI / 2;
+          else if (minWallDist === dRight) rot = -Math.PI / 2;
+          else if (minWallDist === dFront) rot = Math.PI;
+
+          const isRot90 = Math.abs(Math.sin(rot)) > 0.5;
+          const effW = isRot90 ? spec.d : spec.w;
+          const effD = isRot90 ? spec.w : spec.d;
+
+          const x = Math.max(-room.width / 2 + effW / 2, Math.min(room.width / 2 - effW / 2, rawX));
+          const z = Math.max(-room.depth / 2 + effD / 2, Math.min(room.depth / 2 - effD / 2, rawZ));
 
           onDropFurniture(spec, { x, z, by: spec.by ?? 0, rot });
         } else {

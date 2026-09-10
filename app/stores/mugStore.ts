@@ -20,6 +20,7 @@ export interface MugState {
   setBaseColor: (color: string) => void;
   setAlcaColor: (color: string) => void;
   setInteriorColor: (color: string) => void;
+  setAllColors: (color: string) => void;
   setRoughness: (roughness: number) => void;
   setMetalness: (metalness: number) => void;
   setAutoRotate: (autoRotate: boolean) => void;
@@ -28,7 +29,7 @@ export interface MugState {
 
 const DEFAULT_STATE = {
   outerImage: null,
-  useRender3Base: true,
+  useRender3Base: false,
   customText: 'iCanvas 3D',
   useCanvasText: false,
   baseColor: '#ffffff',
@@ -46,9 +47,16 @@ export const useMugStore = create<MugState>((set) => ({
   setUseRender3Base: (use) => set({ useRender3Base: use, outerImage: null }),
   setCustomText: (text) => set({ customText: text, useCanvasText: true, useRender3Base: false }),
   setUseCanvasText: (use) => set({ useCanvasText: use, useRender3Base: false }),
-  setBaseColor: (color) => set({ baseColor: color }),
+  setBaseColor: (color) => set({ baseColor: color, useRender3Base: false }),
   setAlcaColor: (color) => set({ alcaColor: color }),
   setInteriorColor: (color) => set({ interiorColor: color }),
+  setAllColors: (color) =>
+    set({
+      baseColor: color,
+      alcaColor: color,
+      interiorColor: color,
+      useRender3Base: false,
+    }),
   setRoughness: (roughness) => set({ roughness }),
   setMetalness: (metalness) => set({ metalness }),
   setAutoRotate: (autoRotate) => set({ autoRotate }),
