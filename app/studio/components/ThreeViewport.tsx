@@ -513,13 +513,23 @@ export default function ThreeViewport({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
+      // Exact trigonometric Axis-Aligned Bounding Box (AABB) for any arbitrary rotation
+      const getRotatedBounds = (w: number, d: number, rotY: number) => {
+        const cos = Math.abs(Math.cos(rotY));
+        const sin = Math.abs(Math.sin(rotY));
+        return {
+          effW: w * cos + d * sin,
+          effD: w * sin + d * cos,
+        };
+      };
+
       const isWallHangingItem = dragObject.userData.behavior === 'wall' && (dragObject.userData.spec?.by || 0) > 0;
       const itemW = (dragObject.userData.width || 0.8) * dragObject.scale.x;
       const itemH = (dragObject.userData.height || 0.8) * dragObject.scale.y;
       const itemD = (dragObject.userData.depth || 0.6) * dragObject.scale.z;
       const otherObjects = furnitureGroupRef.current.children.filter((o) => o !== dragObject);
 
-      const checkCollision3D = (targetPos: THREE.Vector3, currentW = itemW, currentD = itemD) => {
+      const checkCollision3D = (targetPos: THREE.Vector3, currentW: number, currentD: number) => {
         if (!collisionOn) return false;
         const testBox = new THREE.Box3().setFromCenterAndSize(
           targetPos.clone().add(new THREE.Vector3(0, itemH / 2, 0)),
@@ -550,7 +560,7 @@ export default function ThreeViewport({
           const localPos = new THREE.Vector3(targetLocalX, targetLocalY, itemD / 2 + HALF_WALL);
           const worldPos = wall.localToWorld(localPos.clone());
 
-          if (!checkCollision3D(worldPos)) {
+          if (!checkCollision3D(worldPos, itemW, itemD)) {
             dragObject.position.copy(worldPos);
             dragObject.rotation.y = wall.rotation.y;
           }
@@ -572,7 +582,7 @@ export default function ThreeViewport({
           const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
 
           let targetRot = dragObject.rotation.y;
-          const ROT_ZONE = 0.85; // Distance threshold to align with the nearest wall
+          const ROT_ZONE = 0.7; // Distance threshold to orient towards nearest wall
 
           if (minWallDist < ROT_ZONE) {
             if (minWallDist === dBack) {
@@ -586,45 +596,44 @@ export default function ThreeViewport({
             }
           }
 
-          // Effective bounding box rotated
-          const isRotated90 = Math.abs(Math.sin(targetRot)) > 0.5;
-          const effW = isRotated90 ? itemD : itemW;
-          const effD = isRotated90 ? itemW : itemD;
+          // Exact bounding dimensions under current rotation
+          let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
 
-          // Keep strictly inside room floor limits
-          const halfRoomW = room.width / 2 - effW / 2;
-          const halfRoomD = room.depth / 2 - effD / 2;
-          let tx = Math.max(-halfRoomW, Math.min(halfRoomW, rawX));
-          let tz = Math.max(-halfRoomD, Math.min(halfRoomD, rawZ));
+          // Room clamping bounds
+          let minX = -room.width / 2 + effW / 2;
+          let maxX = room.width / 2 - effW / 2;
+          let minZ = -room.depth / 2 + effD / 2;
+          let maxZ = room.depth / 2 - effD / 2;
 
-          // Magnetic snapping to walls
+          let tx = Math.max(minX, Math.min(maxX, rawX));
+          let tz = Math.max(minZ, Math.min(maxZ, rawZ));
+
+          // Magnetic snapping to walls with dual-axis corner support
           if (snapOn) {
-            const distBack = Math.abs(tz - (-room.depth / 2 + effD / 2));
-            const distLeft = Math.abs(tx - (-room.width / 2 + effW / 2));
-            const distRight = Math.abs(tx - (room.width / 2 - effW / 2));
-            const distFront = Math.abs(tz - (room.depth / 2 - effD / 2));
+            const distBack = Math.abs(tz - minZ);
+            const distFront = Math.abs(tz - maxZ);
+            const distLeft = Math.abs(tx - minX);
+            const distRight = Math.abs(tx - maxX);
 
+            // Z-axis wall snapping (Back / Front)
             if (distBack < SNAP_THRESHOLD) {
-              tz = -room.depth / 2 + effD / 2;
-              targetRot = 0;
-            } else if (distLeft < SNAP_THRESHOLD) {
-              tx = -room.width / 2 + effW / 2;
-              targetRot = Math.PI / 2;
-            } else if (distRight < SNAP_THRESHOLD) {
-              tx = room.width / 2 - effW / 2;
-              targetRot = -Math.PI / 2;
+              tz = minZ;
             } else if (distFront < SNAP_THRESHOLD) {
-              tz = room.depth / 2 - effD / 2;
-              targetRot = Math.PI;
+              tz = maxZ;
+            }
+
+            // X-axis wall snapping (Left / Right) - evaluated independently for corners!
+            if (distLeft < SNAP_THRESHOLD) {
+              tx = minX;
+            } else if (distRight < SNAP_THRESHOLD) {
+              tx = maxX;
             }
 
             // Side-by-side snapping to neighboring floor objects along the walls
             otherObjects.forEach((other) => {
               const oW = (other.userData.width || 0.8) * other.scale.x;
               const oD = (other.userData.depth || 0.6) * other.scale.z;
-              const oIsRot90 = Math.abs(Math.sin(other.rotation.y)) > 0.5;
-              const oEffW = oIsRot90 ? oD : oW;
-              const oEffD = oIsRot90 ? oW : oD;
+              const { effW: oEffW, effD: oEffD } = getRotatedBounds(oW, oD, other.rotation.y);
 
               // If on same wall along Z (back or front)
               if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) {
@@ -642,6 +651,10 @@ export default function ThreeViewport({
               }
             });
           }
+
+          // Strict final boundary re-clamp after all snapping calculations
+          tx = Math.max(minX, Math.min(maxX, tx));
+          tz = Math.max(minZ, Math.min(maxZ, tz));
 
           const targetPos = new THREE.Vector3(tx, targetBaseY, tz);
           if (!checkCollision3D(targetPos, effW, effD)) {
@@ -723,12 +736,27 @@ export default function ThreeViewport({
           else if (minWallDist === dRight) rot = -Math.PI / 2;
           else if (minWallDist === dFront) rot = Math.PI;
 
-          const isRot90 = Math.abs(Math.sin(rot)) > 0.5;
-          const effW = isRot90 ? spec.d : spec.w;
-          const effD = isRot90 ? spec.w : spec.d;
+          const cos = Math.abs(Math.cos(rot));
+          const sin = Math.abs(Math.sin(rot));
+          const effW = spec.w * cos + spec.d * sin;
+          const effD = spec.w * sin + spec.d * cos;
 
-          const x = Math.max(-room.width / 2 + effW / 2, Math.min(room.width / 2 - effW / 2, rawX));
-          const z = Math.max(-room.depth / 2 + effD / 2, Math.min(room.depth / 2 - effD / 2, rawZ));
+          const minX = -room.width / 2 + effW / 2;
+          const maxX = room.width / 2 - effW / 2;
+          const minZ = -room.depth / 2 + effD / 2;
+          const maxZ = room.depth / 2 - effD / 2;
+
+          let x = Math.max(minX, Math.min(maxX, rawX));
+          let z = Math.max(minZ, Math.min(maxZ, rawZ));
+
+          // Snap to wall if close on drop
+          if (snapOn) {
+            if (Math.abs(z - minZ) < SNAP_THRESHOLD) z = minZ;
+            else if (Math.abs(z - maxZ) < SNAP_THRESHOLD) z = maxZ;
+
+            if (Math.abs(x - minX) < SNAP_THRESHOLD) x = minX;
+            else if (Math.abs(x - maxX) < SNAP_THRESHOLD) x = maxX;
+          }
 
           onDropFurniture(spec, { x, z, by: spec.by ?? 0, rot });
         } else {

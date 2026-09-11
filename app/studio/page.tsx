@@ -294,16 +294,34 @@ export default function StudioPage() {
     (uid: number) => {
       const target = furniture.find((f) => f.uid === uid);
       if (!target) return;
+
+      const cos = Math.abs(Math.cos(target.rot));
+      const sin = Math.abs(Math.sin(target.rot));
+      const effW = target.w * cos + target.d * sin;
+      const effD = target.w * sin + target.d * cos;
+
+      const minX = -room.width / 2 + effW / 2;
+      const maxX = room.width / 2 - effW / 2;
+      const minZ = -room.depth / 2 + effD / 2;
+      const maxZ = room.depth / 2 - effD / 2;
+
+      let newX = target.x + 0.3;
+      let newZ = target.z + 0.3;
+      if (newX > maxX) newX = target.x - 0.3;
+      if (newZ > maxZ) newZ = target.z - 0.3;
+      newX = Math.max(minX, Math.min(maxX, newX));
+      newZ = Math.max(minZ, Math.min(maxZ, newZ));
+
       const dupe: FurnitureInstance = {
         ...target,
         uid: Date.now(),
-        x: target.x + 0.3,
-        z: target.z + 0.3,
+        x: newX,
+        z: newZ,
       };
       setFurniture((prev) => [...prev, dupe]);
       setSelectedUid(dupe.uid);
     },
-    [furniture]
+    [furniture, room.width, room.depth]
   );
 
   // Global Keyboard Shortcuts (Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)

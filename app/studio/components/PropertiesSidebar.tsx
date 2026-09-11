@@ -501,24 +501,116 @@ export default function PropertiesSidebar({
           />
         </div>
 
-        <div>
-          <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
-            <span className="flex items-center gap-1">
-              <RotateCw className="size-3" /> Rotação Y
-            </span>
-            <span className="font-mono text-primary">
-              {Math.round((selected.rot * 180) / Math.PI)}°
-            </span>
+        {/* Smart Realignment & Wall Snapping Tools */}
+        <div className="pt-1">
+          <label className="text-[10px] text-on-surface-variant block mb-1.5 font-medium">Realinhamento Inteligente</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => {
+                const curX = selected.x;
+                const curZ = selected.z;
+                const dLeft = curX - (-room.width / 2);
+                const dRight = room.width / 2 - curX;
+                const dBack = curZ - (-room.depth / 2);
+                const dFront = room.depth / 2 - curZ;
+
+                const minDist = Math.min(dLeft, dRight, dBack, dFront);
+                let targetRot = 0;
+                let targetX = curX;
+                let targetZ = curZ;
+
+                const cos = (r: number) => Math.abs(Math.cos(r));
+                const sin = (r: number) => Math.abs(Math.sin(r));
+                const getBounds = (r: number) => ({
+                  effW: selected.w * cos(r) + selected.d * sin(r),
+                  effD: selected.w * sin(r) + selected.d * cos(r),
+                });
+
+                if (minDist === dBack) {
+                  targetRot = 0;
+                  const { effW, effD } = getBounds(targetRot);
+                  targetZ = -room.depth / 2 + effD / 2;
+                  targetX = Math.max(-room.width / 2 + effW / 2, Math.min(room.width / 2 - effW / 2, curX));
+                } else if (minDist === dLeft) {
+                  targetRot = Math.PI / 2;
+                  const { effW, effD } = getBounds(targetRot);
+                  targetX = -room.width / 2 + effW / 2;
+                  targetZ = Math.max(-room.depth / 2 + effD / 2, Math.min(room.depth / 2 - effD / 2, curZ));
+                } else if (minDist === dRight) {
+                  targetRot = -Math.PI / 2;
+                  const { effW, effD } = getBounds(targetRot);
+                  targetX = room.width / 2 - effW / 2;
+                  targetZ = Math.max(-room.depth / 2 + effD / 2, Math.min(room.depth / 2 - effD / 2, curZ));
+                } else if (minDist === dFront) {
+                  targetRot = Math.PI;
+                  const { effW, effD } = getBounds(targetRot);
+                  targetZ = room.depth / 2 - effD / 2;
+                  targetX = Math.max(-room.width / 2 + effW / 2, Math.min(room.width / 2 - effW / 2, curX));
+                }
+
+                onUpdate(selected.uid, { x: targetX, z: targetZ, rot: targetRot });
+              }}
+              className="px-2.5 py-1.5 rounded-lg border border-primary/30 bg-primary/10 hover:bg-primary/20 text-white text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all shadow-sm"
+              title="Encosta perfeitamente na parede mais próxima ajustando a rotação sem entrar na parede"
+            >
+              <Magnet className="size-3.5 text-primary" /> Encostar Parede
+            </button>
+
+            <button
+              onClick={() => {
+                const cos = Math.abs(Math.cos(selected.rot));
+                const sin = Math.abs(Math.sin(selected.rot));
+                const effW = selected.w * cos + selected.d * sin;
+                const effD = selected.w * sin + selected.d * cos;
+
+                const minX = -room.width / 2 + effW / 2;
+                const maxX = room.width / 2 - effW / 2;
+                const minZ = -room.depth / 2 + effD / 2;
+                const maxZ = room.depth / 2 - effD / 2;
+
+                const newX = Math.max(minX, Math.min(maxX, selected.x));
+                const newZ = Math.max(minZ, Math.min(maxZ, selected.z));
+
+                onUpdate(selected.uid, { x: newX, z: newZ });
+              }}
+              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/10 text-on-surface text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all"
+              title="Recalcula e retira o móvel de dentro das paredes caso esteja colidindo"
+            >
+              <Sliders className="size-3.5 text-primary" /> Recalcular Posição
+            </button>
+
+            <button
+              onClick={() => {
+                const newRot = (selected.rot + Math.PI / 2) % (Math.PI * 2);
+                const cos = Math.abs(Math.cos(newRot));
+                const sin = Math.abs(Math.sin(newRot));
+                const effW = selected.w * cos + selected.d * sin;
+                const effD = selected.w * sin + selected.d * cos;
+
+                const minX = -room.width / 2 + effW / 2;
+                const maxX = room.width / 2 - effW / 2;
+                const minZ = -room.depth / 2 + effD / 2;
+                const maxZ = room.depth / 2 - effD / 2;
+
+                const newX = Math.max(minX, Math.min(maxX, selected.x));
+                const newZ = Math.max(minZ, Math.min(maxZ, selected.z));
+
+                onUpdate(selected.uid, { rot: newRot, x: newX, z: newZ });
+              }}
+              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/10 text-on-surface text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all"
+              title="Gira 90 graus mantendo dentro dos limites do cômodo"
+            >
+              <RotateCw className="size-3.5 text-primary" /> Girar 90°
+            </button>
+
+            <button
+              onClick={() => onUpdate(selected.uid, { x: 0, z: 0 })}
+              className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/10 text-on-surface text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all"
+              title="Centralizar no meio do quarto"
+            >
+              <Home className="size-3.5 text-primary" /> Centralizar
+            </button>
           </div>
-          <input
-            type="range"
-            min="0"
-            max={Math.PI * 2}
-            step={Math.PI / 12}
-            value={selected.rot}
-            onChange={(e) => onUpdate(selected.uid, { rot: parseFloat(e.target.value) })}
-            className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
-          />
         </div>
       </div>
 
