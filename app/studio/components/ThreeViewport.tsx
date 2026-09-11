@@ -273,6 +273,11 @@ export default function ThreeViewport({
       animationFrameId = requestAnimationFrame(animate);
       if (controlsRef.current) controlsRef.current.update();
 
+      // Dynamic selection bounding box update
+      if (selectionHelperRef.current) {
+        selectionHelperRef.current.update();
+      }
+
       // Dynamic wall transparency based on camera angle
       if (cameraRef.current && wallsGroupRef.current) {
         wallsGroupRef.current.children.forEach((wallGroup: any) => {
@@ -405,6 +410,8 @@ export default function ThreeViewport({
     buildWall(room.depth, room.height, -hw - HALF_WALL, 0, Math.PI / 2, 'left');
     buildWall(room.depth, room.height, hw + HALF_WALL, 0, -Math.PI / 2, 'right');
 
+    wallsGroupRef.current.updateMatrixWorld(true);
+
     if (floorRef.current) sceneRef.current.remove(floorRef.current);
     const floorGeo = new THREE.PlaneGeometry(room.width + 4, room.depth + 4);
     const floorMat = new THREE.MeshStandardMaterial({
@@ -504,6 +511,8 @@ export default function ThreeViewport({
         );
         if (selectedObj) {
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          furnitureGroupRef.current.updateMatrixWorld(true);
+          selectedObj.updateWorldMatrix(true, true);
           const boxHelper = new THREE.BoxHelper(selectedObj, '#3b82f6');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
@@ -518,6 +527,8 @@ export default function ThreeViewport({
         });
         if (selectedOpeningObj) {
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          wallsGroupRef.current.updateMatrixWorld(true);
+          (selectedOpeningObj as THREE.Object3D).updateWorldMatrix(true, true);
           const boxHelper = new THREE.BoxHelper(selectedOpeningObj, '#f59e0b');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
@@ -599,6 +610,8 @@ export default function ThreeViewport({
           }
 
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          wallsGroupRef.current.updateMatrixWorld(true);
+          top.updateWorldMatrix(true, true);
           const boxHelper = new THREE.BoxHelper(top, '#f59e0b');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
@@ -630,6 +643,8 @@ export default function ThreeViewport({
 
           // Immediately update box helper and rulers on click
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          furnitureGroupRef.current.updateMatrixWorld(true);
+          top.updateWorldMatrix(true, true);
           const boxHelper = new THREE.BoxHelper(top, '#3b82f6');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
