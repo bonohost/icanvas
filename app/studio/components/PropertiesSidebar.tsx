@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FurnitureInstance, RoomSettings, WallSettings } from '../types/furniture';
+import { FurnitureInstance, RoomSettings, WallSettings, WallOpening, WallSide } from '../types/furniture';
 import { MATERIAL_OPTIONS, WALL_PBR_PRESETS, FLOOR_PBR_PRESETS } from '../lib/furniture-data';
+import { OPENING_FRAME_COLORS } from '../lib/wall-builders';
 import {
   Trash2,
   Copy,
@@ -16,32 +17,50 @@ import {
   Sliders,
   Grid3x3,
   Magnet,
+  DoorOpen,
+  AppWindow,
+  X,
+  Eye,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
   selected: FurnitureInstance | null;
+  selectedOpening?: WallOpening | null;
   room: RoomSettings;
   onUpdateRoom: (room: RoomSettings) => void;
   onUpdate: (uid: number, updates: Partial<FurnitureInstance>) => void;
   onRemove: (uid: number) => void;
   onDuplicate: (uid: number) => void;
+  onUpdateOpening?: (id: string, updates: Partial<WallOpening>) => void;
+  onRemoveOpening?: (id: string) => void;
+  onDuplicateOpening?: (id: string) => void;
+  onDeselectAll?: () => void;
   showGrid?: boolean;
   onToggleGrid?: (show: boolean) => void;
   snapOn?: boolean;
   onToggleSnap?: (snap: boolean) => void;
+  autoTransparency?: boolean;
+  onToggleAutoTransparency?: (transparency: boolean) => void;
 }
 
 export default function PropertiesSidebar({
   selected,
+  selectedOpening,
   room,
   onUpdateRoom,
   onUpdate,
   onRemove,
   onDuplicate,
+  onUpdateOpening,
+  onRemoveOpening,
+  onDuplicateOpening,
+  onDeselectAll,
   showGrid = true,
   onToggleGrid,
   snapOn = true,
   onToggleSnap,
+  autoTransparency = true,
+  onToggleAutoTransparency,
 }: PropertiesSidebarProps) {
   const [activeWallTab, setActiveWallTab] = useState<keyof RoomSettings['walls']>('back');
 
@@ -54,6 +73,244 @@ export default function PropertiesSidebar({
       },
     });
   };
+
+  // OPENING ARCHITECTURE SETTINGS (When a door or window is selected)
+  if (selectedOpening) {
+    const isDoor = selectedOpening.type.startsWith('door');
+    const Icon = isDoor ? DoorOpen : AppWindow;
+    const currentWallLength =
+      selectedOpening.wallSide === 'back' || selectedOpening.wallSide === 'front'
+        ? room.width
+        : room.depth;
+
+    return (
+      <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-6">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <div className="size-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 flex-shrink-0">
+              <Icon className="size-4 text-primary" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <h2 className="font-headline font-bold text-xs tracking-wider uppercase text-primary truncate">
+                {selectedOpening.name}
+              </h2>
+              <span className="text-[10px] text-on-surface-variant font-mono">
+                Parede: {selectedOpening.wallSide.toUpperCase()}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onDuplicateOpening?.(selectedOpening.id)}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface transition-colors"
+              title="Duplicar Vão na Parede"
+            >
+              <Copy className="size-4" />
+            </button>
+            <button
+              onClick={() => onRemoveOpening?.(selectedOpening.id)}
+              className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+              title="Excluir Vão (Delete)"
+            >
+              <Trash2 className="size-4" />
+            </button>
+            <button
+              onClick={() => onDeselectAll?.()}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+              title="Fechar Painel (Esc)"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Parede Associada */}
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+            <Layers className="size-3.5 text-primary" /> Parede Instalada
+          </span>
+          <div className="grid grid-cols-4 gap-1 bg-white/5 p-1 rounded-xl">
+            {(['back', 'front', 'left', 'right'] as const).map((side) => {
+              const labels: Record<WallSide, string> = {
+                back: 'Traseira',
+                front: 'Frontal',
+                left: 'Esquerda',
+                right: 'Direita',
+              };
+              const isActive = selectedOpening.wallSide === side;
+              return (
+                <button
+                  key={side}
+                  onClick={() => onUpdateOpening?.(selectedOpening.id, { wallSide: side })}
+                  className={`py-1 text-[10px] font-semibold rounded-lg transition-all ${
+                    isActive ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'
+                  }`}
+                >
+                  {labels[side]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Posição na Parede (0% a 100%) */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-on-surface-variant flex items-center gap-1.5">
+              <Sliders className="size-3.5 text-primary" /> Posição na Parede
+            </span>
+            <span className="font-mono text-primary">
+              {(selectedOpening.position * currentWallLength).toFixed(2)}m ({Math.round(selectedOpening.position * 100)}%)
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0.08"
+            max="0.92"
+            step="0.01"
+            value={selectedOpening.position}
+            onChange={(e) =>
+              onUpdateOpening?.(selectedOpening.id, { position: parseFloat(e.target.value) || 0.5 })
+            }
+            className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+          />
+          <div className="flex justify-between text-[9px] text-on-surface-variant font-mono">
+            <span>Início (0m)</span>
+            <button
+              onClick={() => onUpdateOpening?.(selectedOpening.id, { position: 0.5 })}
+              className="text-primary hover:underline"
+            >
+              Centralizar (50%)
+            </button>
+            <span>Fim ({currentWallLength.toFixed(1)}m)</span>
+          </div>
+        </div>
+
+        {/* Dimensões do Vão */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+            <Box className="size-3.5 text-primary" /> Dimensões do Vão
+          </span>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] text-on-surface-variant block mb-1">Largura</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0.4"
+                max={currentWallLength - 0.2}
+                value={selectedOpening.width}
+                onChange={(e) =>
+                  onUpdateOpening?.(selectedOpening.id, { width: parseFloat(e.target.value) || 0.8 })
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-on-surface-variant block mb-1">Altura</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0.4"
+                max={room.height - 0.1}
+                value={selectedOpening.height}
+                onChange={(e) =>
+                  onUpdateOpening?.(selectedOpening.id, { height: parseFloat(e.target.value) || 1.2 })
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-on-surface-variant block mb-1">Peitoril (Sill)</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                max={room.height - selectedOpening.height - 0.1}
+                value={selectedOpening.sillHeight || 0}
+                onChange={(e) =>
+                  onUpdateOpening?.(selectedOpening.id, {
+                    sillHeight: Math.max(0, parseFloat(e.target.value) || 0),
+                  })
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Abertura da Folha (Para portas de giro / correr) */}
+        {selectedOpening.type !== 'door-opening' && (
+          <div className="space-y-2 border-t border-white/10 pt-4">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-on-surface-variant flex items-center gap-1.5">
+                <DoorOpen className="size-3.5 text-primary" /> Abertura da Folha
+              </span>
+              <span className="font-mono text-primary">
+                {Math.round((selectedOpening.leafOpenRatio ?? 0.35) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={selectedOpening.leafOpenRatio ?? 0.35}
+              onChange={(e) =>
+                onUpdateOpening?.(selectedOpening.id, { leafOpenRatio: parseFloat(e.target.value) })
+              }
+              className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* Acabamento da Esquadria / Batente */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+            <Palette className="size-3.5 text-primary" /> Acabamento da Esquadria
+          </span>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {OPENING_FRAME_COLORS.map((opt) => {
+              const isSelected =
+                (selectedOpening.frameColor || OPENING_FRAME_COLORS[0].color).toLowerCase() ===
+                opt.color.toLowerCase();
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => onUpdateOpening?.(selectedOpening.id, { frameColor: opt.color })}
+                  className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                    isSelected
+                      ? 'border-primary bg-primary/20 text-white shadow-sm'
+                      : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  <div
+                    className="size-3.5 rounded-full border border-white/30 flex-shrink-0"
+                    style={{ backgroundColor: opt.color }}
+                  />
+                  <span className="text-[10px] font-medium leading-tight truncate">{opt.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-on-surface-variant">Cor Customizada</span>
+            <input
+              type="color"
+              value={selectedOpening.frameColor || '#1e293b'}
+              onChange={(e) => onUpdateOpening?.(selectedOpening.id, { frameColor: e.target.value })}
+              className="w-8 h-8 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+            />
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   // ROOM ARCHITECTURE SETTINGS (When nothing is selected)
   if (!selected) {
@@ -390,6 +647,29 @@ export default function PropertiesSidebar({
                 <div
                   className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
                     showGrid ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-white/5 pt-2.5">
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-white flex items-center gap-1.5">
+                  <Eye className="size-3.5 text-primary" /> Auto-Ocultar Paredes
+                </span>
+                <span className="text-[10px] text-on-surface-variant">Transparência dinâmica na visão da câmera</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleAutoTransparency?.(!autoTransparency)}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                  autoTransparency ? 'bg-primary' : 'bg-white/10'
+                }`}
+                title={autoTransparency ? 'Desativar Transparência Automática' : 'Ativar Transparência Automática'}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                    autoTransparency ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>

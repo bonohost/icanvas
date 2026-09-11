@@ -3,19 +3,25 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec } from '../types/furniture';
+import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
+import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
 
 interface ViewportProps {
   room: RoomSettings;
   furniture: FurnitureInstance[];
   onSelect: (uid: number | null) => void;
   selectedUid: number | null;
+  selectedOpeningId?: string | null;
+  onSelectOpening?: (id: string | null) => void;
   onUpdatePosition: (uid: number, x: number, z: number, by?: number, rot?: number) => void;
+  onUpdateOpeningPosition?: (id: string, newPos: number) => void;
   onDropFurniture?: (spec: FurnitureSpec, position: { x: number; z: number; by?: number; rot?: number }) => void;
+  onDropOpening?: (preset: any, wallSide: WallSide, position: number) => void;
   showGrid: boolean;
   snapOn: boolean;
   collisionOn: boolean;
+  autoTransparency?: boolean;
   cameraSettings: { x: number; y: number; z: number; fov: number };
 }
 
@@ -32,11 +38,16 @@ export default function ThreeViewport({
   furniture,
   onSelect,
   selectedUid,
+  selectedOpeningId,
+  onSelectOpening,
   onUpdatePosition,
+  onUpdateOpeningPosition,
   onDropFurniture,
+  onDropOpening,
   showGrid,
   snapOn,
   collisionOn,
+  autoTransparency = true,
   cameraSettings,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,6 +63,11 @@ export default function ThreeViewport({
   const rulersGroupRef = useRef<THREE.Group>(new THREE.Group());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
+
+  const autoTransparencyRef = useRef(autoTransparency);
+  useEffect(() => {
+    autoTransparencyRef.current = autoTransparency;
+  }, [autoTransparency]);
 
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
@@ -218,16 +234,27 @@ export default function ThreeViewport({
 
       // Dynamic wall transparency based on camera angle
       if (cameraRef.current && wallsGroupRef.current) {
-        wallsGroupRef.current.children.forEach((w: any) => {
-          if (w.material) {
-            const wallNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(w.quaternion);
-            const camToWall = new THREE.Vector3().subVectors(w.position, cameraRef.current!.position).normalize();
-            const dot = wallNormal.dot(camToWall);
-            const isBehind = dot > 0.05;
-            w.material.opacity = isBehind ? 0.15 : 1.0;
-            w.material.depthWrite = !isBehind;
-            w.castShadow = false;
-          }
+        wallsGroupRef.current.children.forEach((wallGroup: any) => {
+          const wallNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wallGroup.quaternion);
+          const camToWall = new THREE.Vector3().subVectors(wallGroup.position, cameraRef.current!.position).normalize();
+          const dot = wallNormal.dot(camToWall);
+          const isBehind = autoTransparencyRef.current ? dot > 0.05 : false;
+
+          wallGroup.traverse((child: any) => {
+            if (child.isMesh && child.material && !child.userData?.isOpening) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((m: any) => {
+                  m.transparent = true;
+                  m.opacity = isBehind ? 0.15 : 1.0;
+                  m.depthWrite = !isBehind;
+                });
+              } else {
+                child.material.transparent = true;
+                child.material.opacity = isBehind ? 0.15 : 1.0;
+                child.material.depthWrite = !isBehind;
+              }
+            }
+          });
         });
       }
 
@@ -297,13 +324,11 @@ export default function ThreeViewport({
       w: number,
       h: number,
       x: number,
-      y: number,
       z: number,
       ry: number,
       id: keyof RoomSettings['walls']
     ) => {
       const wallConfig = room.walls[id];
-      const geo = new THREE.BoxGeometry(w, h, WALL_THICKNESS);
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(wallConfig.color),
         roughness: wallConfig.roughness ?? 0.85,
@@ -312,23 +337,32 @@ export default function ThreeViewport({
         opacity: 1.0,
       });
       applyTexture(mat, wallConfig.textureUrl, wallConfig.tileX || 1, wallConfig.tileY || 1);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(x, y, z);
-      mesh.rotation.y = ry;
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.userData = { isWall: true, wallId: id, w, h };
-      wallsGroupRef.current.add(mesh);
+
+      const wallOpenings = (room.openings || []).filter((o) => o.wallSide === id);
+      const wallGroup = buildParametricWallGroup(w, h, WALL_THICKNESS, wallConfig, wallOpenings, mat);
+      wallGroup.position.set(x, 0, z);
+      wallGroup.rotation.y = ry;
+      wallGroup.userData = { isWall: true, wallId: id, w, h };
+
+      // Add 3D architectural doors / windows belonging to this wall
+      wallOpenings.forEach((opening) => {
+        const openingGroup = buildOpening3D(opening, WALL_THICKNESS);
+        const localX = (opening.position - 0.5) * w;
+        const localY = opening.sillHeight || 0;
+        openingGroup.position.set(localX, localY, 0);
+        wallGroup.add(openingGroup);
+      });
+
+      wallsGroupRef.current.add(wallGroup);
     };
 
     const hw = room.width / 2;
     const hd = room.depth / 2;
-    const hh = room.height / 2;
 
-    buildWall(room.width + WALL_THICKNESS * 2, room.height, 0, hh, -hd - HALF_WALL, 0, 'back');
-    buildWall(room.width + WALL_THICKNESS * 2, room.height, 0, hh, hd + HALF_WALL, Math.PI, 'front');
-    buildWall(room.depth, room.height, -hw - HALF_WALL, hh, 0, Math.PI / 2, 'left');
-    buildWall(room.depth, room.height, hw + HALF_WALL, hh, 0, -Math.PI / 2, 'right');
+    buildWall(room.width, room.height, 0, -hd - HALF_WALL, 0, 'back');
+    buildWall(room.width, room.height, 0, hd + HALF_WALL, Math.PI, 'front');
+    buildWall(room.depth, room.height, -hw - HALF_WALL, 0, Math.PI / 2, 'left');
+    buildWall(room.depth, room.height, hw + HALF_WALL, 0, -Math.PI / 2, 'right');
 
     if (floorRef.current) sceneRef.current.remove(floorRef.current);
     const floorGeo = new THREE.PlaneGeometry(room.width + 4, room.depth + 4);
@@ -434,6 +468,20 @@ export default function ThreeViewport({
           selectionHelperRef.current = boxHelper;
           updateRulers(selectedObj);
         }
+      } else if (selectedOpeningId) {
+        let selectedOpeningObj: THREE.Object3D | null = null;
+        wallsGroupRef.current.traverse((child) => {
+          if (child.userData?.openingId === selectedOpeningId) {
+            selectedOpeningObj = child;
+          }
+        });
+        if (selectedOpeningObj) {
+          if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          const boxHelper = new THREE.BoxHelper(selectedOpeningObj, '#f59e0b');
+          sceneRef.current?.add(boxHelper);
+          selectionHelperRef.current = boxHelper;
+        }
+        rulersGroupRef.current.clear();
       } else {
         if (selectionHelperRef.current) {
           sceneRef.current?.remove(selectionHelperRef.current);
@@ -448,7 +496,7 @@ export default function ThreeViewport({
     return () => {
       active = false;
     };
-  }, [furniture, selectedUid, updateRulers]);
+  }, [furniture, selectedUid, selectedOpeningId, room.openings, updateRulers]);
 
   // Real-time Interactive Dragging & Repositioning System
   useEffect(() => {
@@ -458,6 +506,8 @@ export default function ThreeViewport({
     const mouse = new THREE.Vector2();
     let isDragging = false;
     let dragObject: THREE.Object3D | null = null;
+    let dragOpening: { id: string; wallSide: WallSide; wallGroup: THREE.Object3D; wallLength: number } | null = null;
+
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const intersection = new THREE.Vector3();
     const offset = new THREE.Vector3();
@@ -471,6 +521,51 @@ export default function ThreeViewport({
 
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
+
+      // 1. Check if user clicked on a Door / Window opening
+      const openingIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
+      const openingHit = openingIntersects.find((hit) => {
+        let p: any = hit.object;
+        while (p && !p.userData?.isOpening && p.parent && p.parent !== wallsGroupRef.current) {
+          p = p.parent;
+        }
+        return p?.userData?.isOpening;
+      });
+
+      if (openingHit) {
+        let top: any = openingHit.object;
+        while (top && !top.userData?.isOpening && top.parent) top = top.parent;
+        if (top?.userData?.openingId) {
+          const opId = top.userData.openingId;
+          onSelectOpening?.(opId);
+          onSelect(null);
+
+          // Find wall parent
+          let wallGroup: any = top.parent;
+          while (wallGroup && !wallGroup.userData?.isWall && wallGroup.parent) {
+            wallGroup = wallGroup.parent;
+          }
+
+          if (wallGroup) {
+            dragOpening = {
+              id: opId,
+              wallSide: wallGroup.userData.wallId,
+              wallGroup,
+              wallLength: wallGroup.userData.w || room.width,
+            };
+            isDragging = true;
+            if (controlsRef.current) controlsRef.current.enabled = false;
+          }
+
+          if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
+          const boxHelper = new THREE.BoxHelper(top, '#f59e0b');
+          sceneRef.current?.add(boxHelper);
+          selectionHelperRef.current = boxHelper;
+          return;
+        }
+      }
+
+      // 2. Check if user clicked on Furniture
       const intersects = raycaster.intersectObjects(furnitureGroupRef.current.children, true);
 
       if (intersects.length > 0) {
@@ -481,6 +576,7 @@ export default function ThreeViewport({
 
         if (top.userData?.uid) {
           onSelect(top.userData.uid);
+          onSelectOpening?.(null);
           dragObject = top;
           isDragging = true;
           if (controlsRef.current) controlsRef.current.enabled = false;
@@ -500,11 +596,12 @@ export default function ThreeViewport({
         }
       } else {
         onSelect(null);
+        onSelectOpening?.(null);
       }
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (!isDragging || !dragObject || !cameraRef.current) return;
+      if (!isDragging || !cameraRef.current) return;
 
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -512,6 +609,21 @@ export default function ThreeViewport({
 
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
+
+      // Dragging a door / window along its wall
+      if (dragOpening) {
+        const wallIntersects = raycaster.intersectObject(dragOpening.wallGroup, true);
+        if (wallIntersects.length > 0) {
+          const hit = wallIntersects[0];
+          const localHit = dragOpening.wallGroup.worldToLocal(hit.point.clone());
+          const newPos = Math.max(0.08, Math.min(0.92, localHit.x / dragOpening.wallLength + 0.5));
+          onUpdateOpeningPosition?.(dragOpening.id, newPos);
+        }
+        if (selectionHelperRef.current) selectionHelperRef.current.update();
+        return;
+      }
+
+      if (!dragObject) return;
 
       // Exact trigonometric Axis-Aligned Bounding Box (AABB) for any arbitrary rotation
       const getRotatedBounds = (w: number, d: number, rotY: number) => {
@@ -543,13 +655,18 @@ export default function ThreeViewport({
       };
 
       if (isWallHangingItem) {
-        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children);
+        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
         const validHit = wallIntersects.find(
-          (hit) => ((hit.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity > 0.5
+          (hit) => {
+            let p: any = hit.object;
+            while (p && !p.userData?.isWall && p.parent) p = p.parent;
+            return p?.userData?.isWall;
+          }
         );
 
         if (validHit) {
-          const wall = validHit.object as THREE.Mesh;
+          let wall: any = validHit.object;
+          while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
           const wallW = wall.userData.w || room.width;
           const localHit = wall.worldToLocal(validHit.point.clone());
 
@@ -683,6 +800,7 @@ export default function ThreeViewport({
       }
       isDragging = false;
       dragObject = null;
+      dragOpening = null;
       if (controlsRef.current) controlsRef.current.enabled = true;
     };
 
@@ -693,11 +811,11 @@ export default function ThreeViewport({
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
-      if (!onDropFurniture || !cameraRef.current) return;
+      if (!cameraRef.current) return;
 
       const raw = e.dataTransfer?.getData('application/json');
       if (!raw) return;
-      const spec = JSON.parse(raw) as FurnitureSpec;
+      const parsed = JSON.parse(raw);
 
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -706,13 +824,48 @@ export default function ThreeViewport({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
-      if (spec.pr === 'wall') {
-        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children);
-        const validHit = wallIntersects.find(
-          (hit) => ((hit.object as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity > 0.5
-        );
+      // Handle Door / Window Opening Drop
+      if (parsed.isOpening) {
+        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
+        const validHit = wallIntersects.find((hit) => {
+          let p: any = hit.object;
+          while (p && !p.userData?.isWall && p.parent) p = p.parent;
+          return p?.userData?.isWall;
+        });
+
+        let targetWallSide: WallSide = 'back';
+        let targetPos = 0.5;
+
         if (validHit) {
-          const wall = validHit.object as THREE.Mesh;
+          let wallGroup: any = validHit.object;
+          while (wallGroup && !wallGroup.userData?.isWall && wallGroup.parent) {
+            wallGroup = wallGroup.parent;
+          }
+          if (wallGroup) {
+            targetWallSide = wallGroup.userData.wallId;
+            const wallLength = wallGroup.userData.w || room.width;
+            const localHit = wallGroup.worldToLocal(validHit.point.clone());
+            targetPos = Math.max(0.1, Math.min(0.9, localHit.x / wallLength + 0.5));
+          }
+        }
+        onDropOpening?.(parsed, targetWallSide, targetPos);
+        return;
+      }
+
+      if (!onDropFurniture) return;
+      const spec = parsed as FurnitureSpec;
+
+      if (spec.pr === 'wall') {
+        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
+        const validHit = wallIntersects.find((hit) => {
+          let p: any = hit.object;
+          while (p && !p.userData?.isWall && p.parent) p = p.parent;
+          return p?.userData?.isWall;
+        });
+
+        if (validHit) {
+          let wall: any = validHit.object;
+          while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
           const localHit = wall.worldToLocal(validHit.point.clone());
           const worldPos = wall.localToWorld(new THREE.Vector3(localHit.x, localHit.y, spec.d / 2 + HALF_WALL));
           onDropFurniture(spec, { x: worldPos.x, z: worldPos.z, by: worldPos.y, rot: wall.rotation.y });
@@ -764,7 +917,6 @@ export default function ThreeViewport({
         }
       }
     };
-
     container.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
@@ -778,7 +930,18 @@ export default function ThreeViewport({
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('drop', handleDrop);
     };
-  }, [room, snapOn, collisionOn, onSelect, onUpdatePosition, onDropFurniture, updateRulers]);
+  }, [
+    room,
+    snapOn,
+    collisionOn,
+    onSelect,
+    onSelectOpening,
+    onUpdatePosition,
+    onUpdateOpeningPosition,
+    onDropFurniture,
+    onDropOpening,
+    updateRulers,
+  ]);
 
   return <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden" />;
 }

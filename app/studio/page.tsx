@@ -6,7 +6,15 @@ import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
 import ProjectManagerModal from './components/ProjectManagerModal';
 import TemplatesModal from './components/TemplatesModal';
-import { FurnitureInstance, FurnitureSpec, RoomSettings, StudioProject } from './types/furniture';
+import {
+  FurnitureInstance,
+  FurnitureSpec,
+  RoomSettings,
+  StudioProject,
+  WallOpening,
+  WallSide,
+} from './types/furniture';
+import { OpeningPreset } from './lib/furniture-data';
 import { RoomTemplatePreset } from './lib/room-templates';
 import {
   saveProject,
@@ -28,6 +36,8 @@ import {
   Plus,
   Edit3,
   Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function StudioPage() {
@@ -91,9 +101,11 @@ export default function StudioPage() {
   ]);
 
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
+  const [autoTransparency, setAutoTransparency] = useState(true);
 
   const [room, setRoom] = useState<RoomSettings>({
     width: 4.5,
@@ -108,6 +120,31 @@ export default function StudioPage() {
       left: { color: '#f8fafc', tileX: 2, tileY: 1 },
       right: { color: '#f8fafc', tileX: 2, tileY: 1 },
     },
+    openings: [
+      {
+        id: 'door_main',
+        wallSide: 'front',
+        type: 'door-hinged',
+        name: 'Porta de Madeira de Giro',
+        position: 0.25,
+        width: 0.8,
+        height: 2.1,
+        sillHeight: 0,
+        frameColor: '#8b5a2b',
+        leafOpenRatio: 0.35,
+      },
+      {
+        id: 'win_main',
+        wallSide: 'left',
+        type: 'window-standard',
+        name: 'Janela Padrão 2 Folhas',
+        position: 0.5,
+        width: 1.4,
+        height: 1.2,
+        sillHeight: 1.0,
+        frameColor: '#1e293b',
+      },
+    ],
     lightIntensity: 1.2,
     reflectionOpacity: 0.05,
   });
@@ -324,6 +361,78 @@ export default function StudioPage() {
     [furniture, room.width, room.depth]
   );
 
+  const handleAddOpening = useCallback(
+    (preset: OpeningPreset, wallSide: WallSide = 'back', position = 0.5) => {
+      const newOpening: WallOpening = {
+        id: `op_${Date.now()}`,
+        wallSide,
+        type: preset.type,
+        name: preset.name,
+        position,
+        width: preset.width,
+        height: preset.height,
+        sillHeight: preset.sillHeight,
+        frameColor: preset.frameColor,
+        leafOpenRatio: 0.35,
+      };
+      setRoom((prev) => ({
+        ...prev,
+        openings: [...(prev.openings || []), newOpening],
+      }));
+      setSelectedOpeningId(newOpening.id);
+      setSelectedUid(null);
+      setSaveToast(`Vão "${newOpening.name}" Adicionado!`);
+      setTimeout(() => setSaveToast(null), 2500);
+    },
+    []
+  );
+
+  const handleUpdateOpening = useCallback((id: string, updates: Partial<WallOpening>) => {
+    setRoom((prev) => ({
+      ...prev,
+      openings: (prev.openings || []).map((o) => (o.id === id ? { ...o, ...updates } : o)),
+    }));
+  }, []);
+
+  const handleUpdateOpeningPosition = useCallback((id: string, newPos: number) => {
+    setRoom((prev) => ({
+      ...prev,
+      openings: (prev.openings || []).map((o) => (o.id === id ? { ...o, position: newPos } : o)),
+    }));
+  }, []);
+
+  const handleRemoveOpening = useCallback((id: string) => {
+    setRoom((prev) => ({
+      ...prev,
+      openings: (prev.openings || []).filter((o) => o.id !== id),
+    }));
+    setSelectedOpeningId(null);
+  }, []);
+
+  const handleDuplicateOpening = useCallback(
+    (id: string) => {
+      const target = (room.openings || []).find((o) => o.id === id);
+      if (!target) return;
+      const dupe: WallOpening = {
+        ...target,
+        id: `op_${Date.now()}`,
+        position: Math.min(0.85, target.position + 0.15),
+      };
+      setRoom((prev) => ({
+        ...prev,
+        openings: [...(prev.openings || []), dupe],
+      }));
+      setSelectedOpeningId(dupe.id);
+      setSelectedUid(null);
+    },
+    [room.openings]
+  );
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedUid(null);
+    setSelectedOpeningId(null);
+  }, []);
+
   // Global Keyboard Shortcuts (Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -348,6 +457,9 @@ export default function StudioPage() {
         if (selectedUid) {
           e.preventDefault();
           handleDuplicate(selectedUid);
+        } else if (selectedOpeningId) {
+          e.preventDefault();
+          handleDuplicateOpening(selectedOpeningId);
         }
       }
 
@@ -356,27 +468,42 @@ export default function StudioPage() {
         if (selectedUid) {
           e.preventDefault();
           handleRemove(selectedUid);
+        } else if (selectedOpeningId) {
+          e.preventDefault();
+          handleRemoveOpening(selectedOpeningId);
         }
       }
 
       // Deselect: Escape
       if (e.key === 'Escape') {
-        setSelectedUid(null);
+        handleDeselectAll();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedUid, handleDuplicate, handleRemove, handleSaveCurrent]);
+  }, [
+    selectedUid,
+    selectedOpeningId,
+    handleDuplicate,
+    handleDuplicateOpening,
+    handleRemove,
+    handleRemoveOpening,
+    handleSaveCurrent,
+    handleDeselectAll,
+  ]);
 
   const handleClearAll = () => {
-    if (window.confirm('Deseja limpar todos os móveis da cena?')) {
+    if (window.confirm('Deseja limpar todos os móveis e vãos da cena?')) {
       setFurniture([]);
+      setRoom((prev) => ({ ...prev, openings: [] }));
       setSelectedUid(null);
+      setSelectedOpeningId(null);
     }
   };
 
   const selectedObject = furniture.find((f) => f.uid === selectedUid) || null;
+  const selectedOpening = (room.openings || []).find((o) => o.id === selectedOpeningId) || null;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#090d16] text-white pt-20">
@@ -437,7 +564,7 @@ export default function StudioPage() {
             />
             <Edit3 className="size-3 text-white/30 group-hover:text-primary transition-colors hidden sm:block" />
             <span className="text-[10px] text-on-surface-variant font-mono hidden lg:inline">
-              ({room.width.toFixed(1)}m × {room.depth.toFixed(1)}m • {furniture.length} móveis)
+              ({room.width.toFixed(1)}m × {room.depth.toFixed(1)}m • {furniture.length} móveis • {(room.openings || []).length} vãos)
             </span>
           </div>
         </div>
@@ -470,8 +597,22 @@ export default function StudioPage() {
                 ? 'bg-primary/20 text-primary border border-primary/40'
                 : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
             }`}
+            title={snapOn ? 'Desativar Snap' : 'Ativar Snap Magnético'}
           >
             <Magnet className="size-3.5" /> Snap
+          </button>
+
+          <button
+            onClick={() => setAutoTransparency(!autoTransparency)}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
+              autoTransparency
+                ? 'bg-primary/20 text-primary border border-primary/40'
+                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+            }`}
+            title={autoTransparency ? 'Transparência Automática de Paredes: Ativada' : 'Transparência Automática de Paredes: Desativada'}
+          >
+            {autoTransparency ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            <span>Paredes Auto</span>
           </button>
 
           <div className="w-px h-5 bg-white/10 mx-1" />
@@ -479,7 +620,7 @@ export default function StudioPage() {
           <button
             onClick={handleClearAll}
             className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
-            title="Limpar todos os móveis da cena"
+            title="Limpar todos os móveis e portas/janelas da cena"
           >
             <Trash2 className="size-3.5" /> Limpar
           </button>
@@ -488,34 +629,52 @@ export default function StudioPage() {
 
       {/* Main Studio Area (Catalog + 3D Viewport + Properties) */}
       <div className="flex flex-1 overflow-hidden relative min-h-0 h-full">
-        <CatalogSidebar onAdd={handleAdd} />
+        <CatalogSidebar onAdd={handleAdd} onAddOpening={handleAddOpening} />
 
         <main className="relative flex-1 bg-[#0b0f19] overflow-hidden h-full min-h-0">
           <ThreeViewport
             room={room}
             furniture={furniture}
-            onSelect={setSelectedUid}
+            onSelect={(uid) => {
+              setSelectedUid(uid);
+              if (uid) setSelectedOpeningId(null);
+            }}
             selectedUid={selectedUid}
+            selectedOpeningId={selectedOpeningId}
+            onSelectOpening={(id) => {
+              setSelectedOpeningId(id);
+              if (id) setSelectedUid(null);
+            }}
             onUpdatePosition={handleUpdatePosition}
+            onUpdateOpeningPosition={handleUpdateOpeningPosition}
             onDropFurniture={handleAdd}
+            onDropOpening={(preset, wallSide, pos) => handleAddOpening(preset, wallSide, pos)}
             showGrid={showGrid}
             snapOn={snapOn}
             collisionOn={collisionOn}
+            autoTransparency={autoTransparency}
             cameraSettings={cameraSettings}
           />
         </main>
 
         <PropertiesSidebar
           selected={selectedObject}
+          selectedOpening={selectedOpening}
           room={room}
           onUpdateRoom={setRoom}
           onUpdate={handleUpdate}
           onRemove={handleRemove}
           onDuplicate={handleDuplicate}
+          onUpdateOpening={handleUpdateOpening}
+          onRemoveOpening={handleRemoveOpening}
+          onDuplicateOpening={handleDuplicateOpening}
+          onDeselectAll={handleDeselectAll}
           showGrid={showGrid}
           onToggleGrid={setShowGrid}
           snapOn={snapOn}
           onToggleSnap={setSnapOn}
+          autoTransparency={autoTransparency}
+          onToggleAutoTransparency={setAutoTransparency}
         />
       </div>
 

@@ -31,6 +31,32 @@ export interface CatalogCategory {
   items: FurnitureSpec[];
 }
 
+export type WallSide = 'back' | 'front' | 'left' | 'right';
+
+export type WallOpeningType =
+  | 'door-hinged'
+  | 'door-sliding'
+  | 'door-opening'
+  | 'door-glass'
+  | 'window-standard'
+  | 'window-large'
+  | 'window-sliding'
+  | 'window-high';
+
+export interface WallOpening {
+  id: string;
+  wallSide: WallSide;
+  type: WallOpeningType;
+  name: string;
+  position: number; // 0.0 to 1.0 (normalized position along the wall)
+  width: number; // meters
+  height: number; // meters
+  sillHeight: number; // meters (0 for doors)
+  frameColor?: string; // hex
+  frameMaterial?: 'metal' | 'wood' | 'pvc';
+  leafOpenRatio?: number; // 0.0 to 1.0
+}
+
 export interface WallSettings {
   color: string;
   textureUrl?: string;
@@ -56,6 +82,7 @@ export interface RoomSettings {
     left: WallSettings;
     right: WallSettings;
   };
+  openings?: WallOpening[];
   lightIntensity: number;
   reflectionOpacity: number;
 }

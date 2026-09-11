@@ -1,4 +1,118 @@
-import { CatalogCategory, MaterialType } from '../types/furniture';
+import { CatalogCategory, MaterialType, WallOpeningType } from '../types/furniture';
+
+export interface OpeningPreset {
+  id: string;
+  type: WallOpeningType;
+  name: string;
+  width: number;
+  height: number;
+  sillHeight: number;
+  frameColor: string;
+  icon: string;
+  description: string;
+}
+
+export const OPENING_PRESETS: OpeningPreset[] = [
+  {
+    id: 'door-hinged-wood',
+    type: 'door-hinged',
+    name: 'Porta de Madeira de Giro',
+    width: 0.8,
+    height: 2.1,
+    sillHeight: 0,
+    frameColor: '#8b5a2b',
+    icon: 'DoorClosed',
+    description: 'Porta convencional de giro 80x210cm com batente e maçaneta',
+  },
+  {
+    id: 'door-pivot-entry',
+    type: 'door-hinged',
+    name: 'Porta Pivotante de Entrada',
+    width: 1.0,
+    height: 2.2,
+    sillHeight: 0,
+    frameColor: '#1e293b',
+    icon: 'DoorOpen',
+    description: 'Porta de entrada 100x220cm com puxador inox',
+  },
+  {
+    id: 'door-sliding-wood',
+    type: 'door-sliding',
+    name: 'Porta de Correr Embutida',
+    width: 0.9,
+    height: 2.1,
+    sillHeight: 0,
+    frameColor: '#f8fafc',
+    icon: 'Columns',
+    description: 'Porta de correr 90x210cm de trilho superior',
+  },
+  {
+    id: 'door-glass-balcony',
+    type: 'door-glass',
+    name: 'Porta Balcão de Vidro',
+    width: 1.6,
+    height: 2.1,
+    sillHeight: 0,
+    frameColor: '#1e293b',
+    icon: 'Maximize',
+    description: 'Porta balcão 2 folhas de vidro temperado 160x210cm',
+  },
+  {
+    id: 'door-opening-arch',
+    type: 'door-opening',
+    name: 'Vão Livre / Passagem Aberta',
+    width: 0.9,
+    height: 2.1,
+    sillHeight: 0,
+    frameColor: '#1e293b',
+    icon: 'SquareDashed',
+    description: 'Abertura de passagem livre na parede com guarnição',
+  },
+  {
+    id: 'window-std-2f',
+    type: 'window-standard',
+    name: 'Janela Padrão 2 Folhas',
+    width: 1.2,
+    height: 1.2,
+    sillHeight: 1.0,
+    frameColor: '#1e293b',
+    icon: 'AppWindow',
+    description: 'Janela de alumínio 120x120cm com peitoril de 1,00m',
+  },
+  {
+    id: 'window-panoramic',
+    type: 'window-large',
+    name: 'Janela Panorâmica / Sala',
+    width: 2.0,
+    height: 1.4,
+    sillHeight: 0.7,
+    frameColor: '#1e293b',
+    icon: 'Maximize2',
+    description: 'Janela ampla para salas 200x140cm peitoril 70cm',
+  },
+  {
+    id: 'window-kitchen-ribbon',
+    type: 'window-sliding',
+    name: 'Janela de Correr Cozinha',
+    width: 1.6,
+    height: 0.8,
+    sillHeight: 1.2,
+    frameColor: '#f8fafc',
+    icon: 'StretchHorizontal',
+    description: 'Janela horizontal 160x80cm ideal sobre a bancada',
+  },
+  {
+    id: 'window-bath-high',
+    type: 'window-high',
+    name: 'Janela Maxim-Ar Banheiro',
+    width: 0.6,
+    height: 0.6,
+    sillHeight: 1.6,
+    frameColor: '#f8fafc',
+    icon: 'Grid',
+    description: 'Janela basculante alta 60x60cm peitoril 1,60m',
+  },
+];
 
 export const CATALOG: CatalogCategory[] = [
   {
