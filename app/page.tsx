@@ -5,7 +5,7 @@ export default function HomePage() {
     <>
       {/* Main Content */}
       <main className="flex-grow z-10 relative pt-24 md:pt-32 px-margin-mobile md:px-margin-desktop flex flex-col items-center">
-        
+
         {/* Hero Section */}
         <section className="text-center max-w-4xl mx-auto py-20 md:py-32 flex flex-col items-center">
           <h1 className="font-display-lg text-display-lg font-bold text-on-background mb-6 tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
@@ -23,7 +23,7 @@ export default function HomePage() {
         {/* Simulators Bento Grid */}
         <section className="w-full max-w-7xl mx-auto pb-32">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
+
             {/* Mug Sim Card */}
             <Link href="/mug-simulator" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-electric-glow/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -38,7 +38,7 @@ export default function HomePage() {
             </Link>
 
             {/* Configurator Card */}
-            <Link href="/sofa-customizer" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
+            {/* <Link href="/sofa-customizer" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-electric-glow/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5">
                 <img alt="Configurator" className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRIpVrJrLWY3YlXRh01vp7gvLTRJ8dpWYkl0-uWHNOE0X_MwYnrlOl3LWUIsrqnTZwrWcB0VXzSnVZ2my0C5FD1yj4PvddSC7_qV6CNpSgPGmLTwWdfKLGP2YTUq7YZh3EFYhzwi8UshDW5YJpWkcDs_w0bXeHm-c5zpfEhdxgI78u49T83kglghJlJKmhgZJDZlOJ5qOu0GKzs5fEKVg17CJ6vQGWbAZv5pOW4xAkCI8boDIyT7vT" />
@@ -48,7 +48,7 @@ export default function HomePage() {
                 <h3 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Configurator</h3>
               </div>
               <p className="font-body-md text-body-md text-on-surface-variant relative z-10">Plataforma robusta para configuração de móveis e produtos complexos. Explore variações estruturais instantaneamente.</p>
-            </Link>
+            </Link> */}
 
             {/* 360 Viewer Card */}
             <Link href="/360-viewer" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
@@ -66,8 +66,12 @@ export default function HomePage() {
             {/* Studio 3D Card */}
             <Link href="/studio" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden md:col-span-3 lg:col-span-1">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5 bg-slate-900 flex items-center justify-center">
-                <span className="material-symbols-outlined text-6xl text-primary/60 group-hover:text-primary group-hover:scale-110 transition-all">view_in_ar</span>
+              <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5 bg-slate-900">
+                <img
+                  alt="Studio 3D - Planejador de Ambientes"
+                  className="object-cover w-full h-full opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                  src="/images/studio-preview.png"
+                />
               </div>
               <div className="flex items-center gap-3 mb-3 relative z-10">
                 <span className="material-symbols-outlined text-primary text-[24px]">architecture</span>

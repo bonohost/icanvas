@@ -6,6 +6,7 @@ import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
 import ProjectManagerModal from './components/ProjectManagerModal';
 import TemplatesModal from './components/TemplatesModal';
+import AiRenderModal from './components/AiRenderModal';
 import {
   FurnitureInstance,
   FurnitureSpec,
@@ -46,8 +47,10 @@ export default function StudioPage() {
   const [isSaved, setIsSaved] = useState<boolean>(true);
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
+  const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const isInitialMount = useRef(true);
+  const captureSnapshotRef = useRef<() => string>(() => '');
 
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([
     {
@@ -529,6 +532,20 @@ export default function StudioPage() {
             </button>
 
             <button
+              onClick={() => setIsAiRenderOpen(true)}
+              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/30 border border-purple-400/40 transition-all active:scale-95 animate-in fade-in"
+              title="Gerar Render Fotorrealista com IA em 1 clique"
+            >
+              <Sparkles className="size-3.5 text-purple-200 animate-pulse" />
+              <span className="bg-gradient-to-r from-white via-purple-100 to-purple-200 bg-clip-text text-transparent">
+                Render IA
+              </span>
+              <span className="px-1 py-0.2 rounded text-[8px] font-black bg-white/20 text-white tracking-widest uppercase">
+                HDR
+              </span>
+            </button>
+
+            <button
               onClick={handleSaveCurrent}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${
                 isSaved
@@ -654,6 +671,9 @@ export default function StudioPage() {
             collisionOn={collisionOn}
             autoTransparency={autoTransparency}
             cameraSettings={cameraSettings}
+            onRegisterCapture={(fn) => {
+              captureSnapshotRef.current = fn;
+            }}
           />
         </main>
 
@@ -732,6 +752,16 @@ export default function StudioPage() {
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}
         onApplyTemplate={handleApplyTemplate}
+      />
+
+      {/* AI Photorealistic Render Modal */}
+      <AiRenderModal
+        isOpen={isAiRenderOpen}
+        onClose={() => setIsAiRenderOpen(false)}
+        onCaptureSnapshot={() => captureSnapshotRef.current?.() || ''}
+        room={room}
+        furniture={furniture}
+        projectName={projectName}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 export default function Viewer360Scene() {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [debugVisible, setDebugVisible] = useState(false);
+  const [objectsVisible, setObjectsVisible] = useState(false);
   const [entityPose, setEntityPose] = useState({
     x: -1,
     y: 0,
@@ -19,6 +20,13 @@ export default function Viewer360Scene() {
     const handleShortcut = (event: KeyboardEvent) => {
       const entity = entityRef.current;
 
+      // Ctrl + 0: Alterna visibilidade dos objetos 3D
+      if (event.ctrlKey && (event.key === '0' || event.code === 'Digit0' || event.code === 'Numpad0')) {
+        event.preventDefault();
+        setObjectsVisible((current) => !current);
+      }
+
+      // Ctrl + J: Alterna painel de debug
       if (event.ctrlKey && event.key.toLowerCase() === 'j') {
         event.preventDefault();
         setDebugVisible((current) => !current);
@@ -173,6 +181,7 @@ export default function Viewer360Scene() {
           <strong>Debug pose</strong>
           <div>position: x {entityPose.x} / y {entityPose.y} / z {entityPose.z}</div>
           <div>rotation: x {entityPose.rx} / y {entityPose.ry} / z {entityPose.rz}°</div>
+          <div>Objetos 3D: {objectsVisible ? 'Visíveis' : 'Ocultos'} (Ctrl+0)</div>
           <div>Ctrl+J: alterna o painel</div>
           <div>← / →: gira 10° no eixo Y</div>
         </div>
@@ -186,31 +195,35 @@ export default function Viewer360Scene() {
         {/* Imagem 360° de alta resolução. O asset está em /public/textures/360/room.jpg */}
         <a-sky src="/textures/360/room.jpg" rotation="0 -130 0"></a-sky>
 
-        {/* Exemplo de Hotspot interativo */}
-        <a-box
-          position="-1 1.5 -3"
-          rotation="0 45 0"
-          color="#4CC3D9"
-          draggable="planeY: 1.5"
-        ></a-box>
+        {/* Grupo de Objetos 3D com visibilidade controlada por Ctrl + 0 (Inicia oculto) */}
+        <a-entity visible={objectsVisible ? 'true' : 'false'}>
+          {/* Exemplo de Hotspot interativo */}
+          <a-box
+            position="-1 1.5 -3"
+            rotation="0 45 0"
+            color="#4CC3D9"
+            draggable="planeY: 1.5"
+            visible={objectsVisible ? 'true' : 'false'}
+          ></a-box>
 
-        <a-box
-          position="-1 0 -3"
-          rotation="0 45 0"
-          color="#21a196"
-          draggable="planeY: 0"
-        ></a-box>
+          <a-box
+            position="-1 0 -3"
+            rotation="0 45 0"
+            color="#21a196"
+            draggable="planeY: 0"
+            visible={objectsVisible ? 'true' : 'false'}
+          ></a-box>
 
-        <a-entity
-          ref={entityRef}
-          gltf-model="url(/3dmodels/wash/wash.glb)"
-          position="-2.36 0 -1.71"
-          rotation="0 -45 0"
-          draggable="planeY: 0"
-          scale="1 1 1"
-          visible="true"  
-        ></a-entity>
-
+          <a-entity
+            ref={entityRef}
+            gltf-model="url(/3dmodels/wash/wash.glb)"
+            position="-2.36 0 -1.71"
+            rotation="0 -45 0"
+            draggable="planeY: 0"
+            scale="1 1 1"
+            visible={objectsVisible ? 'true' : 'false'}
+          ></a-entity>
+        </a-entity>
 
         {/* Câmera com controles de giroscópio para mobile e arrastar para desktop */}
         <a-camera look-controls="enabled: true" wasd-controls="enabled: false"></a-camera>

@@ -23,6 +23,7 @@ interface ViewportProps {
   collisionOn: boolean;
   autoTransparency?: boolean;
   cameraSettings: { x: number; y: number; z: number; fov: number };
+  onRegisterCapture?: (captureFn: () => string) => void;
 }
 
 const SNAP_THRESHOLD = 0.15;
@@ -49,6 +50,7 @@ export default function ThreeViewport({
   collisionOn,
   autoTransparency = true,
   cameraSettings,
+  onRegisterCapture,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -68,6 +70,40 @@ export default function ThreeViewport({
   useEffect(() => {
     autoTransparencyRef.current = autoTransparency;
   }, [autoTransparency]);
+
+  // Expose clean snapshot capture function for AI Renderer
+  useEffect(() => {
+    if (!onRegisterCapture) return;
+
+    const captureSnapshot = () => {
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      if (!renderer || !scene || !camera) return '';
+
+      const gridPrev = gridHelperRef.current?.visible ?? false;
+      const selectPrev = selectionHelperRef.current?.visible ?? false;
+      const rulersPrev = rulersGroupRef.current?.visible ?? false;
+
+      // Hide non-photorealistic guides
+      if (gridHelperRef.current) gridHelperRef.current.visible = false;
+      if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
+      if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
+
+      // Render clean frame
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL('image/jpeg', 0.95);
+
+      // Restore guides
+      if (gridHelperRef.current) gridHelperRef.current.visible = gridPrev;
+      if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
+      if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
+
+      return dataUrl;
+    };
+
+    onRegisterCapture(captureSnapshot);
+  }, [onRegisterCapture]);
 
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
@@ -168,7 +204,12 @@ export default function ThreeViewport({
     camera.layers.enable(LAYER_TECHNICAL);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true,
+    });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
