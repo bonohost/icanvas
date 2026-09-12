@@ -22,6 +22,7 @@ import {
   X,
   Eye,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -36,6 +37,7 @@ interface PropertiesSidebarProps {
   onRemoveOpening?: (id: string) => void;
   onDuplicateOpening?: (id: string) => void;
   onDeselectAll?: () => void;
+  onClose?: () => void;
   showGrid?: boolean;
   onToggleGrid?: (show: boolean) => void;
   snapOn?: boolean;
@@ -56,6 +58,7 @@ export default function PropertiesSidebar({
   onRemoveOpening,
   onDuplicateOpening,
   onDeselectAll,
+  onClose,
   showGrid = true,
   onToggleGrid,
   snapOn = true,
@@ -117,13 +120,23 @@ export default function PropertiesSidebar({
             >
               <Trash2 className="size-4" />
             </button>
-            <button
-              onClick={() => onDeselectAll?.()}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
-              title="Fechar Painel (Esc)"
-            >
-              <X className="size-4" />
-            </button>
+            {onClose ? (
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+                title="Ocultar Painel ( ] )"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => onDeselectAll?.()}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+                title="Fechar Painel (Esc)"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -445,14 +458,25 @@ export default function PropertiesSidebar({
   if (!selected) {
     return (
       <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-6">
-        <div className="border-b border-white/10 pb-3">
-          <h2 className="font-headline font-bold text-xs tracking-widest uppercase text-primary flex items-center gap-2">
-            <Home className="size-4" />
-            Configuração do Ambiente
-          </h2>
-          <p className="text-[11px] text-on-surface-variant mt-1">
-            Defina as dimensões da sala, piso, paredes e iluminação.
-          </p>
+        <div className="border-b border-white/10 pb-3 flex items-start justify-between">
+          <div>
+            <h2 className="font-headline font-bold text-xs tracking-widest uppercase text-primary flex items-center gap-2">
+              <Home className="size-4" />
+              Configuração do Ambiente
+            </h2>
+            <p className="text-[11px] text-on-surface-variant mt-1">
+              Defina as dimensões da sala, piso, paredes e iluminação.
+            </p>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors flex-shrink-0"
+              title="Ocultar Painel ( ] )"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          )}
         </div>
 
         {/* Room Dimensions */}
@@ -860,6 +884,15 @@ export default function PropertiesSidebar({
           >
             <Trash2 className="size-4" />
           </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+              title="Ocultar Painel ( ] )"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -17,6 +17,7 @@ import {
   Plus,
   GripVertical,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Search,
   X,
@@ -58,9 +59,10 @@ const iconMap: Record<string, any> = {
 interface CatalogSidebarProps {
   onAdd: (spec: FurnitureSpec) => void;
   onAddOpening?: (preset: OpeningPreset) => void;
+  onClose?: () => void;
 }
 
-export default function CatalogSidebar({ onAdd, onAddOpening }: CatalogSidebarProps) {
+export default function CatalogSidebar({ onAdd, onAddOpening, onClose }: CatalogSidebarProps) {
   const [activeTab, setActiveTab] = useState<'furniture' | 'openings'>('furniture');
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
@@ -141,17 +143,29 @@ export default function CatalogSidebar({ onAdd, onAddOpening }: CatalogSidebarPr
       {/* Header */}
       <div className="p-4 border-b border-white/10 flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-headline font-bold text-xs tracking-widest uppercase text-primary flex items-center gap-2">
-            <Box className="size-4 text-primary" />
-            Catálogo 3D Pro
-          </h2>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-medium border border-primary/20">
-            {activeTab === 'furniture'
-              ? searchTerm
-                ? `${totalFilteredItems} / ${totalAllItems}`
-                : `${totalAllItems} itens`
-              : `${OPENING_PRESETS.length} vãos`}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="font-headline font-bold text-xs tracking-widest uppercase text-primary flex items-center gap-2 truncate">
+              <Box className="size-4 text-primary flex-shrink-0" />
+              Catálogo 3D Pro
+            </h2>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-medium border border-primary/20 flex-shrink-0">
+              {activeTab === 'furniture'
+                ? searchTerm
+                  ? `${totalFilteredItems}`
+                  : `${totalAllItems}`
+                : `${OPENING_PRESETS.length}`}
+            </span>
+          </div>
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors flex-shrink-0"
+              title="Ocultar Catálogo ( [ )"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
         </div>
 
         {/* Tab Switcher: Móveis vs Portas/Janelas */}

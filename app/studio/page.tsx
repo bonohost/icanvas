@@ -39,6 +39,12 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  PanelLeft,
+  PanelRight,
+  PanelLeftOpen,
+  PanelRightOpen,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 export default function StudioPage() {
@@ -109,6 +115,11 @@ export default function StudioPage() {
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
+
+  // Menu toggles & Focus / Zen mode
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const [isZenMode, setIsZenMode] = useState(false);
 
   const [room, setRoom] = useState<RoomSettings>({
     width: 4.5,
@@ -477,6 +488,24 @@ export default function StudioPage() {
         }
       }
 
+      // Toggle Left Sidebar: [ or Ctrl+B
+      if (e.key === '[' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b')) {
+        e.preventDefault();
+        setShowLeftSidebar((prev) => !prev);
+      }
+
+      // Toggle Right Sidebar: ]
+      if (e.key === ']') {
+        e.preventDefault();
+        setShowRightSidebar((prev) => !prev);
+      }
+
+      // Toggle Focus / Zen Mode: Tab
+      if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        setIsZenMode((prev) => !prev);
+      }
+
       // Deselect: Escape
       if (e.key === 'Escape') {
         handleDeselectAll();
@@ -588,6 +617,48 @@ export default function StudioPage() {
 
         {/* Viewport & Scene Utilities */}
         <div className="flex items-center gap-2">
+          {/* Menu & Sidebar Toggles */}
+          <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">
+            <button
+              onClick={() => setShowLeftSidebar((prev) => !prev)}
+              className={`p-1.5 rounded-md text-xs font-medium transition-all ${
+                showLeftSidebar && !isZenMode
+                  ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title={showLeftSidebar ? 'Ocultar Catálogo ( [ )' : 'Mostrar Catálogo ( [ )'}
+            >
+              <PanelLeft className="size-3.5" />
+            </button>
+
+            <button
+              onClick={() => setIsZenMode((prev) => !prev)}
+              className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${
+                isZenMode
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title="Modo Foco / Ocultar Menus (Tab)"
+            >
+              {isZenMode ? <Minimize2 className="size-3.5 text-amber-400" /> : <Maximize2 className="size-3.5" />}
+              <span className="text-[11px] hidden xl:inline">{isZenMode ? 'Foco ON' : 'Modo Foco'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowRightSidebar((prev) => !prev)}
+              className={`p-1.5 rounded-md text-xs font-medium transition-all ${
+                showRightSidebar && !isZenMode
+                  ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title={showRightSidebar ? 'Ocultar Propriedades ( ] )' : 'Mostrar Propriedades ( ] )'}
+            >
+              <PanelRight className="size-3.5" />
+            </button>
+          </div>
+
+          <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
+
           <button
             onClick={() => exportProjectAsJson(currentProjectObject)}
             className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-all hidden md:flex"
@@ -646,8 +717,20 @@ export default function StudioPage() {
 
       {/* Main Studio Area (Catalog + 3D Viewport + Properties) */}
       <div className="flex flex-1 overflow-hidden relative min-h-0 h-full">
-        <CatalogSidebar onAdd={handleAdd} onAddOpening={handleAddOpening} />
+        {/* Left Sidebar (Catalog) with smooth width transition */}
+        <div
+          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${
+            showLeftSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
+          }`}
+        >
+          <CatalogSidebar
+            onAdd={handleAdd}
+            onAddOpening={handleAddOpening}
+            onClose={() => setShowLeftSidebar(false)}
+          />
+        </div>
 
+        {/* 3D Viewport Main Area */}
         <main className="relative flex-1 bg-[#0b0f19] overflow-hidden h-full min-h-0">
           <ThreeViewport
             room={room}
@@ -675,27 +758,118 @@ export default function StudioPage() {
               captureSnapshotRef.current = fn;
             }}
           />
+
+          {/* Floating Toggle Controls inside 3D Viewport */}
+          {/* Left toggle button when catalog is hidden */}
+          {(!showLeftSidebar || isZenMode) && (
+            <button
+              onClick={() => {
+                setShowLeftSidebar(true);
+                setIsZenMode(false);
+              }}
+              className="absolute left-3 top-3 z-30 px-2.5 py-1.5 rounded-xl bg-surface-container/90 hover:bg-surface-container border border-white/10 hover:border-primary/40 text-white shadow-xl backdrop-blur-md flex items-center gap-1.5 text-xs font-semibold transition-all hover:scale-105 group"
+              title="Abrir Catálogo 3D ( [ )"
+            >
+              <PanelLeftOpen className="size-4 text-primary group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">Catálogo</span>
+            </button>
+          )}
+
+          {/* Right toggle button when properties panel is hidden */}
+          {(!showRightSidebar || isZenMode) && (
+            <button
+              onClick={() => {
+                setShowRightSidebar(true);
+                setIsZenMode(false);
+              }}
+              className="absolute right-3 top-3 z-30 px-2.5 py-1.5 rounded-xl bg-surface-container/90 hover:bg-surface-container border border-white/10 hover:border-primary/40 text-white shadow-xl backdrop-blur-md flex items-center gap-1.5 text-xs font-semibold transition-all hover:scale-105 group"
+              title="Abrir Propriedades ( ] )"
+            >
+              <span className="hidden sm:inline">Propriedades</span>
+              <PanelRightOpen className="size-4 text-primary group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+
+          {/* Floating Pill Toolbar for Quick View & Focus Toggles */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 p-1 rounded-2xl bg-surface-container-lowest/80 border border-white/10 shadow-2xl backdrop-blur-xl">
+            <button
+              onClick={() => {
+                setShowLeftSidebar((prev) => !prev);
+                if (isZenMode) setIsZenMode(false);
+              }}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
+                showLeftSidebar && !isZenMode
+                  ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
+                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title="Alternar Catálogo ( [ )"
+            >
+              <PanelLeft className="size-3.5" />
+              <span className="text-[11px] hidden md:inline">Catálogo</span>
+            </button>
+
+            <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+            <button
+              onClick={() => setIsZenMode((prev) => !prev)}
+              className={`px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
+                isZenMode
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-inner'
+                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title="Modo Foco / Ocultar Todos os Menus (Tab)"
+            >
+              {isZenMode ? <Minimize2 className="size-3.5 text-amber-400" /> : <Maximize2 className="size-3.5" />}
+              <span className="text-[11px] font-medium">{isZenMode ? 'Sair do Modo Foco' : 'Modo Foco'}</span>
+            </button>
+
+            <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+            <button
+              onClick={() => {
+                setShowRightSidebar((prev) => !prev);
+                if (isZenMode) setIsZenMode(false);
+              }}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
+                showRightSidebar && !isZenMode
+                  ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
+                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title="Alternar Propriedades ( ] )"
+            >
+              <span className="text-[11px] hidden md:inline">Propriedades</span>
+              <PanelRight className="size-3.5" />
+            </button>
+          </div>
         </main>
 
-        <PropertiesSidebar
-          selected={selectedObject}
-          selectedOpening={selectedOpening}
-          room={room}
-          onUpdateRoom={setRoom}
-          onUpdate={handleUpdate}
-          onRemove={handleRemove}
-          onDuplicate={handleDuplicate}
-          onUpdateOpening={handleUpdateOpening}
-          onRemoveOpening={handleRemoveOpening}
-          onDuplicateOpening={handleDuplicateOpening}
-          onDeselectAll={handleDeselectAll}
-          showGrid={showGrid}
-          onToggleGrid={setShowGrid}
-          snapOn={snapOn}
-          onToggleSnap={setSnapOn}
-          autoTransparency={autoTransparency}
-          onToggleAutoTransparency={setAutoTransparency}
-        />
+        {/* Right Sidebar (Properties) with smooth width transition */}
+        <div
+          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${
+            showRightSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
+          }`}
+        >
+          <PropertiesSidebar
+            selected={selectedObject}
+            selectedOpening={selectedOpening}
+            room={room}
+            onUpdateRoom={setRoom}
+            onUpdate={handleUpdate}
+            onRemove={handleRemove}
+            onDuplicate={handleDuplicate}
+            onUpdateOpening={handleUpdateOpening}
+            onRemoveOpening={handleRemoveOpening}
+            onDuplicateOpening={handleDuplicateOpening}
+            onDeselectAll={handleDeselectAll}
+            onClose={() => setShowRightSidebar(false)}
+            showGrid={showGrid}
+            onToggleGrid={setShowGrid}
+            snapOn={snapOn}
+            onToggleSnap={setSnapOn}
+            autoTransparency={autoTransparency}
+            onToggleAutoTransparency={setAutoTransparency}
+          />
+        </div>
       </div>
 
       {/* Studio Footer (Viewpoints & Technical info) */}
