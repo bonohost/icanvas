@@ -1,11 +1,20 @@
 'use client';
 
 import { useMemo, useRef, useEffect, useState } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, Center } from '@react-three/drei';
 import * as THREE from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { useMugStore } from '../../stores/mugStore';
+
+function CameraManager() {
+  const { camera } = useThree();
+  useEffect(() => {
+    camera.position.set(0, 0.15, 2.3);
+    camera.lookAt(0, 0, 0);
+  }, [camera]);
+  return null;
+}
 
 function Mug({
   texture,
@@ -65,6 +74,8 @@ export default function MugScene() {
     roughness,
     metalness,
   } = useMugStore();
+
+  const controlsRef = useRef<any>(null);
 
   // Reference to our compositing canvas
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -194,9 +205,11 @@ export default function MugScene() {
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-      <directionalLight position={[-5, -2, -5]} intensity={0.4} />
+      <CameraManager />
+      <ambientLight intensity={0.8} />
+      <directionalLight position={[5, 8, 5]} intensity={1.4} castShadow />
+      <directionalLight position={[-5, -2, -5]} intensity={0.5} />
+      <directionalLight position={[0, 4, -5]} intensity={0.7} />
       <Environment preset="studio" />
       <Center>
         <Mug
@@ -206,11 +219,14 @@ export default function MugScene() {
         />
       </Center>
       <OrbitControls
+        ref={controlsRef}
         enableZoom={true}
         enablePan={true}
         enableRotate={true}
-        minDistance={2}
-        maxDistance={10}
+        minDistance={0.7}
+        maxDistance={5.5}
+        target={[0, 0, 0]}
+        makeDefault
       />
     </>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, ChangeEvent, DragEvent } from 'react';
+import { useRef, useState, useEffect, ChangeEvent, DragEvent } from 'react';
 import { useMugStore } from '../stores/mugStore';
 
 const COLOR_PALETTE = [
@@ -43,6 +43,30 @@ export default function MugSimulatorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState<'outer' | 'colors' | 'text'>('outer');
+  const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [isZenMode, setIsZenMode] = useState(false);
+
+  // Keyboard shortcut support (Tab, ], Ctrl+B, F, Escape)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setIsMenuOpen((prev) => !prev);
+      } else if (e.key === ']' || (e.ctrlKey && e.key.toLowerCase() === 'b')) {
+        e.preventDefault();
+        setIsMenuOpen((prev) => !prev);
+      } else if (e.key.toLowerCase() === 'f') {
+        setIsZenMode((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setIsZenMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,11 +96,16 @@ export default function MugSimulatorPage() {
   };
 
   return (
-    <main className="flex-1 flex mt-20 relative h-[calc(100vh-80px)] pointer-events-none">
+    <main className="flex-1 flex mt-20 relative h-[calc(100vh-80px)] overflow-hidden pointer-events-none">
       {/* Active Canvas Area Overlay Info */}
       <div className="flex-1 relative w-full h-full pointer-events-none">
         {/* Floating Viewport Controls */}
-        <div className="absolute bottom-margin-mobile md:bottom-margin-desktop left-1/2 -translate-x-1/2 glass-panel rounded-full px-4 py-2 flex items-center gap-3 z-10 pointer-events-auto shadow-lg">
+        <div
+          className={`absolute bottom-margin-mobile md:bottom-margin-desktop left-1/2 -translate-x-1/2 glass-panel rounded-full px-4 py-2 flex items-center gap-2.5 z-10 pointer-events-auto shadow-2xl backdrop-blur-xl border border-white/10 transition-all duration-300 ${
+            isZenMode ? 'opacity-30 hover:opacity-100 scale-95 hover:scale-100' : 'opacity-100'
+          }`}
+        >
+          {/* Auto Rotate Toggle */}
           <button
             onClick={() => setAutoRotate(!autoRotate)}
             className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium transition-colors ${
@@ -94,6 +123,7 @@ export default function MugSimulatorPage() {
 
           <div className="h-4 w-[1px] bg-white/10" />
 
+          {/* Reset View & Colors */}
           <button
             onClick={reset}
             className="px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors"
@@ -102,10 +132,50 @@ export default function MugSimulatorPage() {
             <span className="material-symbols-outlined text-[16px]">restart_alt</span>
             <span>Reset</span>
           </button>
+
+          <div className="h-4 w-[1px] bg-white/10" />
+
+          {/* Zen / Focus Mode Button */}
+          <button
+            onClick={() => setIsZenMode(!isZenMode)}
+            className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-medium transition-colors ${
+              isZenMode
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                : 'text-on-surface-variant hover:text-purple-400 hover:bg-white/5'
+            }`}
+            title="Modo Foco / Limpo (F)"
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
+            </span>
+            <span>{isZenMode ? 'Sair Foco' : 'Foco 3D'}</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-white/10" />
+
+          {/* Menu Toggle Button */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-medium transition-colors ${
+              isMenuOpen
+                ? 'bg-primary/20 text-primary border border-primary/30'
+                : 'text-on-surface-variant hover:text-white hover:bg-white/10'
+            }`}
+            title="Ocultar / Mostrar Menu Lateral (Tab)"
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              {isMenuOpen ? 'dock_to_right' : 'menu_open'}
+            </span>
+            <span>{isMenuOpen ? 'Ocultar Menu' : 'Abrir Menu'}</span>
+          </button>
         </div>
 
         {/* Contextual Title */}
-        <div className="absolute top-8 left-8 z-10 pointer-events-none">
+        <div
+          className={`absolute top-8 left-8 z-10 pointer-events-none transition-opacity duration-300 ${
+            isZenMode ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
           <h1 className="font-display-lg text-on-surface opacity-80 mix-blend-screen leading-tight">
             Simulador
             <br />
@@ -118,17 +188,47 @@ export default function MugSimulatorPage() {
             </span>
           </div>
         </div>
+
+        {/* Floating Open Sidebar Button on Right Edge when collapsed */}
+        {!isMenuOpen && !isZenMode && (
+          <button
+            onClick={() => setIsMenuOpen(true)}
+            className="absolute right-6 top-8 z-30 pointer-events-auto px-4 py-2.5 rounded-xl glass-panel border border-primary/40 bg-black/60 hover:bg-primary/20 text-white shadow-2xl backdrop-blur-xl flex items-center gap-2.5 transition-all hover:scale-105 active:scale-95 group"
+            title="Abrir Painel de Customização (Tab)"
+          >
+            <span className="material-symbols-outlined text-[18px] text-primary group-hover:rotate-12 transition-transform">
+              tune
+            </span>
+            <span className="text-xs font-semibold">Personalizar Caneca</span>
+            <kbd className="px-1.5 py-0.5 text-[10px] bg-white/10 rounded font-mono text-white/60">Tab</kbd>
+          </button>
+        )}
       </div>
 
       {/* Right Control Panel */}
-      <aside className="w-panel-width max-w-sm flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col relative z-20 pointer-events-auto shadow-2xl backdrop-blur-xl">
+      <aside
+        className={`w-panel-width max-w-sm flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col relative z-20 pointer-events-auto shadow-2xl backdrop-blur-xl transition-all duration-300 ease-in-out ${
+          isMenuOpen && !isZenMode
+            ? 'translate-x-0 opacity-100 mr-0'
+            : 'translate-x-full opacity-0 -mr-[384px] pointer-events-none'
+        }`}
+      >
         <div className="p-6 flex flex-col gap-5 h-full">
-          {/* Section Header */}
-          <div>
-            <h2 className="font-headline-lg-mobile text-primary mb-1">Personalizador de Caneca</h2>
-            <p className="font-body-md text-on-surface-variant text-xs">
-              Estampe a área externa e alterne as cores da alça e do interior de forma independente.
-            </p>
+          {/* Section Header with Close Button */}
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="font-headline-lg-mobile text-primary mb-1">Personalizador de Caneca</h2>
+              <p className="font-body-md text-on-surface-variant text-xs">
+                Estampe a área externa e alterne as cores da alça e do interior de forma independente.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsMenuOpen(false)}
+              className="p-1.5 rounded-lg text-on-surface-variant hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center -mr-2 -mt-1"
+              title="Ocultar Menu (Tab)"
+            >
+              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+            </button>
           </div>
 
           {/* Mode Tabs */}
