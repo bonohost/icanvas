@@ -23,6 +23,7 @@ import {
   Eye,
   Sparkles,
   ChevronRight,
+  Lightbulb,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -760,7 +761,7 @@ export default function PropertiesSidebar({
         <div className="space-y-3 border-t border-white/10 pt-4">
           <div className="flex justify-between items-center text-xs">
             <span className="text-on-surface-variant flex items-center gap-1.5">
-              <Sun className="size-3.5 text-primary" /> Intensidade da Luz
+              <Sun className="size-3.5 text-primary" /> Luz Solar / Ambiente
             </span>
             <span className="font-mono text-primary">{Math.round(room.lightIntensity * 100)}%</span>
           </div>
@@ -773,6 +774,214 @@ export default function PropertiesSidebar({
             onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
             className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
           />
+        </div>
+
+        {/* Iluminação de Área PBR (RectAreaLight / Plafon LED) */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Lightbulb className="size-3.5 text-primary" /> Luz de Área (Plafon LED)
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const cur = room.areaLight || {
+                  enabled: true,
+                  intensity: 2.0,
+                  width: 2.2,
+                  height: 1.6,
+                  color: '#ffffff',
+                  showHelper: true,
+                };
+                onUpdateRoom({
+                  ...room,
+                  areaLight: {
+                    ...cur,
+                    enabled: !cur.enabled,
+                  },
+                });
+              }}
+              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                room.areaLight?.enabled ? 'bg-primary' : 'bg-white/10'
+              }`}
+              title={room.areaLight?.enabled ? 'Desativar Luz de Área' : 'Ativar Luz de Área'}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                  room.areaLight?.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {room.areaLight?.enabled && (
+            <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-3">
+              {/* Moldura Guia Visual (Helper) */}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-white">Moldura Visual (Guia 3D)</span>
+                  <span className="text-[10px] text-on-surface-variant">Exibe contorno retangular no teto</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = room.areaLight || {
+                      enabled: true,
+                      intensity: 2.0,
+                      width: 2.2,
+                      height: 1.6,
+                      color: '#ffffff',
+                      showHelper: true,
+                    };
+                    onUpdateRoom({
+                      ...room,
+                      areaLight: {
+                        ...cur,
+                        showHelper: !cur.showHelper,
+                      },
+                    });
+                  }}
+                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                    room.areaLight?.showHelper ? 'bg-primary' : 'bg-white/10'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                      room.areaLight?.showHelper ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Intensidade */}
+              <div>
+                <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                  <span>Intensidade da Área</span>
+                  <span className="font-mono text-primary">
+                    {Math.round((room.areaLight.intensity ?? 2.0) * 50)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.2"
+                  max="6.0"
+                  step="0.1"
+                  value={room.areaLight.intensity ?? 2.0}
+                  onChange={(e) => {
+                    onUpdateRoom({
+                      ...room,
+                      areaLight: {
+                        ...room.areaLight!,
+                        intensity: parseFloat(e.target.value),
+                      },
+                    });
+                  }}
+                  className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                />
+              </div>
+
+              {/* Dimensões da Área (Largura e Comprimento) */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                    <span>Largura (X)</span>
+                    <span className="font-mono text-primary">{(room.areaLight.width ?? 2.2).toFixed(1)}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="5.0"
+                    step="0.1"
+                    value={room.areaLight.width ?? 2.2}
+                    onChange={(e) => {
+                      onUpdateRoom({
+                        ...room,
+                        areaLight: {
+                          ...room.areaLight!,
+                          width: parseFloat(e.target.value),
+                        },
+                      });
+                    }}
+                    className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                    <span>Comprimento (Z)</span>
+                    <span className="font-mono text-primary">{(room.areaLight.height ?? 1.6).toFixed(1)}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="5.0"
+                    step="0.1"
+                    value={room.areaLight.height ?? 1.6}
+                    onChange={(e) => {
+                      onUpdateRoom({
+                        ...room,
+                        areaLight: {
+                          ...room.areaLight!,
+                          height: parseFloat(e.target.value),
+                        },
+                      });
+                    }}
+                    className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Temperatura de Cor & Presets */}
+              <div className="space-y-2 border-t border-white/5 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-on-surface-variant">Temperatura / Tonalidade</span>
+                  <input
+                    type="color"
+                    value={room.areaLight.color || '#ffffff'}
+                    onChange={(e) => {
+                      onUpdateRoom({
+                        ...room,
+                        areaLight: {
+                          ...room.areaLight!,
+                          color: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-7 h-7 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+                  />
+                </div>
+
+                <div className="grid grid-cols-4 gap-1">
+                  {[
+                    { name: '4000K Neutro', color: '#ffffff' },
+                    { name: '3000K Quente', color: '#fff1e0' },
+                    { name: '2700K Âmbar', color: '#ffd7a8' },
+                    { name: '6000K Frio', color: '#eef6ff' },
+                  ].map((temp) => (
+                    <button
+                      key={temp.name}
+                      onClick={() => {
+                        onUpdateRoom({
+                          ...room,
+                          areaLight: {
+                            ...room.areaLight!,
+                            color: temp.color,
+                          },
+                        });
+                      }}
+                      className={`p-1 rounded text-center border text-[9px] font-medium transition-all ${
+                        (room.areaLight?.color || '#ffffff').toLowerCase() === temp.color.toLowerCase()
+                          ? 'border-primary bg-primary/20 text-white shadow-sm'
+                          : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:text-white'
+                      }`}
+                    >
+                      {temp.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Visual Guides & Grid Toggle */}

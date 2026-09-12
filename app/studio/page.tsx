@@ -162,6 +162,14 @@ export default function StudioPage() {
     ],
     lightIntensity: 1.2,
     reflectionOpacity: 0.05,
+    areaLight: {
+      enabled: true,
+      intensity: 2.0,
+      width: 2.2,
+      height: 1.6,
+      color: '#ffffff',
+      showHelper: true,
+    },
   });
 
   const [cameraSettings, setCameraSettings] = useState({

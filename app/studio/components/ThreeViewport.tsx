@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
+import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
@@ -69,6 +71,8 @@ export default function ThreeViewport({
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+  const rectLightRef = useRef<THREE.RectAreaLight | null>(null);
+  const rectLightHelperRef = useRef<RectAreaLightHelper | null>(null);
 
   // Texture helper with synchronous cache retrieval and async callback support to eliminate screen flicker
   const getOrLoadTexture = useCallback((url?: string, tx = 1, ty = 1, onLoaded?: (tex: THREE.Texture) => void): THREE.Texture | null => {
@@ -113,11 +117,13 @@ export default function ThreeViewport({
       const gridPrev = gridHelperRef.current?.visible ?? false;
       const selectPrev = selectionHelperRef.current?.visible ?? false;
       const rulersPrev = rulersGroupRef.current?.visible ?? false;
+      const rectPrev = rectLightHelperRef.current?.visible ?? false;
 
       // Hide non-photorealistic guides
       if (gridHelperRef.current) gridHelperRef.current.visible = false;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
       if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
+      if (rectLightHelperRef.current) rectLightHelperRef.current.visible = false;
 
       // Render clean frame
       renderer.render(scene, camera);
@@ -127,6 +133,7 @@ export default function ThreeViewport({
       if (gridHelperRef.current) gridHelperRef.current.visible = gridPrev;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
       if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
+      if (rectLightHelperRef.current) rectLightHelperRef.current.visible = rectPrev;
 
       return dataUrl;
     };
@@ -240,7 +247,7 @@ export default function ThreeViewport({
       preserveDrawingBuffer: true,
     });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
@@ -292,6 +299,35 @@ export default function ThreeViewport({
     const fillLight = new THREE.DirectionalLight('#93c5fd', 0.4);
     fillLight.position.set(-6, 8, -6);
     scene.add(fillLight);
+
+    // Initialize RectAreaLight Uniforms for PBR materials
+    RectAreaLightUniformsLib.init();
+
+    // Architectural Area Light (Ceiling Plafon / LED Softbox)
+    const initialArea = room.areaLight || {
+      enabled: true,
+      intensity: 2.0,
+      width: 2.2,
+      height: 1.6,
+      color: '#ffffff',
+      showHelper: true,
+    };
+    const rectLight = new THREE.RectAreaLight(
+      initialArea.color,
+      initialArea.enabled ? initialArea.intensity : 0,
+      initialArea.width,
+      initialArea.height
+    );
+    const initialY = initialArea.posY ?? (room.height - 0.05);
+    rectLight.position.set(0, initialY, 0);
+    rectLight.rotation.x = -Math.PI / 2; // Point down towards floor
+    scene.add(rectLight);
+    rectLightRef.current = rectLight;
+
+    const rectHelper = new RectAreaLightHelper(rectLight);
+    rectHelper.visible = !!(initialArea.enabled && initialArea.showHelper);
+    scene.add(rectHelper);
+    rectLightHelperRef.current = rectHelper;
 
     scene.add(furnitureGroupRef.current);
     scene.add(wallsGroupRef.current);
@@ -376,6 +412,37 @@ export default function ThreeViewport({
       topLightRef.current.shadow.camera.updateProjectionMatrix();
     }
   }, [room.lightIntensity, room.width, room.depth, room.height]);
+
+  // 1.5. RectAreaLight & Helper Real-Time Synchronization (Non-destructive)
+  useEffect(() => {
+    if (!rectLightRef.current) return;
+    const al = room.areaLight || {
+      enabled: false,
+      intensity: 0,
+      width: 2.2,
+      height: 1.6,
+      color: '#ffffff',
+      showHelper: false,
+    };
+
+    rectLightRef.current.color.set(al.color || '#ffffff');
+    rectLightRef.current.intensity = al.enabled ? (al.intensity ?? 2.0) : 0;
+    rectLightRef.current.width = Math.max(0.2, al.width || 2.2);
+    rectLightRef.current.height = Math.max(0.2, al.height || 1.6);
+
+    const lightY = al.posY ?? (room.height - 0.05);
+    rectLightRef.current.position.set(0, lightY, 0);
+    rectLightRef.current.rotation.x = -Math.PI / 2;
+
+    if (rectLightHelperRef.current && sceneRef.current) {
+      sceneRef.current.remove(rectLightHelperRef.current);
+      rectLightHelperRef.current.dispose?.();
+      const newHelper = new RectAreaLightHelper(rectLightRef.current);
+      newHelper.visible = !!(al.enabled && al.showHelper);
+      sceneRef.current.add(newHelper);
+      rectLightHelperRef.current = newHelper;
+    }
+  }, [room.areaLight, room.height]);
 
   // 2. Floor Geometry & Materials (smart in-place material update to eliminate flickering)
   useEffect(() => {

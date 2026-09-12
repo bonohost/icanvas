@@ -74,6 +74,16 @@ export interface WallSettings {
   metalness?: number;
 }
 
+export interface AreaLightSettings {
+  enabled: boolean;
+  intensity: number; // 0.0 to 5.0
+  width: number; // meters (e.g. 2.0)
+  height: number; // meters (e.g. 1.5)
+  color: string; // hex
+  posY?: number; // meters
+  showHelper: boolean; // toggle visible rectangular helper frame
+}
+
 export interface RoomSettings {
   width: number;
   depth: number;
@@ -93,6 +103,7 @@ export interface RoomSettings {
   openings?: WallOpening[];
   lightIntensity: number;
   reflectionOpacity: number;
+  areaLight?: AreaLightSettings;
 }
 
 export interface StudioProject {
