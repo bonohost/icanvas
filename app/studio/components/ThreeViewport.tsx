@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
@@ -26,6 +27,8 @@ interface ViewportProps {
   autoTransparency?: boolean;
   cameraSettings: { x: number; y: number; z: number; fov: number };
   onRegisterCapture?: (captureFn: () => string) => void;
+  gizmoEnabled?: boolean;
+  gizmoMode?: 'translate' | 'rotate';
 }
 
 const SNAP_THRESHOLD = 0.15;
@@ -53,12 +56,15 @@ export default function ThreeViewport({
   autoTransparency = true,
   cameraSettings,
   onRegisterCapture,
+  gizmoEnabled = false,
+  gizmoMode = 'translate',
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const transformControlsRef = useRef<TransformControls | null>(null);
   const furnitureGroupRef = useRef<THREE.Group>(new THREE.Group());
   const wallsGroupRef = useRef<THREE.Group>(new THREE.Group());
   const floorRef = useRef<THREE.Mesh | null>(null);
@@ -73,6 +79,11 @@ export default function ThreeViewport({
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
   const rectLightRef = useRef<THREE.RectAreaLight | null>(null);
   const rectLightHelperRef = useRef<RectAreaLightHelper | null>(null);
+
+  const onUpdatePositionRef = useRef(onUpdatePosition);
+  useEffect(() => {
+    onUpdatePositionRef.current = onUpdatePosition;
+  }, [onUpdatePosition]);
 
   // Texture helper with synchronous cache retrieval and async callback support to eliminate screen flicker
   const getOrLoadTexture = useCallback((url?: string, tx = 1, ty = 1, onLoaded?: (tex: THREE.Texture) => void): THREE.Texture | null => {
@@ -118,12 +129,14 @@ export default function ThreeViewport({
       const selectPrev = selectionHelperRef.current?.visible ?? false;
       const rulersPrev = rulersGroupRef.current?.visible ?? false;
       const rectPrev = rectLightHelperRef.current?.visible ?? false;
+      const gizmoPrev = transformControlsRef.current?.getHelper().visible ?? false;
 
       // Hide non-photorealistic guides
       if (gridHelperRef.current) gridHelperRef.current.visible = false;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
       if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = false;
+      if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = false;
 
       // Render clean frame
       renderer.render(scene, camera);
@@ -134,6 +147,7 @@ export default function ThreeViewport({
       if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
       if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = rectPrev;
+      if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = gizmoPrev;
 
       return dataUrl;
     };
@@ -333,6 +347,45 @@ export default function ThreeViewport({
     scene.add(wallsGroupRef.current);
     scene.add(rulersGroupRef.current);
 
+    // TransformControls Gizmo for free XYZ object translation/rotation
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.size = 0.85;
+    transformControls.space = 'world';
+    transformControls.setMode(gizmoMode || 'translate');
+    const gizmoRoot = transformControls.getHelper();
+    gizmoRoot.visible = false;
+    scene.add(gizmoRoot);
+    transformControlsRef.current = transformControls;
+
+    transformControls.addEventListener('dragging-changed', (event: any) => {
+      if (controlsRef.current) {
+        controlsRef.current.enabled = !event.value;
+      }
+    });
+
+    transformControls.addEventListener('change', () => {
+      if (selectionHelperRef.current) {
+        selectionHelperRef.current.update();
+      }
+      if (transformControls.object) {
+        updateRulers(transformControls.object);
+      }
+    });
+
+    transformControls.addEventListener('objectChange', () => {
+      const obj = transformControls.object;
+      if (obj && obj.userData?.uid) {
+        const uid = obj.userData.uid;
+        onUpdatePositionRef.current(
+          uid,
+          obj.position.x,
+          obj.position.z,
+          obj.position.y,
+          obj.rotation.y
+        );
+      }
+    });
+
     let animationFrameId: number;
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -391,6 +444,7 @@ export default function ThreeViewport({
     return () => {
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
+      transformControls.dispose();
       renderer.dispose();
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
@@ -571,11 +625,11 @@ export default function ThreeViewport({
       z: number;
       ry: number;
     }> = [
-      { id: 'back', w: room.width, h: room.height, x: 0, z: -hd - HALF_WALL, ry: 0 },
-      { id: 'front', w: room.width, h: room.height, x: 0, z: hd + HALF_WALL, ry: Math.PI },
-      { id: 'left', w: room.depth, h: room.height, x: -hw - HALF_WALL, z: 0, ry: Math.PI / 2 },
-      { id: 'right', w: room.depth, h: room.height, x: hw + HALF_WALL, z: 0, ry: -Math.PI / 2 },
-    ];
+        { id: 'back', w: room.width, h: room.height, x: 0, z: -hd - HALF_WALL, ry: 0 },
+        { id: 'front', w: room.width, h: room.height, x: 0, z: hd + HALF_WALL, ry: Math.PI },
+        { id: 'left', w: room.depth, h: room.height, x: -hw - HALF_WALL, z: 0, ry: Math.PI / 2 },
+        { id: 'right', w: room.depth, h: room.height, x: hw + HALF_WALL, z: 0, ry: -Math.PI / 2 },
+      ];
 
     let hasChanges = false;
 
@@ -804,6 +858,37 @@ export default function ThreeViewport({
     };
   }, [furniture, selectedUid, selectedOpeningId, room.openings, updateRulers]);
 
+  // Sync TransformControls attachment and mode
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    if (!tc) return;
+
+    if (gizmoMode === 'rotate') {
+      tc.setMode('rotate');
+      tc.showX = false;
+      tc.showZ = false;
+      tc.showY = true;
+    } else {
+      tc.setMode('translate');
+      tc.showX = true;
+      tc.showY = true;
+      tc.showZ = true;
+    }
+
+    if (selectedUid && gizmoEnabled) {
+      const selectedObj = furnitureGroupRef.current.children.find(
+        (c) => c.userData?.uid === selectedUid
+      );
+      if (selectedObj) {
+        tc.attach(selectedObj);
+      } else {
+        tc.detach();
+      }
+    } else {
+      tc.detach();
+    }
+  }, [selectedUid, gizmoEnabled, gizmoMode, furniture]);
+
   // Real-time Interactive Dragging & Repositioning System
   useEffect(() => {
     const container = containerRef.current;
@@ -820,6 +905,11 @@ export default function ThreeViewport({
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || !cameraRef.current) return;
+
+      // If user is currently dragging or hovering a Gizmo axis, don't trigger scene drag
+      if (transformControlsRef.current?.dragging || transformControlsRef.current?.axis) {
+        return;
+      }
 
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -885,15 +975,19 @@ export default function ThreeViewport({
         if (top.userData?.uid) {
           onSelect(top.userData.uid);
           onSelectOpening?.(null);
-          dragObject = top;
-          isDragging = true;
-          if (controlsRef.current) controlsRef.current.enabled = false;
 
-          const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
-          plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);
+          // In standard locked mode, initiate floor/wall constrained drag. In gizmo mode, gizmo handles free XYZ.
+          if (!gizmoEnabled) {
+            dragObject = top;
+            isDragging = true;
+            if (controlsRef.current) controlsRef.current.enabled = false;
 
-          raycaster.ray.intersectPlane(plane, intersection);
-          offset.copy(top.position).sub(intersection);
+            const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
+            plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);
+
+            raycaster.ray.intersectPlane(plane, intersection);
+            offset.copy(top.position).sub(intersection);
+          }
 
           // Immediately update box helper and rulers on click
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);

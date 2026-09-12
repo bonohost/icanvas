@@ -112,6 +112,7 @@ export default function StudioPage() {
 
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
+  const [transformMode, setTransformMode] = useState<'locked' | 'translate' | 'rotate'>('locked');
   const [showGrid, setShowGrid] = useState(true);
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
@@ -755,6 +756,8 @@ export default function StudioPage() {
             collisionOn={collisionOn}
             autoTransparency={autoTransparency}
             cameraSettings={cameraSettings}
+            gizmoEnabled={transformMode !== 'locked'}
+            gizmoMode={transformMode === 'rotate' ? 'rotate' : 'translate'}
             onRegisterCapture={(fn) => {
               captureSnapshotRef.current = fn;
             }}
@@ -865,6 +868,8 @@ export default function StudioPage() {
             onToggleSnap={setSnapOn}
             autoTransparency={autoTransparency}
             onToggleAutoTransparency={setAutoTransparency}
+            transformMode={transformMode}
+            onTransformModeChange={setTransformMode}
           />
         </div>
       </div>

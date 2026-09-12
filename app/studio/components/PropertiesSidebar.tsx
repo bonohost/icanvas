@@ -24,6 +24,9 @@ import {
   Sparkles,
   ChevronRight,
   Lightbulb,
+  Lock,
+  Unlock,
+  Move3D,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -45,6 +48,12 @@ interface PropertiesSidebarProps {
   onToggleSnap?: (snap: boolean) => void;
   autoTransparency?: boolean;
   onToggleAutoTransparency?: (transparency: boolean) => void;
+  gizmoEnabled?: boolean;
+  onToggleGizmo?: (enabled: boolean) => void;
+  gizmoMode?: 'translate' | 'rotate';
+  onGizmoModeChange?: (mode: 'translate' | 'rotate') => void;
+  transformMode?: 'locked' | 'translate' | 'rotate';
+  onTransformModeChange?: (mode: 'locked' | 'translate' | 'rotate') => void;
 }
 
 export default function PropertiesSidebar({
@@ -66,6 +75,12 @@ export default function PropertiesSidebar({
   onToggleSnap,
   autoTransparency = true,
   onToggleAutoTransparency,
+  gizmoEnabled = false,
+  onToggleGizmo,
+  gizmoMode = 'translate',
+  onGizmoModeChange,
+  transformMode = 'locked',
+  onTransformModeChange,
 }: PropertiesSidebarProps) {
   const [activeWallTab, setActiveWallTab] = useState<keyof RoomSettings['walls']>('back');
 
@@ -159,9 +174,8 @@ export default function PropertiesSidebar({
                 <button
                   key={side}
                   onClick={() => onUpdateOpening?.(selectedOpening.id, { wallSide: side })}
-                  className={`py-1 text-[10px] font-semibold rounded-lg transition-all ${
-                    isActive ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'
-                  }`}
+                  className={`py-1 text-[10px] font-semibold rounded-lg transition-all ${isActive ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'
+                    }`}
                 >
                   {labels[side]}
                 </button>
@@ -277,11 +291,10 @@ export default function PropertiesSidebar({
                     onClick={() =>
                       onUpdateOpening?.(selectedOpening.id, { mullionStyle: styleOpt.id as any })
                     }
-                    className={`p-2 rounded-lg border text-left flex flex-col transition-all ${
-                      isSelected
+                    className={`p-2 rounded-lg border text-left flex flex-col transition-all ${isSelected
                         ? 'border-primary bg-primary/20 text-white shadow-sm'
                         : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <span className="text-[11px] font-semibold">{styleOpt.name}</span>
                     <span className="text-[9px] opacity-70">{styleOpt.desc}</span>
@@ -314,11 +327,10 @@ export default function PropertiesSidebar({
                         glassRoughness: preset.roughness,
                       })
                     }
-                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      isSelected
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${isSelected
                         ? 'border-primary bg-primary/20 text-white shadow-sm'
                         : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div
                       className="size-3.5 rounded-full border border-white/30 flex-shrink-0 shadow-inner"
@@ -425,11 +437,10 @@ export default function PropertiesSidebar({
                 <button
                   key={opt.id}
                   onClick={() => onUpdateOpening?.(selectedOpening.id, { frameColor: opt.color })}
-                  className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                    isSelected
+                  className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${isSelected
                       ? 'border-primary bg-primary/20 text-white shadow-sm'
                       : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <div
                     className="size-3.5 rounded-full border border-white/30 flex-shrink-0"
@@ -558,11 +569,10 @@ export default function PropertiesSidebar({
                 <button
                   key={side}
                   onClick={() => setActiveWallTab(side)}
-                  className={`py-1 text-[10px] font-semibold rounded-md transition-all ${
-                    activeWallTab === side
+                  className={`py-1 text-[10px] font-semibold rounded-md transition-all ${activeWallTab === side
                       ? 'bg-primary text-white shadow'
                       : 'text-on-surface-variant hover:text-white'
-                  }`}
+                    }`}
                 >
                   {labels[side]}
                 </button>
@@ -592,11 +602,10 @@ export default function PropertiesSidebar({
                         tileY: preset.tileY || 1,
                       });
                     }}
-                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      isSelected
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${isSelected
                         ? 'border-primary bg-primary/20 text-white shadow-sm'
                         : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div
                       className="size-4 rounded border border-white/30 flex-shrink-0"
@@ -690,11 +699,10 @@ export default function PropertiesSidebar({
                         floorTileY: preset.tileY || 4,
                       });
                     }}
-                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                      isSelected
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${isSelected
                         ? 'border-primary bg-primary/20 text-white shadow-sm'
                         : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div
                       className="size-4 rounded border border-white/30 flex-shrink-0"
@@ -801,15 +809,13 @@ export default function PropertiesSidebar({
                   },
                 });
               }}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                room.areaLight?.enabled ? 'bg-primary' : 'bg-white/10'
-              }`}
+              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${room.areaLight?.enabled ? 'bg-primary' : 'bg-white/10'
+                }`}
               title={room.areaLight?.enabled ? 'Desativar Luz de Área' : 'Ativar Luz de Área'}
             >
               <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  room.areaLight?.enabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${room.areaLight?.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
               />
             </button>
           </div>
@@ -841,14 +847,12 @@ export default function PropertiesSidebar({
                       },
                     });
                   }}
-                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
-                    room.areaLight?.showHelper ? 'bg-primary' : 'bg-white/10'
-                  }`}
+                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${room.areaLight?.showHelper ? 'bg-primary' : 'bg-white/10'
+                    }`}
                 >
                   <div
-                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                      room.areaLight?.showHelper ? 'translate-x-4' : 'translate-x-0'
-                    }`}
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${room.areaLight?.showHelper ? 'translate-x-4' : 'translate-x-0'
+                      }`}
                   />
                 </button>
               </div>
@@ -969,11 +973,10 @@ export default function PropertiesSidebar({
                           },
                         });
                       }}
-                      className={`p-1 rounded text-center border text-[9px] font-medium transition-all ${
-                        (room.areaLight?.color || '#ffffff').toLowerCase() === temp.color.toLowerCase()
+                      className={`p-1 rounded text-center border text-[9px] font-medium transition-all ${(room.areaLight?.color || '#ffffff').toLowerCase() === temp.color.toLowerCase()
                           ? 'border-primary bg-primary/20 text-white shadow-sm'
                           : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:text-white'
-                      }`}
+                        }`}
                     >
                       {temp.name}
                     </button>
@@ -1001,15 +1004,13 @@ export default function PropertiesSidebar({
               <button
                 type="button"
                 onClick={() => onToggleGrid?.(!showGrid)}
-                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                  showGrid ? 'bg-primary' : 'bg-white/10'
-                }`}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${showGrid ? 'bg-primary' : 'bg-white/10'
+                  }`}
                 title={showGrid ? 'Ocultar Grade' : 'Exibir Grade'}
               >
                 <div
-                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                    showGrid ? 'translate-x-5' : 'translate-x-0'
-                  }`}
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${showGrid ? 'translate-x-5' : 'translate-x-0'
+                    }`}
                 />
               </button>
             </div>
@@ -1024,15 +1025,13 @@ export default function PropertiesSidebar({
               <button
                 type="button"
                 onClick={() => onToggleAutoTransparency?.(!autoTransparency)}
-                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                  autoTransparency ? 'bg-primary' : 'bg-white/10'
-                }`}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${autoTransparency ? 'bg-primary' : 'bg-white/10'
+                  }`}
                 title={autoTransparency ? 'Desativar Transparência Automática' : 'Ativar Transparência Automática'}
               >
                 <div
-                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                    autoTransparency ? 'translate-x-5' : 'translate-x-0'
-                  }`}
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${autoTransparency ? 'translate-x-5' : 'translate-x-0'
+                    }`}
                 />
               </button>
             </div>
@@ -1047,15 +1046,13 @@ export default function PropertiesSidebar({
               <button
                 type="button"
                 onClick={() => onToggleSnap?.(!snapOn)}
-                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                  snapOn ? 'bg-primary' : 'bg-white/10'
-                }`}
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${snapOn ? 'bg-primary' : 'bg-white/10'
+                  }`}
                 title={snapOn ? 'Desativar Snap' : 'Ativar Snap'}
               >
                 <div
-                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                    snapOn ? 'translate-x-5' : 'translate-x-0'
-                  }`}
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${snapOn ? 'translate-x-5' : 'translate-x-0'
+                    }`}
                 />
               </button>
             </div>
@@ -1107,9 +1104,76 @@ export default function PropertiesSidebar({
 
       {/* Transform / Position */}
       <div className="space-y-3">
-        <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-          <Sliders className="size-3.5 text-primary" /> Posição &amp; Rotação
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+            <Sliders className="size-3.5 text-primary" /> Posição &amp; Rotação
+          </span>
+
+          <select
+            value={transformMode}
+            onChange={(e) => {
+              const newMode = e.target.value as 'locked' | 'translate' | 'rotate';
+              onTransformModeChange?.(newMode);
+              if (newMode === 'locked') {
+                onToggleGizmo?.(false);
+              } else {
+                onToggleGizmo?.(true);
+                onGizmoModeChange?.(newMode === 'rotate' ? 'rotate' : 'translate');
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold outline-none cursor-pointer transition-all ${transformMode === 'locked'
+                ? 'border-white/10 bg-white/5 text-on-surface-variant hover:border-white/20 hover:text-white'
+                : transformMode === 'translate'
+                  ? 'border-amber-500/50 bg-amber-500/20 text-amber-300 shadow-md shadow-amber-500/20'
+                  : 'border-purple-500/50 bg-purple-500/20 text-purple-300 shadow-md shadow-purple-500/20'
+              }`}
+            title="Selecione o modo de transformação: Fixo/Travado no piso, Livre XYZ, ou Giro 360°"
+          >
+            <option value="locked" className="bg-[#131b2e] text-white">
+              🔒 Fixo / Travado
+            </option>
+            <option value="translate" className="bg-[#131b2e] text-white">
+              🔓 Livre XYZ
+            </option>
+            <option value="rotate" className="bg-[#131b2e] text-white">
+              🔄 Giro 360° (Eixo Y)
+            </option>
+          </select>
+        </div>
+
+        {/* Gizmo 3D Translation Helper Box */}
+        {transformMode === 'translate' && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                <Move3D className="size-3 text-amber-400 animate-pulse" /> Modo Livre XYZ Ativo
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                Translação 3D
+              </span>
+            </div>
+            <p className="text-[10px] text-amber-200/90 leading-tight">
+              Arraste as setas na cena 3D: <span className="text-red-400 font-bold">X (Vermelho)</span>, <span className="text-green-400 font-bold">Y (Verde - Altura)</span> e <span className="text-blue-400 font-bold">Z (Azul)</span>.
+            </p>
+          </div>
+        )}
+
+        {/* Gizmo 3D Rotation Helper Box */}
+        {transformMode === 'rotate' && (
+          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-200 text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1">
+                <RotateCw className="size-3 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} /> Giro 360° no Eixo Y
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">
+                {Math.round((((selected.rot * 180) / Math.PI) % 360 + 360) % 360)}°
+              </span>
+            </div>
+            <p className="text-[10px] text-purple-200/90 leading-tight">
+              Arraste o anel verde do Gizmo na cena 3D para rotacionar com precisão de 0° a 360°.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -1340,11 +1404,10 @@ export default function PropertiesSidebar({
                     dm: { t: type, c: defaultColors[type] || selected.dm.c },
                   });
                 }}
-                className={`py-1 text-[10px] font-medium rounded-md transition-all ${
-                  isActive
+                className={`py-1 text-[10px] font-medium rounded-md transition-all ${isActive
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-on-surface-variant hover:text-white hover:bg-white/5'
-                }`}
+                  }`}
               >
                 {labels[type]}
               </button>
@@ -1378,11 +1441,10 @@ export default function PropertiesSidebar({
                     dm: { ...selected.dm, c: opt.c },
                   })
                 }
-                className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                  selected.dm.c.toLowerCase() === opt.c.toLowerCase()
+                className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${selected.dm.c.toLowerCase() === opt.c.toLowerCase()
                     ? 'border-primary bg-primary/20 text-white shadow-sm'
                     : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30'
-                }`}
+                  }`}
               >
                 <div className="w-3.5 h-3.5 rounded-full border border-white/30 flex-shrink-0" style={{ backgroundColor: opt.c }} />
                 <span className="text-[10px] font-medium truncate">{opt.n}</span>
