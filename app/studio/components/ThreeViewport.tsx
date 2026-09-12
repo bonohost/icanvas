@@ -28,7 +28,8 @@ interface ViewportProps {
   cameraSettings: { x: number; y: number; z: number; fov: number };
   onRegisterCapture?: (captureFn: () => string) => void;
   gizmoEnabled?: boolean;
-  gizmoMode?: 'translate' | 'rotate';
+  gizmoMode?: 'translate' | 'rotate_y' | 'rotate_full';
+  onDragStart?: () => void;
 }
 
 const SNAP_THRESHOLD = 0.15;
@@ -58,6 +59,7 @@ export default function ThreeViewport({
   onRegisterCapture,
   gizmoEnabled = false,
   gizmoMode = 'translate',
+  onDragStart,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -84,6 +86,51 @@ export default function ThreeViewport({
   useEffect(() => {
     onUpdatePositionRef.current = onUpdatePosition;
   }, [onUpdatePosition]);
+
+  const onDragStartRef = useRef(onDragStart);
+  useEffect(() => {
+    onDragStartRef.current = onDragStart;
+  }, [onDragStart]);
+
+  const roomRef = useRef(room);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  const snapOnRef = useRef(snapOn);
+  useEffect(() => {
+    snapOnRef.current = snapOn;
+  }, [snapOn]);
+
+  const collisionOnRef = useRef(collisionOn);
+  useEffect(() => {
+    collisionOnRef.current = collisionOn;
+  }, [collisionOn]);
+
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  const onSelectOpeningRef = useRef(onSelectOpening);
+  useEffect(() => {
+    onSelectOpeningRef.current = onSelectOpening;
+  }, [onSelectOpening]);
+
+  const onUpdateOpeningPositionRef = useRef(onUpdateOpeningPosition);
+  useEffect(() => {
+    onUpdateOpeningPositionRef.current = onUpdateOpeningPosition;
+  }, [onUpdateOpeningPosition]);
+
+  const onDropFurnitureRef = useRef(onDropFurniture);
+  useEffect(() => {
+    onDropFurnitureRef.current = onDropFurniture;
+  }, [onDropFurniture]);
+
+  const onDropOpeningRef = useRef(onDropOpening);
+  useEffect(() => {
+    onDropOpeningRef.current = onDropOpening;
+  }, [onDropOpening]);
 
   // Texture helper with synchronous cache retrieval and async callback support to eliminate screen flicker
   const getOrLoadTexture = useCallback((url?: string, tx = 1, ty = 1, onLoaded?: (tex: THREE.Texture) => void): THREE.Texture | null => {
@@ -351,7 +398,7 @@ export default function ThreeViewport({
     const transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.size = 0.85;
     transformControls.space = 'world';
-    transformControls.setMode(gizmoMode || 'translate');
+    transformControls.setMode(gizmoMode === 'translate' ? 'translate' : 'rotate');
     const gizmoRoot = transformControls.getHelper();
     gizmoRoot.visible = false;
     scene.add(gizmoRoot);
@@ -360,6 +407,9 @@ export default function ThreeViewport({
     transformControls.addEventListener('dragging-changed', (event: any) => {
       if (controlsRef.current) {
         controlsRef.current.enabled = !event.value;
+      }
+      if (event.value) {
+        onDragStartRef.current?.();
       }
     });
 
@@ -863,16 +913,28 @@ export default function ThreeViewport({
     const tc = transformControlsRef.current;
     if (!tc) return;
 
-    if (gizmoMode === 'rotate') {
+    tc.enabled = !!gizmoEnabled;
+
+    if (gizmoMode === 'rotate_y') {
       tc.setMode('rotate');
       tc.showX = false;
       tc.showZ = false;
       tc.showY = true;
+    } else if (gizmoMode === 'rotate_full') {
+      tc.setMode('rotate');
+      tc.showX = true;
+      tc.showY = true;
+      tc.showZ = true;
     } else {
       tc.setMode('translate');
       tc.showX = true;
       tc.showY = true;
       tc.showZ = true;
+    }
+
+    const helper = tc.getHelper();
+    if (helper) {
+      helper.visible = !!gizmoEnabled;
     }
 
     if (selectedUid && gizmoEnabled) {
@@ -889,7 +951,7 @@ export default function ThreeViewport({
     }
   }, [selectedUid, gizmoEnabled, gizmoMode, furniture]);
 
-  // Real-time Interactive Dragging & Repositioning System
+  // Real-time Interactive Dragging & Repositioning System (Permanent listeners on refs)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -906,8 +968,8 @@ export default function ThreeViewport({
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || !cameraRef.current) return;
 
-      // If user is currently dragging or hovering a Gizmo axis, don't trigger scene drag
-      if (transformControlsRef.current?.dragging || transformControlsRef.current?.axis) {
+      // If user is actively dragging the TransformControls gizmo handles, let the gizmo handle it
+      if (transformControlsRef.current?.dragging) {
         return;
       }
 
@@ -933,8 +995,8 @@ export default function ThreeViewport({
         while (top && !top.userData?.isOpening && top.parent) top = top.parent;
         if (top?.userData?.openingId) {
           const opId = top.userData.openingId;
-          onSelectOpening?.(opId);
-          onSelect(null);
+          onSelectOpeningRef.current?.(opId);
+          onSelectRef.current?.(null);
 
           // Find wall parent
           let wallGroup: any = top.parent;
@@ -943,11 +1005,12 @@ export default function ThreeViewport({
           }
 
           if (wallGroup) {
+            onDragStartRef.current?.();
             dragOpening = {
               id: opId,
               wallSide: wallGroup.userData.wallId,
               wallGroup,
-              wallLength: wallGroup.userData.w || room.width,
+              wallLength: wallGroup.userData.w || roomRef.current.width,
             };
             isDragging = true;
             if (controlsRef.current) controlsRef.current.enabled = false;
@@ -973,21 +1036,20 @@ export default function ThreeViewport({
         }
 
         if (top.userData?.uid) {
-          onSelect(top.userData.uid);
-          onSelectOpening?.(null);
+          onSelectRef.current?.(top.userData.uid);
+          onSelectOpeningRef.current?.(null);
 
-          // In standard locked mode, initiate floor/wall constrained drag. In gizmo mode, gizmo handles free XYZ.
-          if (!gizmoEnabled) {
-            dragObject = top;
-            isDragging = true;
-            if (controlsRef.current) controlsRef.current.enabled = false;
+          // Natural direct dragging of furniture across floor/walls
+          onDragStartRef.current?.();
+          dragObject = top;
+          isDragging = true;
+          if (controlsRef.current) controlsRef.current.enabled = false;
 
-            const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
-            plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);
+          const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
+          plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);
 
-            raycaster.ray.intersectPlane(plane, intersection);
-            offset.copy(top.position).sub(intersection);
-          }
+          raycaster.ray.intersectPlane(plane, intersection);
+          offset.copy(top.position).sub(intersection);
 
           // Immediately update box helper and rulers on click
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
@@ -999,8 +1061,8 @@ export default function ThreeViewport({
           updateRulers(top);
         }
       } else {
-        onSelect(null);
-        onSelectOpening?.(null);
+        onSelectRef.current?.(null);
+        onSelectOpeningRef.current?.(null);
       }
     };
 
@@ -1021,13 +1083,17 @@ export default function ThreeViewport({
           const hit = wallIntersects[0];
           const localHit = dragOpening.wallGroup.worldToLocal(hit.point.clone());
           const newPos = Math.max(0.08, Math.min(0.92, localHit.x / dragOpening.wallLength + 0.5));
-          onUpdateOpeningPosition?.(dragOpening.id, newPos);
+          onUpdateOpeningPositionRef.current?.(dragOpening.id, newPos);
         }
         if (selectionHelperRef.current) selectionHelperRef.current.update();
         return;
       }
 
       if (!dragObject) return;
+
+      const currentRoom = roomRef.current;
+      const currentSnapOn = snapOnRef.current;
+      const currentCollisionOn = collisionOnRef.current;
 
       // Exact trigonometric Axis-Aligned Bounding Box (AABB) for any arbitrary rotation
       const getRotatedBounds = (w: number, d: number, rotY: number) => {
@@ -1046,7 +1112,7 @@ export default function ThreeViewport({
       const otherObjects = furnitureGroupRef.current.children.filter((o) => o !== dragObject);
 
       const checkCollision3D = (targetPos: THREE.Vector3, currentW: number, currentD: number) => {
-        if (!collisionOn) return false;
+        if (!currentCollisionOn) return false;
         const testBox = new THREE.Box3().setFromCenterAndSize(
           targetPos.clone().add(new THREE.Vector3(0, itemH / 2, 0)),
           new THREE.Vector3(currentW, itemH, currentD).subScalar(COLLISION_EPSILON)
@@ -1071,12 +1137,12 @@ export default function ThreeViewport({
         if (validHit) {
           let wall: any = validHit.object;
           while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
-          const wallW = wall.userData.w || room.width;
+          const wallW = wall.userData.w || currentRoom.width;
           const localHit = wall.worldToLocal(validHit.point.clone());
 
           let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHit.x));
           const targetElevation = dragObject.userData.spec?.by ?? 1.5;
-          let targetLocalY = Math.max(itemH / 2, Math.min(room.height - itemH / 2, targetElevation));
+          let targetLocalY = Math.max(itemH / 2, Math.min(currentRoom.height - itemH / 2, targetElevation));
 
           const localPos = new THREE.Vector3(targetLocalX, targetLocalY, itemD / 2 + HALF_WALL);
           const worldPos = wall.localToWorld(localPos.clone());
@@ -1095,10 +1161,10 @@ export default function ThreeViewport({
           const rawZ = intersection.z + offset.z;
 
           // Distance from raw center to the 4 room walls
-          const dLeft = rawX - (-room.width / 2);
-          const dRight = room.width / 2 - rawX;
-          const dBack = rawZ - (-room.depth / 2);
-          const dFront = room.depth / 2 - rawZ;
+          const dLeft = rawX - (-currentRoom.width / 2);
+          const dRight = currentRoom.width / 2 - rawX;
+          const dBack = rawZ - (-currentRoom.depth / 2);
+          const dFront = currentRoom.depth / 2 - rawZ;
 
           const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
 
@@ -1121,16 +1187,16 @@ export default function ThreeViewport({
           let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
 
           // Room clamping bounds
-          let minX = -room.width / 2 + effW / 2;
-          let maxX = room.width / 2 - effW / 2;
-          let minZ = -room.depth / 2 + effD / 2;
-          let maxZ = room.depth / 2 - effD / 2;
+          let minX = -currentRoom.width / 2 + effW / 2;
+          let maxX = currentRoom.width / 2 - effW / 2;
+          let minZ = -currentRoom.depth / 2 + effD / 2;
+          let maxZ = currentRoom.depth / 2 - effD / 2;
 
           let tx = Math.max(minX, Math.min(maxX, rawX));
           let tz = Math.max(minZ, Math.min(maxZ, rawZ));
 
           // Magnetic snapping to walls with dual-axis corner support
-          if (snapOn) {
+          if (currentSnapOn) {
             const distBack = Math.abs(tz - minZ);
             const distFront = Math.abs(tz - maxZ);
             const distLeft = Math.abs(tx - minX);
@@ -1194,7 +1260,7 @@ export default function ThreeViewport({
     const handlePointerUp = () => {
       if (isDragging && dragObject) {
         const fixedY = dragObject.userData.spec?.by ?? (dragObject.userData.behavior === 'wall' ? dragObject.position.y : 0);
-        onUpdatePosition(
+        onUpdatePositionRef.current?.(
           dragObject.userData.uid,
           dragObject.position.x,
           dragObject.position.z,
@@ -1228,6 +1294,9 @@ export default function ThreeViewport({
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
 
+      const currentRoom = roomRef.current;
+      const currentSnapOn = snapOnRef.current;
+
       // Handle Door / Window Opening Drop
       if (parsed.isOpening) {
         const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
@@ -1247,16 +1316,16 @@ export default function ThreeViewport({
           }
           if (wallGroup) {
             targetWallSide = wallGroup.userData.wallId;
-            const wallLength = wallGroup.userData.w || room.width;
+            const wallLength = wallGroup.userData.w || currentRoom.width;
             const localHit = wallGroup.worldToLocal(validHit.point.clone());
             targetPos = Math.max(0.1, Math.min(0.9, localHit.x / wallLength + 0.5));
           }
         }
-        onDropOpening?.(parsed, targetWallSide, targetPos);
+        onDropOpeningRef.current?.(parsed, targetWallSide, targetPos);
         return;
       }
 
-      if (!onDropFurniture) return;
+      if (!onDropFurnitureRef.current) return;
       const spec = parsed as FurnitureSpec;
 
       if (spec.pr === 'wall') {
@@ -1272,19 +1341,19 @@ export default function ThreeViewport({
           while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
           const localHit = wall.worldToLocal(validHit.point.clone());
           const worldPos = wall.localToWorld(new THREE.Vector3(localHit.x, localHit.y, spec.d / 2 + HALF_WALL));
-          onDropFurniture(spec, { x: worldPos.x, z: worldPos.z, by: worldPos.y, rot: wall.rotation.y });
+          onDropFurnitureRef.current?.(spec, { x: worldPos.x, z: worldPos.z, by: worldPos.y, rot: wall.rotation.y });
         } else {
-          onDropFurniture(spec, { x: 0, z: -room.depth / 2 + spec.d / 2, by: spec.by ?? 1.5, rot: 0 });
+          onDropFurnitureRef.current?.(spec, { x: 0, z: -currentRoom.depth / 2 + spec.d / 2, by: spec.by ?? 1.5, rot: 0 });
         }
       } else {
         if (raycaster.ray.intersectPlane(plane, intersection)) {
           const rawX = intersection.x;
           const rawZ = intersection.z;
 
-          const dLeft = rawX - (-room.width / 2);
-          const dRight = room.width / 2 - rawX;
-          const dBack = rawZ - (-room.depth / 2);
-          const dFront = room.depth / 2 - rawZ;
+          const dLeft = rawX - (-currentRoom.width / 2);
+          const dRight = currentRoom.width / 2 - rawX;
+          const dBack = rawZ - (-currentRoom.depth / 2);
+          const dFront = currentRoom.depth / 2 - rawZ;
           const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
 
           let rot = 0;
@@ -1298,16 +1367,16 @@ export default function ThreeViewport({
           const effW = spec.w * cos + spec.d * sin;
           const effD = spec.w * sin + spec.d * cos;
 
-          const minX = -room.width / 2 + effW / 2;
-          const maxX = room.width / 2 - effW / 2;
-          const minZ = -room.depth / 2 + effD / 2;
-          const maxZ = room.depth / 2 - effD / 2;
+          const minX = -currentRoom.width / 2 + effW / 2;
+          const maxX = currentRoom.width / 2 - effW / 2;
+          const minZ = -currentRoom.depth / 2 + effD / 2;
+          const maxZ = currentRoom.depth / 2 - effD / 2;
 
           let x = Math.max(minX, Math.min(maxX, rawX));
           let z = Math.max(minZ, Math.min(maxZ, rawZ));
 
           // Snap to wall if close on drop
-          if (snapOn) {
+          if (currentSnapOn) {
             if (Math.abs(z - minZ) < SNAP_THRESHOLD) z = minZ;
             else if (Math.abs(z - maxZ) < SNAP_THRESHOLD) z = maxZ;
 
@@ -1315,12 +1384,13 @@ export default function ThreeViewport({
             else if (Math.abs(x - maxX) < SNAP_THRESHOLD) x = maxX;
           }
 
-          onDropFurniture(spec, { x, z, by: spec.by ?? 0, rot });
+          onDropFurnitureRef.current?.(spec, { x, z, by: spec.by ?? 0, rot });
         } else {
-          onDropFurniture(spec, { x: 0, z: 0, by: spec.by ?? 0, rot: 0 });
+          onDropFurnitureRef.current?.(spec, { x: 0, z: 0, by: spec.by ?? 0, rot: 0 });
         }
       }
     };
+
     container.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
@@ -1334,18 +1404,7 @@ export default function ThreeViewport({
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('drop', handleDrop);
     };
-  }, [
-    room,
-    snapOn,
-    collisionOn,
-    onSelect,
-    onSelectOpening,
-    onUpdatePosition,
-    onUpdateOpeningPosition,
-    onDropFurniture,
-    onDropOpening,
-    updateRulers,
-  ]);
+  }, [updateRulers]);
 
   return <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden" />;
 }

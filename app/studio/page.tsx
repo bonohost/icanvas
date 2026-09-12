@@ -46,7 +46,14 @@ import {
   Maximize2,
   Minimize2,
   ZoomIn,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
+
+interface HistorySnapshot {
+  furniture: FurnitureInstance[];
+  room: RoomSettings;
+}
 
 export default function StudioPage() {
   const [projectId, setProjectId] = useState<string>('proj_default');
@@ -112,11 +119,16 @@ export default function StudioPage() {
 
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
-  const [transformMode, setTransformMode] = useState<'locked' | 'translate' | 'rotate'>('locked');
+  const [transformMode, setTransformMode] = useState<'locked' | 'translate' | 'rotate_y' | 'rotate_full'>('locked');
   const [showGrid, setShowGrid] = useState(true);
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
+
+  // Undo / Redo History System (Max 50 states)
+  const [pastStates, setPastStates] = useState<HistorySnapshot[]>([]);
+  const [futureStates, setFutureStates] = useState<HistorySnapshot[]>([]);
+  const MAX_HISTORY = 50;
 
   // Menu toggles & Focus / Zen mode
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
@@ -216,6 +228,87 @@ export default function StudioPage() {
     return () => clearTimeout(timeout);
   }, [projectId, projectName, room, furniture, cameraSettings]);
 
+  // Keep snapshot ref synced for instant history push
+  const currentSnapshotRef = useRef<HistorySnapshot>({
+    furniture: [],
+    room: {
+      width: 4.5,
+      depth: 3.2,
+      height: 2.6,
+      floorColor: '#e2e8f0',
+      floorTileX: 4,
+      floorTileY: 4,
+      walls: {
+        back: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        front: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        left: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        right: { color: '#f8fafc', tileX: 2, tileY: 1 },
+      },
+      lightIntensity: 1.2,
+      reflectionOpacity: 0.05,
+    },
+  });
+
+  useEffect(() => {
+    currentSnapshotRef.current = {
+      furniture,
+      room,
+    };
+  }, [furniture, room]);
+
+  const pushHistory = useCallback(() => {
+    const snapshot: HistorySnapshot = {
+      furniture: JSON.parse(JSON.stringify(currentSnapshotRef.current.furniture)),
+      room: JSON.parse(JSON.stringify(currentSnapshotRef.current.room)),
+    };
+    setPastStates((prev) => [...prev.slice(-(MAX_HISTORY - 1)), snapshot]);
+    setFutureStates([]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    setPastStates((prevPast) => {
+      if (prevPast.length === 0) return prevPast;
+      const newPast = [...prevPast];
+      const previousState = newPast.pop()!;
+
+      const currentState: HistorySnapshot = {
+        furniture: JSON.parse(JSON.stringify(currentSnapshotRef.current.furniture)),
+        room: JSON.parse(JSON.stringify(currentSnapshotRef.current.room)),
+      };
+      setFutureStates((prevFuture) => [currentState, ...prevFuture.slice(0, MAX_HISTORY - 1)]);
+
+      setFurniture(previousState.furniture);
+      setRoom(previousState.room);
+      setSelectedUid(null);
+      setSelectedOpeningId(null);
+      setSaveToast('Desfeito (Ctrl+Z)');
+      setTimeout(() => setSaveToast(null), 2000);
+      return newPast;
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setFutureStates((prevFuture) => {
+      if (prevFuture.length === 0) return prevFuture;
+      const newFuture = [...prevFuture];
+      const nextState = newFuture.shift()!;
+
+      const currentState: HistorySnapshot = {
+        furniture: JSON.parse(JSON.stringify(currentSnapshotRef.current.furniture)),
+        room: JSON.parse(JSON.stringify(currentSnapshotRef.current.room)),
+      };
+      setPastStates((prevPast) => [...prevPast.slice(-(MAX_HISTORY - 1)), currentState]);
+
+      setFurniture(nextState.furniture);
+      setRoom(nextState.room);
+      setSelectedUid(null);
+      setSelectedOpeningId(null);
+      setSaveToast('Refeito (Ctrl+Y)');
+      setTimeout(() => setSaveToast(null), 2000);
+      return newFuture;
+    });
+  }, []);
+
   const currentProjectObject: StudioProject = {
     id: projectId,
     name: projectName,
@@ -242,6 +335,8 @@ export default function StudioPage() {
     if (project.cameraSettings) {
       setCameraSettings(project.cameraSettings);
     }
+    setPastStates([]);
+    setFutureStates([]);
     setIsSaved(true);
     setSaveToast(`Projeto "${project.name}" Carregado!`);
     setTimeout(() => setSaveToast(null), 2500);
@@ -270,6 +365,8 @@ export default function StudioPage() {
     setRoom(newRoom);
     setFurniture([]);
     setSelectedUid(null);
+    setPastStates([]);
+    setFutureStates([]);
     saveProject({
       id: newId,
       name,
@@ -284,6 +381,7 @@ export default function StudioPage() {
 
   const handleApplyTemplate = useCallback(
     (template: RoomTemplatePreset, mode: 'replace' | 'append') => {
+      pushHistory();
       const timestamp = Date.now();
       const newItems: FurnitureInstance[] = template.furniture.map((item, idx) => ({
         ...item,
@@ -302,11 +400,12 @@ export default function StudioPage() {
       }
       setTimeout(() => setSaveToast(null), 2500);
     },
-    []
+    [pushHistory]
   );
 
   const handleAdd = useCallback(
     (spec: FurnitureSpec, position?: { x: number; z: number; by?: number; rot?: number }) => {
+      pushHistory();
       const newInstance: FurnitureInstance = {
         ...spec,
         uid: Date.now(),
@@ -319,12 +418,13 @@ export default function StudioPage() {
       setFurniture((prev) => [...prev, newInstance]);
       setSelectedUid(newInstance.uid);
     },
-    [room.width, room.depth]
+    [pushHistory, room.width, room.depth]
   );
 
   const handleUpdate = useCallback((uid: number, updates: Partial<FurnitureInstance>) => {
+    pushHistory();
     setFurniture((prev) => prev.map((f) => (f.uid === uid ? { ...f, ...updates } : f)));
-  }, []);
+  }, [pushHistory]);
 
   const handleUpdatePosition = useCallback(
     (uid: number, x: number, z: number, by?: number, rot?: number) => {
@@ -347,15 +447,17 @@ export default function StudioPage() {
   );
 
   const handleRemove = useCallback((uid: number) => {
+    pushHistory();
     setFurniture((prev) => prev.filter((f) => f.uid !== uid));
     setSelectedUid(null);
-  }, []);
+  }, [pushHistory]);
 
   const handleDuplicate = useCallback(
     (uid: number) => {
       const target = furniture.find((f) => f.uid === uid);
       if (!target) return;
 
+      pushHistory();
       const cos = Math.abs(Math.cos(target.rot));
       const sin = Math.abs(Math.sin(target.rot));
       const effW = target.w * cos + target.d * sin;
@@ -382,11 +484,12 @@ export default function StudioPage() {
       setFurniture((prev) => [...prev, dupe]);
       setSelectedUid(dupe.uid);
     },
-    [furniture, room.width, room.depth]
+    [furniture, pushHistory, room.width, room.depth]
   );
 
   const handleAddOpening = useCallback(
     (preset: OpeningPreset, wallSide: WallSide = 'back', position = 0.5) => {
+      pushHistory();
       const newOpening: WallOpening = {
         id: `op_${Date.now()}`,
         wallSide,
@@ -408,15 +511,16 @@ export default function StudioPage() {
       setSaveToast(`Vão "${newOpening.name}" Adicionado!`);
       setTimeout(() => setSaveToast(null), 2500);
     },
-    []
+    [pushHistory]
   );
 
   const handleUpdateOpening = useCallback((id: string, updates: Partial<WallOpening>) => {
+    pushHistory();
     setRoom((prev) => ({
       ...prev,
       openings: (prev.openings || []).map((o) => (o.id === id ? { ...o, ...updates } : o)),
     }));
-  }, []);
+  }, [pushHistory]);
 
   const handleUpdateOpeningPosition = useCallback((id: string, newPos: number) => {
     setRoom((prev) => ({
@@ -426,17 +530,19 @@ export default function StudioPage() {
   }, []);
 
   const handleRemoveOpening = useCallback((id: string) => {
+    pushHistory();
     setRoom((prev) => ({
       ...prev,
       openings: (prev.openings || []).filter((o) => o.id !== id),
     }));
     setSelectedOpeningId(null);
-  }, []);
+  }, [pushHistory]);
 
   const handleDuplicateOpening = useCallback(
     (id: string) => {
       const target = (room.openings || []).find((o) => o.id === id);
       if (!target) return;
+      pushHistory();
       const dupe: WallOpening = {
         ...target,
         id: `op_${Date.now()}`,
@@ -449,15 +555,25 @@ export default function StudioPage() {
       setSelectedOpeningId(dupe.id);
       setSelectedUid(null);
     },
-    [room.openings]
+    [pushHistory, room.openings]
   );
+
+  const handleSelectFurniture = useCallback((uid: number | null) => {
+    setSelectedUid(uid);
+    if (uid) setSelectedOpeningId(null);
+  }, []);
+
+  const handleSelectOpening = useCallback((id: string | null) => {
+    setSelectedOpeningId(id);
+    if (id) setSelectedUid(null);
+  }, []);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedUid(null);
     setSelectedOpeningId(null);
   }, []);
 
-  // Global Keyboard Shortcuts (Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
+  // Global Keyboard Shortcuts (Ctrl+Z = Undo, Ctrl+Y = Redo, Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -467,6 +583,23 @@ export default function StudioPage() {
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable)
       ) {
+        return;
+      }
+
+      // Undo: Ctrl+Z or Cmd+Z (without Shift)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Cmd+Y, or Ctrl+Shift+Z / Cmd+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)
+      ) {
+        e.preventDefault();
+        handleRedo();
         return;
       }
 
@@ -527,6 +660,8 @@ export default function StudioPage() {
   }, [
     selectedUid,
     selectedOpeningId,
+    handleUndo,
+    handleRedo,
     handleDuplicate,
     handleDuplicateOpening,
     handleRemove,
@@ -537,6 +672,7 @@ export default function StudioPage() {
 
   const handleClearAll = () => {
     if (window.confirm('Deseja limpar todos os móveis e vãos da cena?')) {
+      pushHistory();
       setFurniture([]);
       setRoom((prev) => ({ ...prev, openings: [] }));
       setSelectedUid(null);
@@ -604,6 +740,32 @@ export default function StudioPage() {
                 </>
               )}
             </button>
+
+            {/* Undo & Redo History Controls */}
+            <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/10">
+              <button
+                onClick={handleUndo}
+                disabled={pastStates.length === 0}
+                className={`p-1.5 rounded-md text-xs font-medium transition-all ${pastStates.length > 0
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
+                  : 'text-white/20 cursor-not-allowed'
+                  }`}
+                title={`Desfazer (Ctrl+Z)${pastStates.length > 0 ? ` (${pastStates.length})` : ''}`}
+              >
+                <Undo2 className="size-3.5" />
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={futureStates.length === 0}
+                className={`p-1.5 rounded-md text-xs font-medium transition-all ${futureStates.length > 0
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
+                  : 'text-white/20 cursor-not-allowed'
+                  }`}
+                title={`Refazer (Ctrl+Y / Ctrl+Shift+Z)${futureStates.length > 0 ? ` (${futureStates.length})` : ''}`}
+              >
+                <Redo2 className="size-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
@@ -737,27 +899,22 @@ export default function StudioPage() {
           <ThreeViewport
             room={room}
             furniture={furniture}
-            onSelect={(uid) => {
-              setSelectedUid(uid);
-              if (uid) setSelectedOpeningId(null);
-            }}
+            onSelect={handleSelectFurniture}
             selectedUid={selectedUid}
             selectedOpeningId={selectedOpeningId}
-            onSelectOpening={(id) => {
-              setSelectedOpeningId(id);
-              if (id) setSelectedUid(null);
-            }}
+            onSelectOpening={handleSelectOpening}
             onUpdatePosition={handleUpdatePosition}
             onUpdateOpeningPosition={handleUpdateOpeningPosition}
             onDropFurniture={handleAdd}
-            onDropOpening={(preset, wallSide, pos) => handleAddOpening(preset, wallSide, pos)}
+            onDropOpening={handleAddOpening}
             showGrid={showGrid}
             snapOn={snapOn}
             collisionOn={collisionOn}
             autoTransparency={autoTransparency}
             cameraSettings={cameraSettings}
             gizmoEnabled={transformMode !== 'locked'}
-            gizmoMode={transformMode === 'rotate' ? 'rotate' : 'translate'}
+            gizmoMode={transformMode === 'locked' ? 'translate' : transformMode}
+            onDragStart={pushHistory}
             onRegisterCapture={(fn) => {
               captureSnapshotRef.current = fn;
             }}
@@ -853,7 +1010,10 @@ export default function StudioPage() {
             selected={selectedObject}
             selectedOpening={selectedOpening}
             room={room}
-            onUpdateRoom={setRoom}
+            onUpdateRoom={(newRoom) => {
+              pushHistory();
+              setRoom(newRoom);
+            }}
             onUpdate={handleUpdate}
             onRemove={handleRemove}
             onDuplicate={handleDuplicate}
@@ -932,6 +1092,8 @@ export default function StudioPage() {
 
         <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant">
           <div className="hidden md:flex items-center gap-3 text-white/50 text-[10px]">
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Z</kbd> Desfazer</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Y</kbd> Refazer</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+S</kbd> Salvar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+D</kbd> Duplicar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Del</kbd> Excluir</span>

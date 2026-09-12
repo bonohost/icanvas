@@ -52,8 +52,8 @@ interface PropertiesSidebarProps {
   onToggleGizmo?: (enabled: boolean) => void;
   gizmoMode?: 'translate' | 'rotate';
   onGizmoModeChange?: (mode: 'translate' | 'rotate') => void;
-  transformMode?: 'locked' | 'translate' | 'rotate';
-  onTransformModeChange?: (mode: 'locked' | 'translate' | 'rotate') => void;
+  transformMode?: 'locked' | 'translate' | 'rotate_y' | 'rotate_full';
+  onTransformModeChange?: (mode: 'locked' | 'translate' | 'rotate_y' | 'rotate_full') => void;
 }
 
 export default function PropertiesSidebar({
@@ -1112,31 +1112,36 @@ export default function PropertiesSidebar({
           <select
             value={transformMode}
             onChange={(e) => {
-              const newMode = e.target.value as 'locked' | 'translate' | 'rotate';
+              const newMode = e.target.value as 'locked' | 'translate' | 'rotate_y' | 'rotate_full';
               onTransformModeChange?.(newMode);
               if (newMode === 'locked') {
                 onToggleGizmo?.(false);
               } else {
                 onToggleGizmo?.(true);
-                onGizmoModeChange?.(newMode === 'rotate' ? 'rotate' : 'translate');
+                onGizmoModeChange?.(newMode === 'translate' ? 'translate' : 'rotate');
               }
             }}
             className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold outline-none cursor-pointer transition-all ${transformMode === 'locked'
                 ? 'border-white/10 bg-white/5 text-on-surface-variant hover:border-white/20 hover:text-white'
                 : transformMode === 'translate'
                   ? 'border-amber-500/50 bg-amber-500/20 text-amber-300 shadow-md shadow-amber-500/20'
-                  : 'border-purple-500/50 bg-purple-500/20 text-purple-300 shadow-md shadow-purple-500/20'
+                  : transformMode === 'rotate_y'
+                    ? 'border-purple-500/50 bg-purple-500/20 text-purple-300 shadow-md shadow-purple-500/20'
+                    : 'border-cyan-500/50 bg-cyan-500/20 text-cyan-300 shadow-md shadow-cyan-500/20'
               }`}
-            title="Selecione o modo de transformação: Fixo/Travado no piso, Livre XYZ, ou Giro 360°"
+            title="Modo de movimentação: Padrão (Piso/Paredes), Livre XYZ (Gizmo), Giro Y ou Giro 360° Full"
           >
             <option value="locked" className="bg-[#131b2e] text-white">
-              🔒 Fixo / Travado
+              🎯 Padrão (Piso &amp; Paredes)
             </option>
             <option value="translate" className="bg-[#131b2e] text-white">
-              🔓 Livre XYZ
+              🔓 Livre XYZ (Gizmo 3D)
             </option>
-            <option value="rotate" className="bg-[#131b2e] text-white">
+            <option value="rotate_y" className="bg-[#131b2e] text-white">
               🔄 Giro 360° (Eixo Y)
+            </option>
+            <option value="rotate_full" className="bg-[#131b2e] text-white">
+              🌐 Giro 360° Full (3 Eixos)
             </option>
           </select>
         </div>
@@ -1158,8 +1163,8 @@ export default function PropertiesSidebar({
           </div>
         )}
 
-        {/* Gizmo 3D Rotation Helper Box */}
-        {transformMode === 'rotate' && (
+        {/* Gizmo 3D Rotation Y Helper Box */}
+        {transformMode === 'rotate_y' && (
           <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-200 text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1">
@@ -1170,7 +1175,24 @@ export default function PropertiesSidebar({
               </span>
             </div>
             <p className="text-[10px] text-purple-200/90 leading-tight">
-              Arraste o anel verde do Gizmo na cena 3D para rotacionar com precisão de 0° a 360°.
+              Arraste o anel verde do Gizmo na cena 3D para rotacionar horizontalmente de 0° a 360°.
+            </p>
+          </div>
+        )}
+
+        {/* Gizmo 3D Full 3-Axis Rotation Helper Box */}
+        {transformMode === 'rotate_full' && (
+          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1">
+                <RotateCw className="size-3 text-cyan-400 animate-spin" style={{ animationDuration: '4s' }} /> Giro 360° Full (3 Eixos)
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">
+                X/Y/Z 3D
+              </span>
+            </div>
+            <p className="text-[10px] text-cyan-200/90 leading-tight">
+              Arraste os anéis <span className="text-red-400 font-bold">Vermelho (X)</span>, <span className="text-green-400 font-bold">Verde (Y)</span> ou <span className="text-blue-400 font-bold">Azul (Z)</span> no Gizmo 3D.
             </p>
           </div>
         )}
