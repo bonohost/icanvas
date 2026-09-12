@@ -45,6 +45,7 @@ import {
   PanelRightOpen,
   Maximize2,
   Minimize2,
+  ZoomIn,
 } from 'lucide-react';
 
 export default function StudioPage() {
@@ -267,7 +268,7 @@ export default function StudioPage() {
       updatedAt: new Date().toISOString(),
       room: newRoom,
       furniture: [],
-      cameraSettings: { id: 'iso', x: 5.5, y: 4.5, z: 5.5, fov: 45 },
+      cameraSettings: { id: 'iso', x: 5.5, y: 4.5, z: 5.5, fov: 50 },
     });
     setIsSaved(true);
   }, []);
@@ -576,11 +577,10 @@ export default function StudioPage() {
 
             <button
               onClick={handleSaveCurrent}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${
-                isSaved
-                  ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
-                  : 'bg-green-500/20 border-green-500/40 text-green-300 hover:bg-green-500/30'
-              }`}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${isSaved
+                ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
+                : 'bg-green-500/20 border-green-500/40 text-green-300 hover:bg-green-500/30'
+                }`}
               title="Salvar Projeto (Ctrl+S)"
             >
               {saveToast ? (
@@ -621,11 +621,10 @@ export default function StudioPage() {
           <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">
             <button
               onClick={() => setShowLeftSidebar((prev) => !prev)}
-              className={`p-1.5 rounded-md text-xs font-medium transition-all ${
-                showLeftSidebar && !isZenMode
-                  ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
-                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`p-1.5 rounded-md text-xs font-medium transition-all ${showLeftSidebar && !isZenMode
+                ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+                : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title={showLeftSidebar ? 'Ocultar Catálogo ( [ )' : 'Mostrar Catálogo ( [ )'}
             >
               <PanelLeft className="size-3.5" />
@@ -633,11 +632,10 @@ export default function StudioPage() {
 
             <button
               onClick={() => setIsZenMode((prev) => !prev)}
-              className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${
-                isZenMode
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${isZenMode
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title="Modo Foco / Ocultar Menus (Tab)"
             >
               {isZenMode ? <Minimize2 className="size-3.5 text-amber-400" /> : <Maximize2 className="size-3.5" />}
@@ -646,11 +644,10 @@ export default function StudioPage() {
 
             <button
               onClick={() => setShowRightSidebar((prev) => !prev)}
-              className={`p-1.5 rounded-md text-xs font-medium transition-all ${
-                showRightSidebar && !isZenMode
-                  ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
-                  : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`p-1.5 rounded-md text-xs font-medium transition-all ${showRightSidebar && !isZenMode
+                ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+                : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title={showRightSidebar ? 'Ocultar Propriedades ( ] )' : 'Mostrar Propriedades ( ] )'}
             >
               <PanelRight className="size-3.5" />
@@ -669,22 +666,20 @@ export default function StudioPage() {
 
           <button
             onClick={() => setShowGrid(!showGrid)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-              showGrid
-                ? 'bg-primary/20 text-primary border border-primary/40'
-                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
-            }`}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${showGrid
+              ? 'bg-primary/20 text-primary border border-primary/40'
+              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+              }`}
           >
             <Grid3x3 className="size-3.5" /> Grid
           </button>
 
           <button
             onClick={() => setSnapOn(!snapOn)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-              snapOn
-                ? 'bg-primary/20 text-primary border border-primary/40'
-                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
-            }`}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${snapOn
+              ? 'bg-primary/20 text-primary border border-primary/40'
+              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+              }`}
             title={snapOn ? 'Desativar Snap' : 'Ativar Snap Magnético'}
           >
             <Magnet className="size-3.5" /> Snap
@@ -692,11 +687,10 @@ export default function StudioPage() {
 
           <button
             onClick={() => setAutoTransparency(!autoTransparency)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-              autoTransparency
-                ? 'bg-primary/20 text-primary border border-primary/40'
-                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
-            }`}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${autoTransparency
+              ? 'bg-primary/20 text-primary border border-primary/40'
+              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+              }`}
             title={autoTransparency ? 'Transparência Automática de Paredes: Ativada' : 'Transparência Automática de Paredes: Desativada'}
           >
             {autoTransparency ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
@@ -719,9 +713,8 @@ export default function StudioPage() {
       <div className="flex flex-1 overflow-hidden relative min-h-0 h-full">
         {/* Left Sidebar (Catalog) with smooth width transition */}
         <div
-          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${
-            showLeftSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
-          }`}
+          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${showLeftSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
+            }`}
         >
           <CatalogSidebar
             onAdd={handleAdd}
@@ -797,11 +790,10 @@ export default function StudioPage() {
                 setShowLeftSidebar((prev) => !prev);
                 if (isZenMode) setIsZenMode(false);
               }}
-              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
-                showLeftSidebar && !isZenMode
-                  ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
-                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${showLeftSidebar && !isZenMode
+                ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title="Alternar Catálogo ( [ )"
             >
               <PanelLeft className="size-3.5" />
@@ -812,11 +804,10 @@ export default function StudioPage() {
 
             <button
               onClick={() => setIsZenMode((prev) => !prev)}
-              className={`px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
-                isZenMode
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-inner'
-                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${isZenMode
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold shadow-inner'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title="Modo Foco / Ocultar Todos os Menus (Tab)"
             >
               {isZenMode ? <Minimize2 className="size-3.5 text-amber-400" /> : <Maximize2 className="size-3.5" />}
@@ -830,11 +821,10 @@ export default function StudioPage() {
                 setShowRightSidebar((prev) => !prev);
                 if (isZenMode) setIsZenMode(false);
               }}
-              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${
-                showRightSidebar && !isZenMode
-                  ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
-                  : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${showRightSidebar && !isZenMode
+                ? 'bg-primary/20 text-primary border border-primary/30 font-semibold'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
               title="Alternar Propriedades ( ] )"
             >
               <span className="text-[11px] hidden md:inline">Propriedades</span>
@@ -845,9 +835,8 @@ export default function StudioPage() {
 
         {/* Right Sidebar (Properties) with smooth width transition */}
         <div
-          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${
-            showRightSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
-          }`}
+          className={`h-full flex-shrink-0 transition-all duration-300 ease-in-out overflow-hidden z-20 ${showRightSidebar && !isZenMode ? 'w-80 opacity-100' : 'w-0 opacity-0 pointer-events-none'
+            }`}
         >
           <PropertiesSidebar
             selected={selectedObject}
@@ -880,22 +869,51 @@ export default function StudioPage() {
           </span>
           <div className="flex gap-1.5">
             {[
-              { id: 'iso', label: 'Isométrica 3D', pos: { x: 5.5, y: 4.5, z: 5.5, fov: 45 } },
+              { id: 'iso', label: 'Isométrica 3D', pos: { x: 5.5, y: 4.5, z: 5.5, fov: 50 } },
               { id: 'top', label: 'Planta Baixa (Top)', pos: { x: 0, y: 7.5, z: 0.05, fov: 38 } },
               { id: 'front', label: 'Elevação Frontal', pos: { x: 0, y: 1.5, z: 6.5, fov: 45 } },
             ].map((v) => (
               <button
                 key={v.id}
                 onClick={() => setCameraSettings({ ...v.pos, id: v.id })}
-                className={`h-6 px-2.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all ${
-                  cameraSettings.id === v.id
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-white/5 text-on-surface-variant hover:text-white hover:bg-white/10'
-                }`}
+                className={`h-6 px-2.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all ${cameraSettings.id === v.id
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-white/5 text-on-surface-variant hover:text-white hover:bg-white/10'
+                  }`}
               >
                 {v.label}
               </button>
             ))}
+          </div>
+
+          {/* Divider */}
+          <div className="h-4 w-[1px] bg-white/10" />
+
+          {/* FOV Lens Control Slider (15° to 60°) */}
+          <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 px-2.5 py-0.5 rounded-md hover:border-primary/40 transition-colors">
+            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1">
+              <ZoomIn className="size-3 text-primary" /> FOV:
+            </span>
+            <input
+              type="range"
+              min="15"
+              max="60"
+              step="1"
+              value={cameraSettings.fov || 45}
+              onChange={(e) => {
+                const newFov = Number(e.target.value);
+                setCameraSettings((prev) => ({
+                  ...prev,
+                  fov: newFov,
+                  id: 'custom',
+                }));
+              }}
+              className="w-20 sm:w-28 accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              title="Ajustar Campo de Visão / Lente da Câmera (15° a 60°)"
+            />
+            <span className="text-[10px] font-mono text-primary font-bold w-6 text-right">
+              {Math.round(cameraSettings.fov || 45)}°
+            </span>
           </div>
         </div>
 

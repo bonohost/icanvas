@@ -60,11 +60,40 @@ export default function ThreeViewport({
   const furnitureGroupRef = useRef<THREE.Group>(new THREE.Group());
   const wallsGroupRef = useRef<THREE.Group>(new THREE.Group());
   const floorRef = useRef<THREE.Mesh | null>(null);
+  const floorMeshRef = useRef<THREE.Mesh | null>(null);
+  const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const outdoorMeshRef = useRef<THREE.Mesh | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const selectionHelperRef = useRef<THREE.BoxHelper | null>(null);
   const rulersGroupRef = useRef<THREE.Group>(new THREE.Group());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
+  const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+
+  // Texture helper with synchronous cache retrieval and async callback support to eliminate screen flicker
+  const getOrLoadTexture = useCallback((url?: string, tx = 1, ty = 1, onLoaded?: (tex: THREE.Texture) => void): THREE.Texture | null => {
+    if (!url) return null;
+    const key = `${url}_${tx}_${ty}`;
+    const cached = textureCacheRef.current.get(key);
+    if (cached) {
+      return cached;
+    }
+    textureLoaderRef.current.load(
+      url,
+      (tex) => {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(tx, ty);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        textureCacheRef.current.set(key, tex);
+        if (onLoaded) onLoaded(tex);
+      },
+      undefined,
+      (err) => {
+        console.warn('Texture load error:', err);
+      }
+    );
+    return null;
+  }, []);
 
   const autoTransparencyRef = useRef(autoTransparency);
   useEffect(() => {
@@ -333,10 +362,8 @@ export default function ThreeViewport({
     };
   }, []);
 
-  // Update Room geometry, walls, floor, grid & shadow camera bounds
+  // 1. Lighting & Shadow Camera Bounds (non-destructive)
   useEffect(() => {
-    if (!sceneRef.current) return;
-
     if (ambientLightRef.current) ambientLightRef.current.intensity = room.lightIntensity * 0.85;
     if (hemiLightRef.current) hemiLightRef.current.intensity = room.lightIntensity * 0.6;
     if (topLightRef.current) {
@@ -348,33 +375,189 @@ export default function ThreeViewport({
       topLightRef.current.shadow.camera.bottom = -maxRoomDim;
       topLightRef.current.shadow.camera.updateProjectionMatrix();
     }
+  }, [room.lightIntensity, room.width, room.depth, room.height]);
 
-    wallsGroupRef.current.clear();
+  // 2. Floor Geometry & Materials (smart in-place material update to eliminate flickering)
+  useEffect(() => {
+    if (!sceneRef.current) return;
 
-    const applyTexture = (mat: THREE.MeshStandardMaterial, url?: string, tx = 1, ty = 1) => {
-      if (url) {
-        textureLoaderRef.current.load(url, (tex) => {
-          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-          tex.repeat.set(tx, ty);
-          tex.colorSpace = THREE.SRGBColorSpace;
-          mat.map = tex;
-          mat.needsUpdate = true;
-        });
-      } else {
-        mat.map = null;
-        mat.needsUpdate = true;
+    // Check if floor geometry exists with matching dimensions
+    if (
+      !floorMeshRef.current ||
+      floorMeshRef.current.userData?.w !== room.width ||
+      floorMeshRef.current.userData?.d !== room.depth
+    ) {
+      if (floorRef.current) {
+        sceneRef.current.remove(floorRef.current);
       }
-    };
+      const floorGroup = new THREE.Group();
 
-    const buildWall = (
-      w: number,
-      h: number,
-      x: number,
-      z: number,
-      ry: number,
-      id: keyof RoomSettings['walls']
-    ) => {
+      const floorGeo = new THREE.PlaneGeometry(room.width, room.depth);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(room.floorColor),
+        roughness: room.floorRoughness ?? 0.55,
+        metalness: room.floorMetalness ?? 0.02,
+      });
+      floorMatRef.current = floorMat;
+
+      const initialTex = getOrLoadTexture(
+        room.floorTextureUrl,
+        room.floorTileX || 4,
+        room.floorTileY || 4,
+        (tex) => {
+          if (floorMatRef.current) {
+            floorMatRef.current.map = tex;
+            floorMatRef.current.needsUpdate = true;
+          }
+        }
+      );
+      if (initialTex) {
+        floorMat.map = initialTex;
+      }
+
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      floor.userData = { isFloor: true, w: room.width, d: room.depth };
+      floorMeshRef.current = floor;
+      floorGroup.add(floor);
+
+      const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
+      const outdoorMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#182234'),
+        roughness: 0.92,
+        metalness: 0.05,
+      });
+      const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
+      outdoor.position.y = -0.005;
+      outdoor.rotation.x = -Math.PI / 2;
+      outdoor.receiveShadow = true;
+      outdoorMeshRef.current = outdoor;
+      floorGroup.add(outdoor);
+
+      sceneRef.current.add(floorGroup);
+      floorRef.current = floorGroup as any;
+    } else if (floorMatRef.current) {
+      // In-place material updates without mesh re-instantiation or flickering
+      floorMatRef.current.color.set(room.floorColor);
+      floorMatRef.current.roughness = room.floorRoughness ?? 0.55;
+      floorMatRef.current.metalness = room.floorMetalness ?? 0.02;
+
+      const tex = getOrLoadTexture(
+        room.floorTextureUrl,
+        room.floorTileX || 4,
+        room.floorTileY || 4,
+        (loadedTex) => {
+          if (floorMatRef.current) {
+            floorMatRef.current.map = loadedTex;
+            floorMatRef.current.needsUpdate = true;
+          }
+        }
+      );
+      floorMatRef.current.map = tex;
+      floorMatRef.current.needsUpdate = true;
+    }
+  }, [
+    room.width,
+    room.depth,
+    room.floorColor,
+    room.floorRoughness,
+    room.floorMetalness,
+    room.floorTextureUrl,
+    room.floorTileX,
+    room.floorTileY,
+    getOrLoadTexture,
+  ]);
+
+  // 3. Grid Helper (recreate only on room dimension resize, toggle visibility in place)
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    if (gridHelperRef.current) {
+      sceneRef.current.remove(gridHelperRef.current);
+    }
+    const maxDim = Math.max(room.width, room.depth);
+    const grid = new THREE.GridHelper(maxDim, maxDim * 2, '#3b82f6', '#334155');
+    grid.position.y = 0.002;
+    grid.visible = showGrid;
+    sceneRef.current.add(grid);
+    gridHelperRef.current = grid;
+  }, [room.width, room.depth]);
+
+  useEffect(() => {
+    if (gridHelperRef.current) {
+      gridHelperRef.current.visible = showGrid;
+    }
+  }, [showGrid]);
+
+  // 4. Parametric Walls & Openings Smart Synchronization (Per Wall)
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    const hw = room.width / 2;
+    const hd = room.depth / 2;
+
+    const wallSpecs: Array<{
+      id: keyof RoomSettings['walls'];
+      w: number;
+      h: number;
+      x: number;
+      z: number;
+      ry: number;
+    }> = [
+      { id: 'back', w: room.width, h: room.height, x: 0, z: -hd - HALF_WALL, ry: 0 },
+      { id: 'front', w: room.width, h: room.height, x: 0, z: hd + HALF_WALL, ry: Math.PI },
+      { id: 'left', w: room.depth, h: room.height, x: -hw - HALF_WALL, z: 0, ry: Math.PI / 2 },
+      { id: 'right', w: room.depth, h: room.height, x: hw + HALF_WALL, z: 0, ry: -Math.PI / 2 },
+    ];
+
+    let hasChanges = false;
+
+    wallSpecs.forEach(({ id, w, h, x, z, ry }) => {
       const wallConfig = room.walls[id];
+      const wallOpenings = (room.openings || []).filter((o) => o.wallSide === id);
+
+      const fingerprint = JSON.stringify({
+        w,
+        h,
+        x,
+        z,
+        ry,
+        color: wallConfig.color,
+        roughness: wallConfig.roughness ?? 0.85,
+        metalness: wallConfig.metalness ?? 0.02,
+        textureUrl: wallConfig.textureUrl || '',
+        tileX: wallConfig.tileX || 1,
+        tileY: wallConfig.tileY || 1,
+        openings: wallOpenings.map((o) => ({
+          id: o.id,
+          pos: o.position,
+          w: o.width,
+          h: o.height,
+          sill: o.sillHeight,
+          type: o.type,
+          frameColor: o.frameColor,
+          frameMaterial: o.frameMaterial,
+          glassType: o.glassType,
+          glassColor: o.glassColor,
+          glassOpacity: o.glassOpacity,
+          glassRoughness: o.glassRoughness,
+          mullionStyle: o.mullionStyle,
+          leafOpenRatio: o.leafOpenRatio,
+        })),
+      });
+
+      const existingWall = wallsGroupRef.current.children.find(
+        (child) => child.userData?.wallId === id
+      );
+
+      // If wall fingerprint is identical, do NOT touch it!
+      if (existingWall && existingWall.userData?.fingerprint === fingerprint) {
+        return;
+      }
+
+      hasChanges = true;
+
+      // Material creation with instant cached texture check
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(wallConfig.color),
         roughness: wallConfig.roughness ?? 0.85,
@@ -382,15 +565,26 @@ export default function ThreeViewport({
         transparent: true,
         opacity: 1.0,
       });
-      applyTexture(mat, wallConfig.textureUrl, wallConfig.tileX || 1, wallConfig.tileY || 1);
 
-      const wallOpenings = (room.openings || []).filter((o) => o.wallSide === id);
+      const tex = getOrLoadTexture(
+        wallConfig.textureUrl,
+        wallConfig.tileX || 1,
+        wallConfig.tileY || 1,
+        (loadedTex) => {
+          mat.map = loadedTex;
+          mat.needsUpdate = true;
+        }
+      );
+      if (tex) {
+        mat.map = tex;
+      }
+
       const wallGroup = buildParametricWallGroup(w, h, WALL_THICKNESS, wallConfig, wallOpenings, mat);
       wallGroup.position.set(x, 0, z);
       wallGroup.rotation.y = ry;
-      wallGroup.userData = { isWall: true, wallId: id, w, h };
+      wallGroup.userData = { isWall: true, wallId: id, w, h, fingerprint };
 
-      // Add 3D architectural doors / windows belonging to this wall
+      // Add 3D architectural doors / windows
       wallOpenings.forEach((opening) => {
         const openingGroup = buildOpening3D(opening, WALL_THICKNESS);
         const localX = (opening.position - 0.5) * w;
@@ -404,69 +598,39 @@ export default function ThreeViewport({
         wallGroup.add(openingGroup);
       });
 
+      if (existingWall) {
+        wallsGroupRef.current.remove(existingWall);
+      }
       wallsGroupRef.current.add(wallGroup);
-    };
-
-    const hw = room.width / 2;
-    const hd = room.depth / 2;
-
-    buildWall(room.width, room.height, 0, -hd - HALF_WALL, 0, 'back');
-    buildWall(room.width, room.height, 0, hd + HALF_WALL, Math.PI, 'front');
-    buildWall(room.depth, room.height, -hw - HALF_WALL, 0, Math.PI / 2, 'left');
-    buildWall(room.depth, room.height, hw + HALF_WALL, 0, -Math.PI / 2, 'right');
-
-    wallsGroupRef.current.updateMatrixWorld(true);
-
-    if (floorRef.current) sceneRef.current.remove(floorRef.current);
-    const floorGroup = new THREE.Group();
-
-    // Interior Room Floor
-    const floorGeo = new THREE.PlaneGeometry(room.width, room.depth);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(room.floorColor),
-      roughness: room.floorRoughness ?? 0.55,
-      metalness: room.floorMetalness ?? 0.02,
     });
-    applyTexture(floorMat, room.floorTextureUrl, room.floorTileX || 4, room.floorTileY || 4);
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    floor.userData = { isFloor: true };
-    floorGroup.add(floor);
 
-    // Exterior Outdoor Patio / Horizon Plane (visible through clear glass windows)
-    const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
-    const outdoorMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#182234'),
-      roughness: 0.92,
-      metalness: 0.05,
-    });
-    const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
-    outdoor.position.y = -0.005;
-    outdoor.rotation.x = -Math.PI / 2;
-    outdoor.receiveShadow = true;
-    floorGroup.add(outdoor);
+    if (hasChanges) {
+      wallsGroupRef.current.updateMatrixWorld(true);
+    }
+  }, [room, getOrLoadTexture]);
 
-    sceneRef.current.add(floorGroup);
-    floorRef.current = floorGroup as any;
+  const prevCamPosRef = useRef({ x: cameraSettings.x, y: cameraSettings.y, z: cameraSettings.z });
 
-    if (gridHelperRef.current) sceneRef.current.remove(gridHelperRef.current);
-    const maxDim = Math.max(room.width, room.depth);
-    const grid = new THREE.GridHelper(maxDim, maxDim * 2, '#3b82f6', '#334155');
-    grid.position.y = 0.002;
-    grid.visible = showGrid;
-    sceneRef.current.add(grid);
-    gridHelperRef.current = grid;
-  }, [room, showGrid]);
-
-  // Update Camera Viewpoints
+  // Update Camera Viewpoints and Lens FOV (15° to 60°)
   useEffect(() => {
     if (!cameraRef.current || !controlsRef.current) return;
-    cameraRef.current.position.set(cameraSettings.x, cameraSettings.y, cameraSettings.z);
-    cameraRef.current.fov = cameraSettings.fov;
-    cameraRef.current.updateProjectionMatrix();
-    controlsRef.current.target.set(0, room.height * 0.4, 0);
-    controlsRef.current.update();
+
+    const posChanged =
+      prevCamPosRef.current.x !== cameraSettings.x ||
+      prevCamPosRef.current.y !== cameraSettings.y ||
+      prevCamPosRef.current.z !== cameraSettings.z;
+
+    if (posChanged) {
+      cameraRef.current.position.set(cameraSettings.x, cameraSettings.y, cameraSettings.z);
+      controlsRef.current.target.set(0, room.height * 0.4, 0);
+      controlsRef.current.update();
+      prevCamPosRef.current = { x: cameraSettings.x, y: cameraSettings.y, z: cameraSettings.z };
+    }
+
+    if (cameraRef.current.fov !== cameraSettings.fov) {
+      cameraRef.current.fov = cameraSettings.fov;
+      cameraRef.current.updateProjectionMatrix();
+    }
   }, [cameraSettings, room.height]);
 
   // Sync Furniture Group efficiently without recreating unchanged meshes on selection/render
