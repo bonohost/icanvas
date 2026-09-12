@@ -43,6 +43,9 @@ export type WallOpeningType =
   | 'window-sliding'
   | 'window-high';
 
+export type GlassType = 'clear' | 'smoke' | 'frosted' | 'mirror' | 'bronze' | 'green';
+export type WindowMullionStyle = 'standard' | 'panoramic' | 'colonial' | 'industrial';
+
 export interface WallOpening {
   id: string;
   wallSide: WallSide;
@@ -54,6 +57,11 @@ export interface WallOpening {
   sillHeight: number; // meters (0 for doors)
   frameColor?: string; // hex
   frameMaterial?: 'metal' | 'wood' | 'pvc';
+  glassType?: GlassType;
+  glassColor?: string;
+  glassOpacity?: number; // 0.05 to 1.0
+  glassRoughness?: number; // 0.0 to 1.0
+  mullionStyle?: WindowMullionStyle;
   leafOpenRatio?: number; // 0.0 to 1.0
 }
 

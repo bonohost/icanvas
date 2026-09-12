@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WallOpening, WallSide, WallSettings } from '../types/furniture';
+import { WallOpening, WallSide, WallSettings, GlassType, WindowMullionStyle } from '../types/furniture';
 
 export interface WallSegment {
   width: number;
@@ -143,6 +143,94 @@ export function buildParametricWallGroup(
   return wallGroup;
 }
 
+export interface GlassPreset {
+  id: GlassType;
+  name: string;
+  color: string;
+  opacity: number;
+  roughness: number;
+  metalness: number;
+  transmission: number;
+}
+
+export const GLASS_PRESETS: GlassPreset[] = [
+  { id: 'clear', name: 'Incolor Cristal', color: '#dbeafe', opacity: 0.22, roughness: 0.04, metalness: 0.1, transmission: 0.9 },
+  { id: 'smoke', name: 'Fumê Escuro', color: '#1e293b', opacity: 0.65, roughness: 0.05, metalness: 0.2, transmission: 0.5 },
+  { id: 'frosted', name: 'Jateado / Fosco', color: '#f8fafc', opacity: 0.78, roughness: 0.45, metalness: 0.05, transmission: 0.4 },
+  { id: 'mirror', name: 'Refletivo / Espelhado', color: '#94a3b8', opacity: 0.45, roughness: 0.02, metalness: 0.85, transmission: 0.35 },
+  { id: 'bronze', name: 'Bronze Solar', color: '#d97706', opacity: 0.38, roughness: 0.05, metalness: 0.15, transmission: 0.7 },
+  { id: 'green', name: 'Verde Float', color: '#10b981', opacity: 0.32, roughness: 0.05, metalness: 0.1, transmission: 0.75 },
+];
+
+/**
+ * Builds a hollow rectangular sash frame with a glass pane inside and optional mullion grid.
+ */
+function createSashWithGlass(
+  w: number,
+  h: number,
+  sashProfile: number,
+  sashDepth: number,
+  frameMat: THREE.Material,
+  glassMat: THREE.Material,
+  mullionStyle?: WindowMullionStyle
+): THREE.Group {
+  const sashGroup = new THREE.Group();
+  const innerPaneW = Math.max(0.01, w - sashProfile * 2);
+  const innerPaneH = Math.max(0.01, h - sashProfile * 2);
+
+  // 1. Hollow perimeter frame (Rails & Stiles)
+  // Top rail
+  const topRail = new THREE.Mesh(new THREE.BoxGeometry(w, sashProfile, sashDepth), frameMat);
+  topRail.position.set(0, h / 2 - sashProfile / 2, 0);
+  topRail.castShadow = false;
+  sashGroup.add(topRail);
+
+  // Bottom rail
+  const btmRail = new THREE.Mesh(new THREE.BoxGeometry(w, sashProfile, sashDepth), frameMat);
+  btmRail.position.set(0, -h / 2 + sashProfile / 2, 0);
+  btmRail.castShadow = false;
+  sashGroup.add(btmRail);
+
+  // Left stile
+  const leftStile = new THREE.Mesh(new THREE.BoxGeometry(sashProfile, innerPaneH, sashDepth), frameMat);
+  leftStile.position.set(-w / 2 + sashProfile / 2, 0, 0);
+  leftStile.castShadow = false;
+  sashGroup.add(leftStile);
+
+  // Right stile
+  const rightStile = new THREE.Mesh(new THREE.BoxGeometry(sashProfile, innerPaneH, sashDepth), frameMat);
+  rightStile.position.set(w / 2 - sashProfile / 2, 0, 0);
+  rightStile.castShadow = false;
+  sashGroup.add(rightStile);
+
+  // 2. Center Glass Pane
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(innerPaneW, innerPaneH, 0.008), glassMat);
+  glass.position.set(0, 0, 0);
+  glass.castShadow = false;
+  sashGroup.add(glass);
+
+  // 3. Optional architectural grids / mullions
+  if (mullionStyle === 'colonial') {
+    const barThick = 0.014;
+    const vBar = new THREE.Mesh(new THREE.BoxGeometry(barThick, innerPaneH, sashDepth * 0.7), frameMat);
+    const hBar = new THREE.Mesh(new THREE.BoxGeometry(innerPaneW, barThick, sashDepth * 0.7), frameMat);
+    vBar.castShadow = false;
+    hBar.castShadow = false;
+    sashGroup.add(vBar);
+    sashGroup.add(hBar);
+  } else if (mullionStyle === 'industrial') {
+    const barThick = 0.016;
+    [-innerPaneH / 3.2, innerPaneH / 3.2].forEach((yOff) => {
+      const hBar = new THREE.Mesh(new THREE.BoxGeometry(innerPaneW, barThick, sashDepth * 0.75), frameMat);
+      hBar.position.y = yOff;
+      hBar.castShadow = false;
+      sashGroup.add(hBar);
+    });
+  }
+
+  return sashGroup;
+}
+
 /**
  * Creates 3D Architectural Door / Window Meshes with Frames, Glass, and Handles.
  */
@@ -164,13 +252,28 @@ export function buildOpening3D(
     metalness: framePreset.metalness,
   });
 
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#93c5fd'),
-    roughness: 0.05,
-    metalness: 0.1,
+  const glassPreset =
+    GLASS_PRESETS.find((g) => g.id === opening.glassType) ||
+    GLASS_PRESETS[0];
+
+  const glassColorHex = opening.glassColor || glassPreset.color;
+  const glassOpacity = opening.glassOpacity ?? glassPreset.opacity;
+  const glassRoughness = opening.glassRoughness ?? glassPreset.roughness;
+  const glassMetalness = glassPreset.metalness ?? 0.1;
+  const glassTransmission = glassPreset.transmission ?? 0.9;
+
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(glassColorHex),
+    roughness: glassRoughness,
+    metalness: glassMetalness,
+    transmission: glassTransmission,
+    ior: 1.52,
+    reflectivity: 0.9,
     transparent: true,
-    opacity: 0.35,
+    opacity: glassOpacity,
     depthWrite: false,
+    specularIntensity: 1.0,
+    specularColor: new THREE.Color('#ffffff'),
   });
 
   const chromeMat = new THREE.MeshStandardMaterial({
@@ -195,7 +298,7 @@ export function buildOpening3D(
     frameMat
   );
   leftJamb.position.set(-opening.width / 2 + jambThick / 2, opening.height / 2, 0);
-  leftJamb.castShadow = true;
+  leftJamb.castShadow = false;
   group.add(leftJamb);
 
   // Right jamb
@@ -204,7 +307,7 @@ export function buildOpening3D(
     frameMat
   );
   rightJamb.position.set(opening.width / 2 - jambThick / 2, opening.height / 2, 0);
-  rightJamb.castShadow = true;
+  rightJamb.castShadow = false;
   group.add(rightJamb);
 
   // Header (Top jamb)
@@ -213,7 +316,7 @@ export function buildOpening3D(
     frameMat
   );
   topJamb.position.set(0, opening.height - jambThick / 2, 0);
-  topJamb.castShadow = true;
+  topJamb.castShadow = false;
   group.add(topJamb);
 
   // Bottom Sill for Windows
@@ -223,7 +326,7 @@ export function buildOpening3D(
       frameMat
     );
     sill.position.set(0, jambThick / 2, 0);
-    sill.castShadow = true;
+    sill.castShadow = false;
     group.add(sill);
   }
 
@@ -247,7 +350,7 @@ export function buildOpening3D(
       woodDoorMat
     );
     leafMesh.position.set(innerW / 2, innerCenterY, 0);
-    leafMesh.castShadow = true;
+    leafMesh.castShadow = false;
     leafMesh.receiveShadow = true;
     leafGroup.add(leafMesh);
 
@@ -260,12 +363,14 @@ export function buildOpening3D(
       );
       handleBase.rotation.x = Math.PI / 2;
       handleBase.position.set(innerW - 0.07, handleH, side * (leafThick / 2 + 0.02));
+      handleBase.castShadow = false;
 
       const handleLever = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.015, 0.015),
         chromeMat
       );
       handleLever.position.set(innerW - 0.12, handleH, side * (leafThick / 2 + 0.04));
+      handleLever.castShadow = false;
 
       leafGroup.add(handleBase);
       leafGroup.add(handleLever);
@@ -276,30 +381,24 @@ export function buildOpening3D(
     // 2-Leaf Sliding Door (Half open / glass)
     const leafW = innerW / 2 + 0.02;
     const isGlass = opening.type === 'door-glass';
+    const sashBorder = 0.055;
 
     [-1, 1].forEach((side, idx) => {
       const leafGroup = new THREE.Group();
       const slideOffset = idx === 1 ? (opening.leafOpenRatio ?? 0.3) * (leafW * 0.7) : 0;
       leafGroup.position.set(side * (innerW / 4) - slideOffset, innerCenterY, side * 0.015);
 
-      // Frame around sash
-      const sashFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(leafW, innerH, 0.03),
-        frameMat
-      );
-      leafGroup.add(sashFrame);
-
       if (isGlass) {
-        const glassPane = new THREE.Mesh(
-          new THREE.BoxGeometry(leafW - 0.08, innerH - 0.08, 0.01),
-          glassMat
-        );
-        leafGroup.add(glassPane);
+        // Hollow glass sash leaf
+        const sash = createSashWithGlass(leafW, innerH, sashBorder, 0.03, frameMat, glassMat, opening.mullionStyle);
+        leafGroup.add(sash);
       } else {
+        // Wood panel door leaf
         const panel = new THREE.Mesh(
-          new THREE.BoxGeometry(leafW - 0.06, innerH - 0.06, 0.02),
+          new THREE.BoxGeometry(leafW, innerH, 0.035),
           woodDoorMat
         );
+        panel.castShadow = false;
         leafGroup.add(panel);
       }
 
@@ -309,42 +408,64 @@ export function buildOpening3D(
         chromeMat
       );
       barHandle.position.set(side * (leafW / 2 - 0.04), 0, 0.025);
+      barHandle.castShadow = false;
       leafGroup.add(barHandle);
 
       group.add(leafGroup);
     });
   } else if (opening.type.startsWith('window')) {
-    // 2-Pane Window with Mullions and PBR Glass
-    const paneW = (innerW - jambThick) / 2;
+    const isPanoramic = opening.mullionStyle === 'panoramic';
 
-    [-1, 1].forEach((side) => {
-      const paneCenter = side * (paneW / 2 + jambThick / 4);
-
-      // Glass pane
-      const glass = new THREE.Mesh(
-        new THREE.BoxGeometry(paneW, innerH, 0.008),
-        glassMat
+    if (isPanoramic) {
+      // 1-Piece Full Panoramic Glass Window
+      const sash = createSashWithGlass(
+        innerW,
+        innerH,
+        0.035,
+        0.028,
+        frameMat,
+        glassMat,
+        opening.mullionStyle
       );
-      glass.position.set(paneCenter, innerCenterY, 0);
-      group.add(glass);
+      sash.position.set(0, innerCenterY, 0);
+      group.add(sash);
+    } else {
+      // 2-Pane Window with Central Mullion
+      const paneW = (innerW - jambThick) / 2;
+      const sashProfile = 0.03;
 
-      // Inner Sash Frame
-      const sash = new THREE.Mesh(
-        new THREE.BoxGeometry(paneW, innerH, 0.02),
+      [-1, 1].forEach((side) => {
+        const paneCenter = side * (paneW / 2 + jambThick / 4);
+        const sash = createSashWithGlass(
+          paneW,
+          innerH,
+          sashProfile,
+          0.025,
+          frameMat,
+          glassMat,
+          opening.mullionStyle
+        );
+        sash.position.set(paneCenter, innerCenterY, 0);
+        group.add(sash);
+      });
+
+      // Center Vertical Mullion
+      const mullion = new THREE.Mesh(
+        new THREE.BoxGeometry(jambThick, innerH, jambDepth * 0.7),
         frameMat
       );
-      sash.position.set(paneCenter, innerCenterY, 0);
-      group.add(sash);
-    });
-
-    // Center Vertical Mullion
-    const mullion = new THREE.Mesh(
-      new THREE.BoxGeometry(jambThick, innerH, jambDepth * 0.7),
-      frameMat
-    );
-    mullion.position.set(0, innerCenterY, 0);
-    group.add(mullion);
+      mullion.position.set(0, innerCenterY, 0);
+      mullion.castShadow = false;
+      group.add(mullion);
+    }
   }
+
+  // Ensure all child meshes in doors and windows never cast shadows
+  group.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      child.castShadow = false;
+    }
+  });
 
   return group;
 }

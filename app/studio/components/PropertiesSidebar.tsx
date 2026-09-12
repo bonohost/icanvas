@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { FurnitureInstance, RoomSettings, WallSettings, WallOpening, WallSide } from '../types/furniture';
 import { MATERIAL_OPTIONS, WALL_PBR_PRESETS, FLOOR_PBR_PRESETS } from '../lib/furniture-data';
-import { OPENING_FRAME_COLORS } from '../lib/wall-builders';
+import { OPENING_FRAME_COLORS, GLASS_PRESETS } from '../lib/wall-builders';
 import {
   Trash2,
   Copy,
@@ -21,6 +21,7 @@ import {
   AppWindow,
   X,
   Eye,
+  Sparkles,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -242,8 +243,136 @@ export default function PropertiesSidebar({
           </div>
         </div>
 
+        {/* Divisória / Grade da Janela (Apenas para Janelas) */}
+        {selectedOpening.type.startsWith('window') && (
+          <div className="space-y-2 border-t border-white/10 pt-4">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Grid3x3 className="size-3.5 text-primary" /> Estilo da Grade / Divisória
+            </span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: 'standard', name: '2 Folhas (Padrão)', desc: 'Montante central' },
+                { id: 'panoramic', name: 'Panorâmica', desc: 'Vidro inteiriço' },
+                { id: 'colonial', name: 'Colonial', desc: 'Grades cruzadas' },
+                { id: 'industrial', name: 'Industrial', desc: 'Travessas horizontais' },
+              ].map((styleOpt) => {
+                const isSelected = (selectedOpening.mullionStyle || 'standard') === styleOpt.id;
+                return (
+                  <button
+                    key={styleOpt.id}
+                    onClick={() =>
+                      onUpdateOpening?.(selectedOpening.id, { mullionStyle: styleOpt.id as any })
+                    }
+                    className={`p-2 rounded-lg border text-left flex flex-col transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/20 text-white shadow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-[11px] font-semibold">{styleOpt.name}</span>
+                    <span className="text-[9px] opacity-70">{styleOpt.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Acabamento do Vidro PBR (Para Janelas e Portas de Vidro) */}
+        {(selectedOpening.type.startsWith('window') || selectedOpening.type === 'door-glass') && (
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-primary" /> Acabamento do Vidro
+            </span>
+
+            {/* Presets de Vidro */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {GLASS_PRESETS.map((preset) => {
+                const isSelected = (selectedOpening.glassType || 'clear') === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() =>
+                      onUpdateOpening?.(selectedOpening.id, {
+                        glassType: preset.id,
+                        glassColor: preset.color,
+                        glassOpacity: preset.opacity,
+                        glassRoughness: preset.roughness,
+                      })
+                    }
+                    className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/20 text-white shadow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-on-surface-variant hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    <div
+                      className="size-3.5 rounded-full border border-white/30 flex-shrink-0 shadow-inner"
+                      style={{ backgroundColor: preset.color }}
+                    />
+                    <span className="text-[10px] font-medium leading-tight truncate">{preset.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Ajuste Fino de Transparência & Fosco */}
+            <div className="space-y-2 pt-1">
+              <div>
+                <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                  <span>Transparência do Vidro</span>
+                  <span className="font-mono text-primary">
+                    {Math.round((1 - (selectedOpening.glassOpacity ?? 0.22)) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.05"
+                  max="0.95"
+                  step="0.05"
+                  value={selectedOpening.glassOpacity ?? 0.22}
+                  onChange={(e) =>
+                    onUpdateOpening?.(selectedOpening.id, { glassOpacity: parseFloat(e.target.value) })
+                  }
+                  className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center text-[10px] text-on-surface-variant mb-1">
+                  <span>Jateamento / Fosco</span>
+                  <span className="font-mono text-primary">
+                    {Math.round((selectedOpening.glassRoughness ?? 0.04) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="0.8"
+                  step="0.05"
+                  value={selectedOpening.glassRoughness ?? 0.04}
+                  onChange={(e) =>
+                    onUpdateOpening?.(selectedOpening.id, { glassRoughness: parseFloat(e.target.value) })
+                  }
+                  className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[10px] text-on-surface-variant">Tonalidade do Vidro</span>
+                <input
+                  type="color"
+                  value={selectedOpening.glassColor || '#dbeafe'}
+                  onChange={(e) => onUpdateOpening?.(selectedOpening.id, { glassColor: e.target.value })}
+                  className="w-7 h-7 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Abertura da Folha (Para portas de giro / correr) */}
-        {selectedOpening.type !== 'door-opening' && (
+        {selectedOpening.type !== 'door-opening' && !selectedOpening.type.startsWith('window') && (
           <div className="space-y-2 border-t border-white/10 pt-4">
             <div className="flex justify-between items-center text-xs">
               <span className="text-on-surface-variant flex items-center gap-1.5">
@@ -299,7 +428,7 @@ export default function PropertiesSidebar({
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <span className="text-xs text-on-surface-variant">Cor Customizada</span>
+            <span className="text-xs text-on-surface-variant">Cor Customizada da Esquadria</span>
             <input
               type="color"
               value={selectedOpening.frameColor || '#1e293b'}

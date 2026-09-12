@@ -396,6 +396,11 @@ export default function ThreeViewport({
         const localX = (opening.position - 0.5) * w;
         const localY = opening.sillHeight || 0;
         openingGroup.position.set(localX, localY, 0);
+        openingGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = false;
+          }
+        });
         wallGroup.add(openingGroup);
       });
 
@@ -413,7 +418,10 @@ export default function ThreeViewport({
     wallsGroupRef.current.updateMatrixWorld(true);
 
     if (floorRef.current) sceneRef.current.remove(floorRef.current);
-    const floorGeo = new THREE.PlaneGeometry(room.width + 4, room.depth + 4);
+    const floorGroup = new THREE.Group();
+
+    // Interior Room Floor
+    const floorGeo = new THREE.PlaneGeometry(room.width, room.depth);
     const floorMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(room.floorColor),
       roughness: room.floorRoughness ?? 0.55,
@@ -424,8 +432,23 @@ export default function ThreeViewport({
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     floor.userData = { isFloor: true };
-    sceneRef.current.add(floor);
-    floorRef.current = floor;
+    floorGroup.add(floor);
+
+    // Exterior Outdoor Patio / Horizon Plane (visible through clear glass windows)
+    const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
+    const outdoorMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#182234'),
+      roughness: 0.92,
+      metalness: 0.05,
+    });
+    const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
+    outdoor.position.y = -0.005;
+    outdoor.rotation.x = -Math.PI / 2;
+    outdoor.receiveShadow = true;
+    floorGroup.add(outdoor);
+
+    sceneRef.current.add(floorGroup);
+    floorRef.current = floorGroup as any;
 
     if (gridHelperRef.current) sceneRef.current.remove(gridHelperRef.current);
     const maxDim = Math.max(room.width, room.depth);
