@@ -162,6 +162,16 @@ export default function ThreeViewport({
     autoTransparencyRef.current = autoTransparency;
   }, [autoTransparency]);
 
+  const isWallTransparent = useCallback((wallGroup: any): boolean => {
+    if (!wallGroup || !autoTransparencyRef.current || !cameraRef.current) return false;
+    if (typeof wallGroup.userData?.isTransparent === 'boolean') {
+      return wallGroup.userData.isTransparent;
+    }
+    const wallNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wallGroup.quaternion);
+    const camToWall = new THREE.Vector3().subVectors(wallGroup.position, cameraRef.current.position).normalize();
+    return wallNormal.dot(camToWall) > 0.05;
+  }, []);
+
   // Expose clean snapshot capture function for AI Renderer
   useEffect(() => {
     if (!onRegisterCapture) return;
@@ -453,6 +463,7 @@ export default function ThreeViewport({
           const camToWall = new THREE.Vector3().subVectors(wallGroup.position, cameraRef.current!.position).normalize();
           const dot = wallNormal.dot(camToWall);
           const isBehind = autoTransparencyRef.current ? dot > 0.05 : false;
+          wallGroup.userData.isTransparent = isBehind;
 
           wallGroup.traverse((child: any) => {
             if (child.isMesh && child.material && !child.userData?.isOpening) {
@@ -987,7 +998,13 @@ export default function ThreeViewport({
         while (p && !p.userData?.isOpening && p.parent && p.parent !== wallsGroupRef.current) {
           p = p.parent;
         }
-        return p?.userData?.isOpening;
+        if (!p?.userData?.isOpening) return false;
+        let wallGroup: any = p.parent;
+        while (wallGroup && !wallGroup.userData?.isWall && wallGroup.parent) {
+          wallGroup = wallGroup.parent;
+        }
+        if (wallGroup && isWallTransparent(wallGroup)) return false;
+        return true;
       });
 
       if (openingHit) {
@@ -1130,7 +1147,9 @@ export default function ThreeViewport({
           (hit) => {
             let p: any = hit.object;
             while (p && !p.userData?.isWall && p.parent) p = p.parent;
-            return p?.userData?.isWall;
+            if (!p?.userData?.isWall) return false;
+            if (isWallTransparent(p)) return false;
+            return true;
           }
         );
 
@@ -1303,6 +1322,12 @@ export default function ThreeViewport({
         const validHit = wallIntersects.find((hit) => {
           let p: any = hit.object;
           while (p && !p.userData?.isWall && p.parent) p = p.parent;
+          if (!p?.userData?.isWall) return false;
+          if (isWallTransparent(p)) return false;
+          return true;
+        }) || wallIntersects.find((hit) => {
+          let p: any = hit.object;
+          while (p && !p.userData?.isWall && p.parent) p = p.parent;
           return p?.userData?.isWall;
         });
 
@@ -1331,6 +1356,12 @@ export default function ThreeViewport({
       if (spec.pr === 'wall') {
         const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
         const validHit = wallIntersects.find((hit) => {
+          let p: any = hit.object;
+          while (p && !p.userData?.isWall && p.parent) p = p.parent;
+          if (!p?.userData?.isWall) return false;
+          if (isWallTransparent(p)) return false;
+          return true;
+        }) || wallIntersects.find((hit) => {
           let p: any = hit.object;
           while (p && !p.userData?.isWall && p.parent) p = p.parent;
           return p?.userData?.isWall;
