@@ -41,6 +41,28 @@ const COLLISION_EPSILON = 0.001;
 const LAYER_DEFAULT = 0;
 const LAYER_TECHNICAL = 1;
 
+const createDaylightGradientTexture = (): THREE.Texture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+  gradient.addColorStop(0.0, '#0284c7');   // Azul profundo do céu (topo)
+  gradient.addColorStop(0.18, '#0ea5e9');  // Azul céu luminoso
+  //gradient.addColorStop(0.32, '#38bdf8');  // Azul celeste suave
+  //gradient.addColorStop(0.44, '#bae6fd');  // Bruma e horizonte elevado (visível atrás da sala)
+  gradient.addColorStop(0.32, '#e0f2fe');  // Linha de luz do horizonte
+  gradient.addColorStop(0.44, '#fef3c7');  // Brilho solar quente/dourado na transição de solo
+  gradient.addColorStop(0.60, '#e2e8f0');  // Solo claro natural
+  gradient.addColorStop(1.0, '#cbd5e1');   // Base de solo suave
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 16, 512);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+};
+
 export default function ThreeViewport({
   room,
   furniture,
@@ -80,6 +102,7 @@ export default function ThreeViewport({
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+  const daylightTextureRef = useRef<THREE.Texture | null>(null);
   const rectLightRef = useRef<THREE.RectAreaLight | null>(null);
   const rectLightHelperRef = useRef<RectAreaLightHelper | null>(null);
 
@@ -300,7 +323,15 @@ export default function ThreeViewport({
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#161c28');
+    const initialPreset = room.environmentPreset || 'dark_studio';
+    if (initialPreset === 'daylight') {
+      daylightTextureRef.current = createDaylightGradientTexture();
+      scene.background = daylightTextureRef.current;
+    } else if (initialPreset === 'clean_studio') {
+      scene.background = new THREE.Color('#dbeafe');
+    } else {
+      scene.background = new THREE.Color('#141923');
+    }
     sceneRef.current = scene;
 
     const width = Math.max(container.clientWidth, 400);
@@ -517,6 +548,10 @@ export default function ThreeViewport({
       pmremGenerator.dispose();
       roomEnv.dispose();
       envTexture.dispose();
+      if (daylightTextureRef.current) {
+        daylightTextureRef.current.dispose();
+        daylightTextureRef.current = null;
+      }
       renderer.dispose();
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
@@ -538,7 +573,10 @@ export default function ThreeViewport({
       if (preset === 'clean_studio') {
         sceneRef.current.background = new THREE.Color('#dbeafe');
       } else if (preset === 'daylight') {
-        sceneRef.current.background = new THREE.Color('#60a5fa');
+        if (!daylightTextureRef.current) {
+          daylightTextureRef.current = createDaylightGradientTexture();
+        }
+        sceneRef.current.background = daylightTextureRef.current;
       } else {
         sceneRef.current.background = new THREE.Color('#141923');
       }
@@ -550,7 +588,7 @@ export default function ThreeViewport({
         if (preset === 'clean_studio') {
           mat.color.set('#f1f5f9');
         } else if (preset === 'daylight') {
-          mat.color.set('#334155');
+          mat.color.set('#cbd5e1');
         } else {
           mat.color.set('#1e2738');
         }
