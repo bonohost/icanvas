@@ -83,6 +83,7 @@ export default function PropertiesSidebar({
   onTransformModeChange,
 }: PropertiesSidebarProps) {
   const [activeWallTab, setActiveWallTab] = useState<keyof RoomSettings['walls']>('back');
+  const [sidebarTab, setSidebarTab] = useState<'item' | 'room'>('item');
 
   const updateWall = (key: keyof RoomSettings['walls'], updates: Partial<WallSettings>) => {
     onUpdateRoom({
@@ -103,10 +104,29 @@ export default function PropertiesSidebar({
         ? room.width
         : room.depth;
 
-    return (
-      <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-6">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+    if (sidebarTab !== 'room') {
+      return (
+        <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-6">
+          {/* Top Switcher */}
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+            <button
+              onClick={() => setSidebarTab('item')}
+              className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 bg-primary text-white shadow-sm"
+            >
+              <AppWindow className="size-3.5" />
+              <span>Esquadria</span>
+            </button>
+            <button
+              onClick={() => setSidebarTab('room')}
+              className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-white"
+            >
+              <Sun className="size-3.5" />
+              <span>Ambiente & Luz</span>
+            </button>
+          </div>
+
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="size-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 flex-shrink-0">
               <Icon className="size-4 text-primary" />
@@ -465,11 +485,32 @@ export default function PropertiesSidebar({
       </aside>
     );
   }
+  }
 
-  // ROOM ARCHITECTURE SETTINGS (When nothing is selected)
-  if (!selected) {
+  // ROOM ARCHITECTURE & ENVIRONMENT SETTINGS (When nothing is selected OR when room tab is active)
+  if (!selected || sidebarTab === 'room') {
     return (
       <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-6">
+        {/* Top Switcher if item is selected */}
+        {(selected || selectedOpening) && (
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+            <button
+              onClick={() => setSidebarTab('item')}
+              className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-white"
+            >
+              <Box className="size-3.5" />
+              <span>Voltar ao Item</span>
+            </button>
+            <button
+              onClick={() => setSidebarTab('room')}
+              className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 bg-primary text-white shadow-sm"
+            >
+              <Sun className="size-3.5" />
+              <span>Ambiente & Luz</span>
+            </button>
+          </div>
+        )}
+
         <div className="border-b border-white/10 pb-3 flex items-start justify-between">
           <div>
             <h2 className="font-headline font-bold text-xs tracking-widest uppercase text-primary flex items-center gap-2">
@@ -765,23 +806,86 @@ export default function PropertiesSidebar({
           </div>
         </div>
 
-        {/* Lighting Intensity */}
-        <div className="space-y-3 border-t border-white/10 pt-4">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-on-surface-variant flex items-center gap-1.5">
-              <Sun className="size-3.5 text-primary" /> Luz Solar / Ambiente
+        {/* Ambiente & Iluminação PBR */}
+        <div className="space-y-4 border-t border-white/10 pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Sun className="size-3.5 text-primary" /> Ambiente & Iluminação PBR
             </span>
-            <span className="font-mono text-primary">{Math.round(room.lightIntensity * 100)}%</span>
           </div>
-          <input
-            type="range"
-            min="0.2"
-            max="3.0"
-            step="0.1"
-            value={room.lightIntensity}
-            onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
-            className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
-          />
+
+          {/* Presets de Cenário / Ambiente */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-on-surface-variant block">Cenário de Fundo & Reflexos</label>
+            <div className="grid grid-cols-3 gap-1.5 bg-white/5 p-1 rounded-xl">
+              {[
+                { id: 'dark_studio', label: 'Estúdio Dark', desc: 'Fundo Dark Slate', icon: '🏢' },
+                { id: 'clean_studio', label: 'Estúdio Claro', desc: 'Clean Studio', icon: '☀️' },
+                { id: 'daylight', label: 'Luz Natural', desc: 'Céu & Sol', icon: '🌅' },
+              ].map((p) => {
+                const isActive = (room.environmentPreset || 'dark_studio') === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => onUpdateRoom({ ...room, environmentPreset: p.id as any })}
+                    className={`py-2 px-1 text-center rounded-lg flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      isActive ? 'bg-primary text-white shadow-sm font-bold' : 'text-on-surface-variant hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="text-base">{p.icon}</span>
+                    <span className="text-[10px] leading-tight">{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Slider de Exposição / Brilho Geral da Câmera */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-white/80 flex items-center gap-1.5 text-[11px] font-medium">
+                <Sliders className="size-3.5 text-primary" /> Brilho / Exposição Geral
+              </span>
+              <span className="font-mono text-primary text-xs font-bold">
+                {Math.round((room.exposure ?? 1.0) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.05"
+              value={room.exposure ?? 1.0}
+              onChange={(e) => onUpdateRoom({ ...room, exposure: parseFloat(e.target.value) })}
+              className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+            />
+            <div className="flex justify-between text-[9px] text-white/40">
+              <span>Mais Suave (50%)</span>
+              <span>Padrão (100%)</span>
+              <span>Mais Claro (200%)</span>
+            </div>
+          </div>
+
+          {/* Slider de Intensidade Luz Solar / Ambiente */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-white/80 flex items-center gap-1.5 text-[11px] font-medium">
+                <Sun className="size-3.5 text-amber-400" /> Luz Solar / Ambiente
+              </span>
+              <span className="font-mono text-primary text-xs font-bold">
+                {Math.round((room.lightIntensity ?? 1.0) * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.2"
+              max="2.5"
+              step="0.05"
+              value={room.lightIntensity ?? 1.0}
+              onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
+              className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+            />
+          </div>
         </div>
 
         {/* Iluminação de Área PBR (RectAreaLight / Plafon LED) */}
@@ -1067,6 +1171,24 @@ export default function PropertiesSidebar({
 
   return (
     <aside className="w-80 flex-shrink-0 glass-panel border-l border-white/10 h-full overflow-y-auto flex flex-col z-20 backdrop-blur-xl shadow-2xl p-5 gap-5">
+      {/* Top Switcher */}
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+        <button
+          onClick={() => setSidebarTab('item')}
+          className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 bg-primary text-white shadow-sm"
+        >
+          <Box className="size-3.5" />
+          <span>Item Selecionado</span>
+        </button>
+        <button
+          onClick={() => setSidebarTab('room')}
+          className="py-1.5 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-white"
+        >
+          <Sun className="size-3.5" />
+          <span>Ambiente & Luz</span>
+        </button>
+      </div>
+
       <div className="border-b border-white/10 pb-3 flex items-start justify-between">
         <div>
           <span className="text-[10px] text-primary font-mono uppercase tracking-wider">Item Selecionado</span>

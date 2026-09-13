@@ -1,7 +1,9 @@
 'use client';
 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import ContactModal from './ContactModal';
 
 const navItems = [
   { href: '/mug-simulator', label: 'Mug Sim' },
@@ -12,6 +14,7 @@ const navItems = [
 
 export default function Header() {
   const pathname = usePathname();
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
   return (
     <>
@@ -42,8 +45,18 @@ export default function Header() {
           </nav>
 
           <div className="flex gap-4 items-center">
-            <button className="font-button-md text-button-md text-on-surface-variant hover:text-primary transition-colors duration-300 active:scale-95 transition-transform">Contact</button>
-            <button className="bg-primary-container text-on-primary-container font-button-md text-button-md px-6 py-2 rounded-DEFAULT hover:opacity-90 transition-opacity active:scale-95 transition-transform shadow-[0_4px_14px_0_rgba(37,99,235,0.39)]">Get Started</button>
+            <button
+              onClick={() => setIsContactOpen(true)}
+              className="font-button-md text-button-md text-on-surface-variant hover:text-primary transition-colors duration-300 active:scale-95 transition-transform cursor-pointer"
+            >
+              Contact
+            </button>
+            <button
+              onClick={() => setIsContactOpen(true)}
+              className="bg-primary-container text-on-primary-container font-button-md text-button-md px-6 py-2 rounded-DEFAULT hover:opacity-90 transition-opacity active:scale-95 transition-transform shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] cursor-pointer"
+            >
+              Get Started
+            </button>
           </div>
         </div>
       </header>
@@ -54,7 +67,21 @@ export default function Header() {
           <img alt="iCanvas" className="h-8 w-8 rounded-md" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnFZQ2bFdaVbssT6uU1ZjtMrnHWlwq6wk6FR-dLrRtjjW0IH3RqgwSrgUL7N_ZYK_kDZB2EyJDf9ZdhOwudm06y5aaMhkxbof6NlrORz0liR2CBKl3BNrGSsNh4oyLcovE5XuzP2kBdwoUexur6W_Do7rWACIFW4hTD1gY11Z_DQcHH2j4I6DSLH_5o4aIug1QkDZ2Yg49gLwxZFUoIw_sIOZMzxT-igdo6wkaDnNNvaVDJNlbrhNN" />
           <span className="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary tracking-tighter">iCanvas</span>
         </Link>
+        <button
+          onClick={() => setIsContactOpen(true)}
+          className="text-xs font-semibold text-primary px-3 py-1 rounded-lg bg-primary/10 border border-primary/20"
+        >
+          Contato
+        </button>
       </header>
+
+      {/* Global Contact Modal */}
+      <ContactModal
+        isOpen={isContactOpen}
+        onClose={() => setIsContactOpen(false)}
+        phoneNumber="5516991041695"
+        formattedPhone="+55 (16) 99104-1695"
+      />
     </>
   );
-}
+}

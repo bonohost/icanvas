@@ -84,6 +84,8 @@ export interface AreaLightSettings {
   showHelper: boolean; // toggle visible rectangular helper frame
 }
 
+export type EnvironmentPreset = 'dark_studio' | 'clean_studio' | 'daylight';
+
 export interface RoomSettings {
   width: number;
   depth: number;
@@ -104,6 +106,8 @@ export interface RoomSettings {
   lightIntensity: number;
   reflectionOpacity: number;
   areaLight?: AreaLightSettings;
+  environmentPreset?: EnvironmentPreset;
+  exposure?: number;
 }
 
 export interface StudioProject {

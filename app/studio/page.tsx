@@ -173,7 +173,9 @@ export default function StudioPage() {
         frameColor: '#1e293b',
       },
     ],
-    lightIntensity: 1.2,
+    lightIntensity: 1.0,
+    exposure: 1.0,
+    environmentPreset: 'dark_studio',
     reflectionOpacity: 0.05,
     areaLight: {
       enabled: true,
@@ -244,7 +246,9 @@ export default function StudioPage() {
         left: { color: '#f8fafc', tileX: 2, tileY: 1 },
         right: { color: '#f8fafc', tileX: 2, tileY: 1 },
       },
-      lightIntensity: 1.2,
+      lightIntensity: 1.0,
+      exposure: 1.0,
+      environmentPreset: 'dark_studio',
       reflectionOpacity: 0.05,
     },
   });
@@ -357,7 +361,9 @@ export default function StudioPage() {
         left: { color: '#f8fafc', tileX: 2, tileY: 1 },
         right: { color: '#f8fafc', tileX: 2, tileY: 1 },
       },
-      lightIntensity: 1.2,
+      lightIntensity: 1.0,
+      exposure: 1.0,
+      environmentPreset: 'dark_studio',
       reflectionOpacity: 0.05,
     };
     setProjectId(newId);

@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
@@ -299,7 +300,7 @@ export default function ThreeViewport({
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0b0f19');
+    scene.background = new THREE.Color('#161c28');
     sceneRef.current = scene;
 
     const width = Math.max(container.clientWidth, 400);
@@ -321,11 +322,18 @@ export default function ThreeViewport({
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = room.exposure ?? 1.0;
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // PBR Studio Environment Map (Realistic reflections for metals, glass and glossy surfaces)
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnv = new RoomEnvironment();
+    const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    scene.environment = envTexture;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -334,18 +342,18 @@ export default function ThreeViewport({
     controls.update();
     controlsRef.current = controls;
 
-    // Ambient and Hemisphere Lighting
-    const ambientLight = new THREE.AmbientLight('#ffffff', 0.85);
+    // Ambient and Hemisphere Lighting with natural floor bounce
+    const ambientLight = new THREE.AmbientLight('#ffffff', 0.6);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    const hemiLight = new THREE.HemisphereLight('#ffffff', '#1e293b', 0.6);
+    const hemiLight = new THREE.HemisphereLight('#ffffff', '#334155', 0.5);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
     hemiLightRef.current = hemiLight;
 
     // Directional Sunlight with full architectural shadows
-    const topLight = new THREE.DirectionalLight('#ffffff', 1.8);
+    const topLight = new THREE.DirectionalLight('#ffffff', 1.3);
     topLight.position.set(6, 12, 5);
     topLight.castShadow = true;
     topLight.shadow.mapSize.set(2048, 2048);
@@ -367,7 +375,7 @@ export default function ThreeViewport({
     scene.add(topLight);
     topLightRef.current = topLight;
 
-    const fillLight = new THREE.DirectionalLight('#93c5fd', 0.4);
+    const fillLight = new THREE.DirectionalLight('#bfdbfe', 0.4);
     fillLight.position.set(-6, 8, -6);
     scene.add(fillLight);
 
@@ -506,6 +514,9 @@ export default function ThreeViewport({
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       transformControls.dispose();
+      pmremGenerator.dispose();
+      roomEnv.dispose();
+      envTexture.dispose();
       renderer.dispose();
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
@@ -513,12 +524,70 @@ export default function ThreeViewport({
     };
   }, []);
 
-  // 1. Lighting & Shadow Camera Bounds (non-destructive)
+  // 1. Lighting, Exposure & Environment Preset Synchronization
   useEffect(() => {
-    if (ambientLightRef.current) ambientLightRef.current.intensity = room.lightIntensity * 0.85;
-    if (hemiLightRef.current) hemiLightRef.current.intensity = room.lightIntensity * 0.6;
+    const preset = room.environmentPreset || 'dark_studio';
+    const exposure = room.exposure ?? 1.0;
+    const intensity = room.lightIntensity ?? 1.0;
+
+    if (rendererRef.current) {
+      rendererRef.current.toneMappingExposure = exposure;
+    }
+
+    if (sceneRef.current) {
+      if (preset === 'clean_studio') {
+        sceneRef.current.background = new THREE.Color('#dbeafe');
+      } else if (preset === 'daylight') {
+        sceneRef.current.background = new THREE.Color('#60a5fa');
+      } else {
+        sceneRef.current.background = new THREE.Color('#141923');
+      }
+    }
+
+    if (outdoorMeshRef.current) {
+      const mat = outdoorMeshRef.current.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        if (preset === 'clean_studio') {
+          mat.color.set('#f1f5f9');
+        } else if (preset === 'daylight') {
+          mat.color.set('#334155');
+        } else {
+          mat.color.set('#1e2738');
+        }
+      }
+    }
+
+    if (ambientLightRef.current) {
+      ambientLightRef.current.intensity = intensity * (preset === 'clean_studio' ? 0.75 : preset === 'daylight' ? 0.7 : 0.6);
+    }
+
+    if (hemiLightRef.current) {
+      if (preset === 'clean_studio') {
+        hemiLightRef.current.color.set('#ffffff');
+        hemiLightRef.current.groundColor.set('#cbd5e1');
+        hemiLightRef.current.intensity = intensity * 0.65;
+      } else if (preset === 'daylight') {
+        hemiLightRef.current.color.set('#e0f2fe');
+        hemiLightRef.current.groundColor.set('#334155');
+        hemiLightRef.current.intensity = intensity * 0.75;
+      } else {
+        hemiLightRef.current.color.set('#ffffff');
+        hemiLightRef.current.groundColor.set('#334155');
+        hemiLightRef.current.intensity = intensity * 0.5;
+      }
+    }
+
     if (topLightRef.current) {
-      topLightRef.current.intensity = room.lightIntensity * 1.8;
+      if (preset === 'daylight') {
+        topLightRef.current.color.set('#fffbeb');
+        topLightRef.current.intensity = intensity * 1.5;
+      } else if (preset === 'clean_studio') {
+        topLightRef.current.color.set('#ffffff');
+        topLightRef.current.intensity = intensity * 1.1;
+      } else {
+        topLightRef.current.color.set('#ffffff');
+        topLightRef.current.intensity = intensity * 1.3;
+      }
       const maxRoomDim = Math.max(room.width, room.depth, room.height) * 1.6 + 4;
       topLightRef.current.shadow.camera.left = -maxRoomDim;
       topLightRef.current.shadow.camera.right = maxRoomDim;
@@ -526,7 +595,7 @@ export default function ThreeViewport({
       topLightRef.current.shadow.camera.bottom = -maxRoomDim;
       topLightRef.current.shadow.camera.updateProjectionMatrix();
     }
-  }, [room.lightIntensity, room.width, room.depth, room.height]);
+  }, [room.environmentPreset, room.exposure, room.lightIntensity, room.width, room.depth, room.height]);
 
   // 1.5. RectAreaLight & Helper Real-Time Synchronization (Non-destructive)
   useEffect(() => {
@@ -606,8 +675,8 @@ export default function ThreeViewport({
 
       const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
       const outdoorMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#182234'),
-        roughness: 0.92,
+        color: new THREE.Color('#1e2738'),
+        roughness: 0.9,
         metalness: 0.05,
       });
       const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
