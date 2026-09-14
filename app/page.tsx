@@ -14,7 +14,7 @@ export default function HomePage() {
           <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto mb-12 text-lg">
             De ao seu cliente a oportunidade de visualizar e interagir com seu produto em 3D, diretamente no navegador. Experimente a imersão total com o iCanvas.
           </p>
-          <Link href="/mug-simulator" className="bg-primary-container text-on-primary-container font-button-md text-button-md px-8 py-4 rounded-lg hover:opacity-90 transition-opacity active:scale-95 shadow-[0_0_30px_rgba(37,99,235,0.3)] flex items-center gap-2">
+          <Link href="/mug-coffee" className="bg-primary-container text-on-primary-container font-button-md text-button-md px-8 py-4 rounded-lg hover:opacity-90 transition-opacity active:scale-95 shadow-[0_0_30px_rgba(37,99,235,0.3)] flex items-center gap-2">
             Começar Agora
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </Link>
