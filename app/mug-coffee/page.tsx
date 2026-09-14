@@ -242,12 +242,16 @@ export default function MugCoffeePage() {
   return (
     <main className="flex-1 flex mt-20 relative h-[calc(100vh-80px)] overflow-hidden bg-gradient-to-b from-neutral-950 via-neutral-900 to-black select-none">
       {/* 3D Canvas Viewport (min-w-0 ensures flex container resizes correctly with sidebar) */}
-      <div className="flex-1 min-w-0 relative h-full">
+      <div 
+        className="flex-1 min-w-0 relative h-full"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         {currentCoffeeTexture && (
           <Canvas
             shadows={{ type: THREE.PCFShadowMap }}
             camera={{ position: [0, 0.75, 1.85], fov: 44 }}
             gl={{ antialias: true, alpha: true }}
+            onContextMenu={(e) => e.preventDefault()}
           >
             <CoffeeMugScene
               texture={currentCoffeeTexture}

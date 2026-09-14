@@ -330,10 +330,18 @@ export function CoffeeMugScene({
 
       <OrbitControls
         ref={controlsRef}
-        enablePan={false}
-        minDistance={1.0}
-        maxDistance={4.5}
+        enablePan={true}
+        enableZoom={true}
+        enableRotate={true}
+        screenSpacePanning={true}
+        minDistance={0.8}
+        maxDistance={5.0}
         maxPolarAngle={Math.PI / 2 + 0.08}
+        mouseButtons={{
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN,
+        }}
         makeDefault
       />
     </>
