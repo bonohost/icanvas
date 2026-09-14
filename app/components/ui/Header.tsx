@@ -50,14 +50,14 @@ export default function Header() {
               onClick={() => setIsContactOpen(true)}
               className="font-button-md text-button-md text-on-surface-variant hover:text-primary transition-colors duration-300 active:scale-95 transition-transform cursor-pointer"
             >
-              Contact
+              Contato
             </button>
-            <button
-              onClick={() => setIsContactOpen(true)}
-              className="bg-primary-container text-on-primary-container font-button-md text-button-md px-6 py-2 rounded-DEFAULT hover:opacity-90 transition-opacity active:scale-95 transition-transform shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] cursor-pointer"
+            <Link
+              href="/mug-coffee"
+              className="bg-primary-container text-on-primary-container font-button-md text-button-md px-6 py-2 rounded-DEFAULT hover:opacity-90 transition-opacity active:scale-95 transition-transform shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] cursor-pointer inline-flex items-center justify-center"
             >
-              Get Started
-            </button>
+              Começar
+            </Link>
           </div>
         </div>
       </header>
