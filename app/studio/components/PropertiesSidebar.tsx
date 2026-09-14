@@ -69,7 +69,7 @@ export default function PropertiesSidebar({
   onDuplicateOpening,
   onDeselectAll,
   onClose,
-  showGrid = true,
+  showGrid = false,
   onToggleGrid,
   snapOn = true,
   onToggleSnap,
