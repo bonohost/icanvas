@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect, ChangeEvent } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CoffeeMugScene } from '../components/coffee/CoffeeMugScene';
+import { CoffeeBubblePaintModal } from '../components/coffee/CoffeeBubblePaintModal';
 import { createLatteArtTexture, createLatteArtTextTexture, PresetArtType } from '../components/coffee/LatteArtTextures';
 
 const MUG_PRESET_COLORS = [
@@ -96,6 +97,7 @@ export default function MugCoffeePage() {
 
   const [photoFoamTexture, setPhotoFoamTexture] = useState<THREE.Texture | null>(null);
   const [usePhotoFoam, setUsePhotoFoam] = useState<boolean>(true);
+  const [isBubblePaintModalOpen, setIsBubblePaintModalOpen] = useState<boolean>(false);
 
   // Load high-resolution photographic reference coffee bubbles texture
   useEffect(() => {
@@ -242,7 +244,7 @@ export default function MugCoffeePage() {
   return (
     <main className="flex-1 flex mt-20 relative h-[calc(100vh-80px)] overflow-hidden bg-gradient-to-b from-neutral-950 via-neutral-900 to-black select-none">
       {/* 3D Canvas Viewport (min-w-0 ensures flex container resizes correctly with sidebar) */}
-      <div 
+      <div
         className="flex-1 min-w-0 relative h-full"
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -320,6 +322,18 @@ export default function MugCoffeePage() {
               }`}
           >
             <span>{mixValue > 0.5 ? '☕ Café Puro' : '✨ Revelar Leite'}</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-white/10" />
+
+          {/* Quick Bubble Shader Painter Modal Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsBubblePaintModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-all bg-gradient-to-r from-amber-500/25 to-amber-600/35 text-amber-300 border border-amber-500/40 hover:bg-amber-500/40 shadow-lg shadow-amber-500/10 cursor-pointer"
+            title="Abrir Pintor de Bolhas de Café com GLSL Shader"
+          >
+            <span>🫧 Pintar Bolhas</span>
           </button>
 
           <div className="h-4 w-[1px] bg-white/10" />
@@ -558,7 +572,7 @@ export default function MugCoffeePage() {
                         onClick={() => { setTextLine1('Amo ❤️'); setTextLine2('Café'); }}
                         className="text-[10px] px-2 py-0.5 rounded bg-white/5 hover:bg-amber-500/20 border border-white/10 text-neutral-300 hover:text-amber-300 transition-colors"
                       >
-                        Bom dia! Te Amo
+                        Amo ❤️ Café
                       </button>
                       <button
                         onClick={() => { setTextLine1('Tenha um'); setTextLine2('Lindo Dia ✨'); }}
@@ -716,29 +730,40 @@ export default function MugCoffeePage() {
                   <h3 className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                     <span>🫧</span> Bolhas &amp; Microespuma do Café
                   </h3>
+                  <span className="text-[10px] font-mono text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    Shader Custom
+                  </span>
                 </div>
+
+                {/* Botão Pintor Interativo 2D -> 3D Shader */}
+                <button
+                  type="button"
+                  onClick={() => setIsBubblePaintModalOpen(true)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer group"
+                >
+                  <span className="group-hover:scale-125 transition-transform">🎨</span>
+                  <span>Pintar Bolhas com Mouse (Shader)</span>
+                </button>
 
                 {/* Seletor de Modo de Bolhas */}
                 <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 text-xs">
                   <button
                     type="button"
                     onClick={() => setUsePhotoFoam(true)}
-                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                      usePhotoFoam
+                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${usePhotoFoam
                         ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
                         : 'text-neutral-400 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <span>📸</span> Fotográfico Real
                   </button>
                   <button
                     type="button"
                     onClick={() => setUsePhotoFoam(false)}
-                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                      !usePhotoFoam
+                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${!usePhotoFoam
                         ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
                         : 'text-neutral-400 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <span>✨</span> Procedural 3D
                   </button>
@@ -1127,6 +1152,20 @@ export default function MugCoffeePage() {
           )}
         </div>
       </aside>
+
+      {/* Modal de Pintura de Bolhas e Espuma GLSL Shader em Tempo Real */}
+      <CoffeeBubblePaintModal
+        isOpen={isBubblePaintModalOpen}
+        onClose={() => setIsBubblePaintModalOpen(false)}
+        onApply={(tex) => {
+          setPhotoFoamTexture(tex);
+          setUsePhotoFoam(true);
+        }}
+        onLivePreview={(tex) => {
+          setPhotoFoamTexture(tex);
+          setUsePhotoFoam(true);
+        }}
+      />
     </main>
   );
 }

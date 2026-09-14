@@ -283,23 +283,30 @@ export const coffeeFragmentShader = /* glsl */ `
       ));
     }
 
-    // Photographic foam texture sampling & derivatives
+    // Photographic/Shader foam texture sampling & derivatives (relevo convexo correto)
     vec4 photoFoamColor = texture2D(uPhotoFoamTexture, vUv);
-    float photoLum = dot(photoFoamColor.rgb, vec3(0.299, 0.587, 0.114));
-    float photoLumR = dot(texture2D(uPhotoFoamTexture, vUv + vec2(eps, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
-    float photoLumU = dot(texture2D(uPhotoFoamTexture, vUv + vec2(0.0, eps)).rgb, vec3(0.299, 0.587, 0.114));
+    float photoLum = photoFoamColor.a > 0.001 ? (dot(photoFoamColor.rgb, vec3(0.3, 0.59, 0.11)) * photoFoamColor.a) : 0.0;
+    vec4 photoFoamR = texture2D(uPhotoFoamTexture, vUv + vec2(eps, 0.0));
+    vec4 photoFoamU = texture2D(uPhotoFoamTexture, vUv + vec2(0.0, eps));
+    float photoLumR = photoFoamR.a > 0.001 ? (dot(photoFoamR.rgb, vec3(0.3, 0.59, 0.11)) * photoFoamR.a) : 0.0;
+    float photoLumU = photoFoamU.a > 0.001 ? (dot(photoFoamU.rgb, vec3(0.3, 0.59, 0.11)) * photoFoamU.a) : 0.0;
 
-    vec3 photoNormalLocal = normalize(vec3(
-      (photoLum - photoLumR) / eps * uBubbleIntensity * 0.16 * foamBumpSuppression,
-      (photoLum - photoLumU) / eps * uBubbleIntensity * 0.16 * foamBumpSuppression,
-      1.0
-    ));
+    // Normal positiva para relevo saliente e volumétrico de bolha (convexo)
+    vec3 photoNormalLocal = vec3(0.0, 0.0, 1.0);
+    if (photoFoamColor.a > 0.001) {
+      photoNormalLocal = normalize(vec3(
+        -(photoLumR - photoLum) / eps * uBubbleIntensity * 0.18 * foamBumpSuppression,
+        -(photoLumU - photoLum) / eps * uBubbleIntensity * 0.18 * foamBumpSuppression,
+        1.0
+      ));
+    }
 
     vec3 effectiveBubbleNormal = mix(bubbleNormalLocal, photoNormalLocal, uUsePhotoFoam);
-    float effectiveFoamHeight = mix(hCenter, smoothstep(0.15, 0.85, photoLum), uUsePhotoFoam);
+    float effectiveFoamHeight = mix(hCenter, smoothstep(0.1, 0.9, photoLum), uUsePhotoFoam);
 
-    // Normal is 100% smooth vNormal in the center, and bumped only in the foam ring
-    vec3 normal = normalize(vNormal + effectiveBubbleNormal * (0.65 * foamBumpSuppression));
+    // Perturbação da normal apenas nos componentes tangenciais X e Y
+    vec3 bumpPerturbation = vec3(effectiveBubbleNormal.xy * (0.65 * foamBumpSuppression), 0.0);
+    vec3 normal = normalize(vNormal + bumpPerturbation);
     vec3 viewDir = normalize(vViewPosition);
 
     // 4. BASE ESPRESSO & WARM CREMA (Medium Roast Palette)
@@ -323,9 +330,10 @@ export const coffeeFragmentShader = /* glsl */ `
       baseEspresso = mix(baseEspresso, foamColor, radialFoamMask * 0.85);
     }
 
-    // Blend base espresso with high-res photographic coffee foam if enabled
-    if (uUsePhotoFoam > 0.001) {
-      baseEspresso = mix(baseEspresso, photoFoamColor.rgb, uUsePhotoFoam * photoFoamColor.a);
+    // Blend base espresso with high-res photographic/shader coffee foam if enabled
+    if (uUsePhotoFoam > 0.001 && photoFoamColor.a > 0.001) {
+      float foamBlendFactor = clamp(photoFoamColor.a * uUsePhotoFoam, 0.0, 1.0);
+      baseEspresso = mix(baseEspresso, photoFoamColor.rgb, foamBlendFactor);
     }
 
     // 5. BLEND WITH LATTE ART / TYPOGRAPHY
