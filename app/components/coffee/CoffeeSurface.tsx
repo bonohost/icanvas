@@ -7,6 +7,10 @@ import { coffeeVertexShader, coffeeFragmentShader } from './CoffeeShaders';
 
 export interface CoffeeSurfaceProps {
   texture: THREE.Texture;
+  photoFoamTexture?: THREE.Texture | null;
+  usePhotoFoam?: boolean;
+  baristaPaletteFilter?: number;
+  swirlIntensity?: number;
   mixValue: number;
   tileX?: number;
   tileY?: number;
@@ -27,6 +31,10 @@ export interface CoffeeSurfaceProps {
 
 export function CoffeeSurface({
   texture,
+  photoFoamTexture,
+  usePhotoFoam = true,
+  baristaPaletteFilter = 0.85,
+  swirlIntensity = 0.5,
   mixValue,
   tileX = 1.0,
   tileY = 1.0,
@@ -46,10 +54,27 @@ export function CoffeeSurface({
 }: CoffeeSurfaceProps) {
   const materialRef = useRef<THREE.ShaderMaterial>(null!);
 
+  const dummyTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#180a04';
+      ctx.fillRect(0, 0, 16, 16);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    return tex;
+  }, []);
+
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uTexture: { value: texture },
+      uPhotoFoamTexture: { value: photoFoamTexture || dummyTexture },
+      uUsePhotoFoam: { value: usePhotoFoam ? 1.0 : 0.0 },
+      uBaristaPaletteFilter: { value: baristaPaletteFilter },
+      uSwirlIntensity: { value: swirlIntensity },
       uMix: { value: mixValue },
       uTile: { value: new THREE.Vector2(tileX, tileY) },
       uOffset: { value: new THREE.Vector2(offsetX, offsetY) },
@@ -79,6 +104,10 @@ export function CoffeeSurface({
         delta * 3.8
       );
       materialRef.current.uniforms.uTexture.value = texture;
+      materialRef.current.uniforms.uPhotoFoamTexture.value = photoFoamTexture || dummyTexture;
+      materialRef.current.uniforms.uUsePhotoFoam.value = usePhotoFoam ? 1.0 : 0.0;
+      materialRef.current.uniforms.uBaristaPaletteFilter.value = baristaPaletteFilter;
+      materialRef.current.uniforms.uSwirlIntensity.value = swirlIntensity;
       materialRef.current.uniforms.uTile.value.set(tileX, tileY);
       materialRef.current.uniforms.uOffset.value.set(offsetX, offsetY);
       materialRef.current.uniforms.uRotation.value = rotation;

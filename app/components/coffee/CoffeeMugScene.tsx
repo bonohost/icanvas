@@ -178,6 +178,10 @@ function CameraInit() {
 
 export interface CoffeeMugSceneProps {
   texture: THREE.Texture;
+  photoFoamTexture?: THREE.Texture | null;
+  usePhotoFoam?: boolean;
+  baristaPaletteFilter?: number;
+  swirlIntensity?: number;
   mixValue: number;
   tileX: number;
   tileY: number;
@@ -206,6 +210,10 @@ export interface CoffeeMugSceneProps {
 
 export function CoffeeMugScene({
   texture,
+  photoFoamTexture,
+  usePhotoFoam = true,
+  baristaPaletteFilter = 0.85,
+  swirlIntensity = 0.5,
   mixValue,
   tileX,
   tileY,
@@ -286,6 +294,10 @@ export function CoffeeMugScene({
             {/* Coffee Liquid Surface placed exactly inside the DAE caneca model */}
             <CoffeeSurface
               texture={texture}
+              photoFoamTexture={photoFoamTexture}
+              usePhotoFoam={usePhotoFoam}
+              baristaPaletteFilter={baristaPaletteFilter}
+              swirlIntensity={swirlIntensity}
               mixValue={mixValue}
               tileX={tileX}
               tileY={tileY}

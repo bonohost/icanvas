@@ -58,6 +58,8 @@ export default function MugCoffeePage() {
   const [bubbleIntensity, setBubbleIntensity] = useState<number>(1.1);
   const [bubbleScale, setBubbleScale] = useState<number>(58.0);
   const [centerClearRadius, setCenterClearRadius] = useState<number>(0.52);
+  const [baristaPaletteFilter, setBaristaPaletteFilter] = useState<number>(0.85);
+  const [swirlIntensity, setSwirlIntensity] = useState<number>(0.5);
   const [customCoffeeImageName, setCustomCoffeeImageName] = useState<string | null>(null);
 
   // --- TAB 2: EXTERIOR MUG PRINT STATES ---
@@ -90,6 +92,21 @@ export default function MugCoffeePage() {
       heart: createLatteArtTexture('heart'),
       swan: createLatteArtTexture('swan'),
     };
+  }, []);
+
+  const [photoFoamTexture, setPhotoFoamTexture] = useState<THREE.Texture | null>(null);
+  const [usePhotoFoam, setUsePhotoFoam] = useState<boolean>(true);
+
+  // Load high-resolution photographic reference coffee bubbles texture
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load('/textures/coffee/coffee_real_bubbles.png', (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.generateMipmaps = true;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      setPhotoFoamTexture(tex);
+    });
   }, []);
 
   const [currentCoffeeTexture, setCurrentCoffeeTexture] = useState<THREE.Texture | null>(null);
@@ -234,6 +251,10 @@ export default function MugCoffeePage() {
           >
             <CoffeeMugScene
               texture={currentCoffeeTexture}
+              photoFoamTexture={photoFoamTexture}
+              usePhotoFoam={usePhotoFoam}
+              baristaPaletteFilter={baristaPaletteFilter}
+              swirlIntensity={swirlIntensity}
               mixValue={mixValue}
               tileX={lockAspectRatio ? tileScale : tileX}
               tileY={lockAspectRatio ? tileScale : tileY}
@@ -624,39 +645,139 @@ export default function MugCoffeePage() {
                 </div>
               </div>
 
-              {/* Bolhas & Microespuma 3D (Voronoi & Radial Alpha Mask) */}
-              <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
-                <h3 className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                  <span>🫧</span> Bolhas &amp; Microespuma (Voronoi 3D)
-                </h3>
+              {/* Filtro Barista & Swirl de Leite (Shader Customizado) */}
+              <div className="flex flex-col gap-3.5 border-t border-white/10 pt-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                    <span>🎨</span> Filtro Barista &amp; Swirl de Leite
+                  </h3>
+                  <span className="text-[10px] font-mono text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    GLSL Shader
+                  </span>
+                </div>
 
-                {/* Raio Central Limpo */}
-                <div className="space-y-1 p-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/20">
+                {/* Filtro de Cores Barista (Luminância -> Tons de Espresso, Latte e Espuma) */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/20">
                   <div className="flex justify-between text-xs text-neutral-200 font-medium">
-                    <span>Área Central Limpa (Sem Bolhas)</span>
+                    <span>Filtro de Cores Barista</span>
                     <span className="font-mono text-amber-400 font-bold">
-                      {Math.round(centerClearRadius * 100)}%
+                      {Math.round(baristaPaletteFilter * 100)}%
                     </span>
                   </div>
                   <input
                     type="range"
-                    min="0.10"
-                    max="0.80"
-                    step="0.02"
-                    value={centerClearRadius}
-                    onChange={(e) => setCenterClearRadius(parseFloat(e.target.value))}
+                    min="0.0"
+                    max="1.0"
+                    step="0.05"
+                    value={baristaPaletteFilter}
+                    onChange={(e) => setBaristaPaletteFilter(parseFloat(e.target.value))}
                     className="w-full h-1.5 bg-neutral-700 rounded appearance-none cursor-pointer accent-amber-500"
                   />
                   <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
-                    <span>10% (Espuma Total)</span>
-                    <span>80% (Apenas Borda)</span>
+                    <span>0% (Cor Original)</span>
+                    <span>100% (Espresso/Latte/Creme)</span>
+                  </div>
+                  <p className="text-[10px] text-neutral-400 pt-1 leading-normal">
+                    Converte imagens e textos em autênticas tonalidades de espresso escuro (#2e170a), café com leite (#7a4a26) e espuma cremosa (#ebeae5).
+                  </p>
+                </div>
+
+                {/* Distorção Fluida Swirl Noise */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                  <div className="flex justify-between text-xs text-neutral-200 font-medium">
+                    <span>Distorção Fluida (Swirl de Leite)</span>
+                    <span className="font-mono text-amber-400 font-bold">
+                      {swirlIntensity.toFixed(2)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="1.5"
+                    step="0.05"
+                    value={swirlIntensity}
+                    onChange={(e) => setSwirlIntensity(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-neutral-700 rounded appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+                    <span>0.0 (Estático)</span>
+                    <span>1.5 (Vórtice Barista)</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Bolhas & Microespuma 3D (Fotográfico Realista vs Procedural) */}
+              <div className="flex flex-col gap-3.5 border-t border-white/10 pt-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                    <span>🫧</span> Bolhas &amp; Microespuma do Café
+                  </h3>
+                </div>
+
+                {/* Seletor de Modo de Bolhas */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setUsePhotoFoam(true)}
+                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                      usePhotoFoam
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span>📸</span> Fotográfico Real
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUsePhotoFoam(false)}
+                    className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                      !usePhotoFoam
+                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span>✨</span> Procedural 3D
+                  </button>
+                </div>
+
+                {usePhotoFoam ? (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-200/90 leading-relaxed">
+                    <p className="font-semibold text-amber-300 flex items-center gap-1">
+                      <span>✨</span> Modo Fotorrealista Ativo
+                    </p>
+                    <p className="text-[10px] text-neutral-300 mt-1">
+                      Utilizando o anel fotográfico real com meias-luas assimétricas, profundidade de cavidades e centro espelhado liso.
+                    </p>
+                  </div>
+                ) : (
+                  /* Raio Central Limpo Procedural */
+                  <div className="space-y-1 p-3 rounded-lg bg-amber-500/[0.06] border border-amber-500/20">
+                    <div className="flex justify-between text-xs text-neutral-200 font-medium">
+                      <span>Área Central Limpa (Sem Bolhas)</span>
+                      <span className="font-mono text-amber-400 font-bold">
+                        {Math.round(centerClearRadius * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.10"
+                      max="0.80"
+                      step="0.02"
+                      value={centerClearRadius}
+                      onChange={(e) => setCenterClearRadius(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-neutral-700 rounded appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+                      <span>10% (Espuma Total)</span>
+                      <span>80% (Apenas Borda)</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px] text-neutral-300">
-                      <span>Relevo Bolhas</span>
+                      <span>Relevo / Brilho</span>
                       <span className="font-mono text-amber-400">{bubbleIntensity.toFixed(1)}x</span>
                     </div>
                     <input
@@ -683,6 +804,7 @@ export default function MugCoffeePage() {
                       value={bubbleScale}
                       onChange={(e) => setBubbleScale(parseFloat(e.target.value))}
                       className="w-full h-1 bg-neutral-700 rounded appearance-none cursor-pointer accent-amber-500"
+                      disabled={usePhotoFoam}
                     />
                   </div>
                 </div>

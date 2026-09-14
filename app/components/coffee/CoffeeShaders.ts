@@ -60,6 +60,10 @@ export const coffeeVertexShader = /* glsl */ `
 
 export const coffeeFragmentShader = /* glsl */ `
   uniform sampler2D uTexture;
+  uniform sampler2D uPhotoFoamTexture; // Photographic reference bubble ring texture
+  uniform float uUsePhotoFoam;         // 1.0 = Use real photographic bubble texture, 0.0 = Procedural
+  uniform float uBaristaPaletteFilter; // 0.0 = Original image colors, 1.0 = Remap to espresso/latte/milk foam
+  uniform float uSwirlIntensity;       // Fluid swirl animation intensity
   uniform float uMix;
   uniform vec2 uTile;
   uniform vec2 uOffset;
@@ -90,6 +94,14 @@ export const coffeeFragmentShader = /* glsl */ `
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
+  }
+
+  // Fluid Swirl Noise for realistic coffee milk swirls
+  float swirlNoise(vec2 p, float time) {
+    float speed = time * 0.8;
+    float d = sin(p.x * 4.0 + speed) * 0.5 + sin(p.y * 4.0 - speed) * 0.5;
+    d += sin(p.x * 8.0 - speed * 1.5) * 0.25;
+    return d * 0.05;
   }
 
   // Multi-return Voronoi Cellular Noise
@@ -208,19 +220,43 @@ export const coffeeFragmentShader = /* glsl */ `
     }
     vec2 texUv = (baseUv / max(uTile, vec2(0.01))) + vec2(0.5) - uOffset;
 
-    // Fluid domain warping on projected latte art/text
+    // Fluid domain warping + Swirl noise animation
     vec2 artWarp = vec2(
-      fbm(texUv * 6.5 + vec2(uTime * 0.015, -uTime * 0.01)),
-      fbm(texUv * 6.5 + vec2(3.7 + uTime * 0.01, 2.1 - uTime * 0.015))
+      fbm(texUv * 5.5 + vec2(uTime * 0.015, -uTime * 0.01)),
+      fbm(texUv * 5.5 + vec2(3.7 + uTime * 0.01, 2.1 - uTime * 0.015))
     ) - vec2(0.5);
-    vec2 fluidTexUv = texUv + artWarp * 0.035;
 
-    vec4 texColor = vec4(0.0);
+    float sTime = (uAnimateWaves > 0.5) ? uTime : 0.0;
+    float s1 = swirlNoise(texUv * 3.0 + vec2(0.0, sTime * 0.1), sTime);
+    float s2 = swirlNoise(texUv * 3.0 + vec2(sTime * 0.1, 0.0), sTime);
+
+    vec2 fluidTexUv = texUv + artWarp * 0.02 + vec2(s1, s2) * (uSwirlIntensity * 1.2);
+
+    vec4 rawTexColor = vec4(0.0);
     if (fluidTexUv.x >= 0.0 && fluidTexUv.x <= 1.0 && fluidTexUv.y >= 0.0 && fluidTexUv.y <= 1.0) {
-      texColor = texture2D(uTexture, fluidTexUv);
+      rawTexColor = texture2D(uTexture, fluidTexUv);
     } else {
-      texColor = vec4(uCoffeeColor, 1.0);
+      rawTexColor = vec4(uCoffeeColor, 0.0);
     }
+
+    // 2. FILTRO DE PALETA BARISTA (Remapeamento de Luminância: Espresso Escuro -> Latte Médio -> Espuma Cremosa de Leite)
+    float brightness = dot(rawTexColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 espressoDark = vec3(0.18, 0.09, 0.04); // Marrom torrado profundo
+    vec3 latteMedium  = vec3(0.48, 0.29, 0.15); // Café rico com leite (avelã)
+    vec3 milkFoam     = vec3(0.92, 0.85, 0.76); // Espuma de leite clara e aveludada
+
+    vec3 baristaRemappedColor;
+    if (brightness < 0.5) {
+      // Regiões mais escuras viram espresso profundo misturando-se com latte
+      baristaRemappedColor = mix(espressoDark, latteMedium, brightness * 2.0);
+    } else {
+      // Regiões mais claras transitam de latte para a espuma branca de leite
+      baristaRemappedColor = mix(latteMedium, milkFoam, (brightness - 0.5) * 2.0);
+    }
+
+    // Interpolação suave entre a cor original da imagem e o filtro barista
+    vec3 processedMilkColor = mix(rawTexColor.rgb, baristaRemappedColor, uBaristaPaletteFilter);
+    vec4 texColor = vec4(processedMilkColor, rawTexColor.a);
 
     // 2. ISOLAMENTO DA LATTE ART (Leite macio e sedoso sem relevo de bolhas)
     float milkLuminance = max(texColor.r, max(texColor.g, texColor.b));
@@ -231,6 +267,7 @@ export const coffeeFragmentShader = /* glsl */ `
     float t = (uAnimateWaves > 0.5) ? uTime : 0.0;
     float eps = 0.0025;
 
+    // Procedural foam calculation
     float hCenter = getFoamHeight(vUv, t, radialFoamMask);
     float hRight  = getFoamHeight(vUv + vec2(eps, 0.0), t, radialFoamMask);
     float hUp     = getFoamHeight(vUv + vec2(0.0, eps), t, radialFoamMask);
@@ -246,8 +283,23 @@ export const coffeeFragmentShader = /* glsl */ `
       ));
     }
 
+    // Photographic foam texture sampling & derivatives
+    vec4 photoFoamColor = texture2D(uPhotoFoamTexture, vUv);
+    float photoLum = dot(photoFoamColor.rgb, vec3(0.299, 0.587, 0.114));
+    float photoLumR = dot(texture2D(uPhotoFoamTexture, vUv + vec2(eps, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+    float photoLumU = dot(texture2D(uPhotoFoamTexture, vUv + vec2(0.0, eps)).rgb, vec3(0.299, 0.587, 0.114));
+
+    vec3 photoNormalLocal = normalize(vec3(
+      (photoLum - photoLumR) / eps * uBubbleIntensity * 0.16 * foamBumpSuppression,
+      (photoLum - photoLumU) / eps * uBubbleIntensity * 0.16 * foamBumpSuppression,
+      1.0
+    ));
+
+    vec3 effectiveBubbleNormal = mix(bubbleNormalLocal, photoNormalLocal, uUsePhotoFoam);
+    float effectiveFoamHeight = mix(hCenter, smoothstep(0.15, 0.85, photoLum), uUsePhotoFoam);
+
     // Normal is 100% smooth vNormal in the center, and bumped only in the foam ring
-    vec3 normal = normalize(vNormal + bubbleNormalLocal * (0.65 * radialFoamMask * foamBumpSuppression));
+    vec3 normal = normalize(vNormal + effectiveBubbleNormal * (0.65 * foamBumpSuppression));
     vec3 viewDir = normalize(vViewPosition);
 
     // 4. BASE ESPRESSO & WARM CREMA (Medium Roast Palette)
@@ -264,11 +316,16 @@ export const coffeeFragmentShader = /* glsl */ `
     baseEspresso = mix(baseEspresso, deepReddishWall, smoothstep(0.85, 1.0, normalizedDist));
     baseEspresso += (turbulence - 0.5) * 0.08 * (1.0 - radialFoamMask);
 
-    // Apply collar foam color only where foam exists
+    // Apply collar foam color only where foam exists (or blend with photographic texture)
     if (radialFoamMask > 0.001) {
       float cavity = smoothstep(0.12, 0.75, hCenter);
       vec3 foamColor = mix(goldenCinnamon, brightAmberFroth, cavity);
       baseEspresso = mix(baseEspresso, foamColor, radialFoamMask * 0.85);
+    }
+
+    // Blend base espresso with high-res photographic coffee foam if enabled
+    if (uUsePhotoFoam > 0.001) {
+      baseEspresso = mix(baseEspresso, photoFoamColor.rgb, uUsePhotoFoam * photoFoamColor.a);
     }
 
     // 5. BLEND WITH LATTE ART / TYPOGRAPHY
