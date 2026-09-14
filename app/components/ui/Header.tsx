@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import ContactModal from './ContactModal';
 
 const navItems = [
-  { href: '/mug-simulator', label: 'Mug Sim' },
+  //{ href: '/mug-simulator', label: 'Mug Sim' },
+  { href: '/mug-coffee', label: 'Mug Sim' },
   // { href: '/sofa-customizer', label: 'Configurator' },
   { href: '/360-viewer', label: '360 Viewer' },
   { href: '/studio', label: 'Studio' },
@@ -34,8 +35,8 @@ export default function Header() {
                   key={item.href}
                   href={item.href}
                   className={`font-medium transition-colors duration-300 h-full flex items-center ${isActive
-                      ? 'text-primary font-bold border-b-2 border-primary mt-[2px]'
-                      : 'text-on-surface-variant hover:text-primary active:scale-95 transition-transform'
+                    ? 'text-primary font-bold border-b-2 border-primary mt-[2px]'
+                    : 'text-on-surface-variant hover:text-primary active:scale-95 transition-transform'
                     }`}
                 >
                   {item.label}
@@ -84,4 +85,4 @@ export default function Header() {
       />
     </>
   );
-}
+}

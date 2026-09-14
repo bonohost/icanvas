@@ -24,8 +24,21 @@ export default function HomePage() {
         <section className="w-full max-w-7xl mx-auto pb-32">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
+
+            {/* <Link href="/mug-simulator" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-electric-glow/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5">
+                <img alt="Mug Sim" className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCR83Wptz43BKcUdES_89T9qVSVts2fxDRE7cWbolhEX0_nqsnTDZrd9tsPfT7dUsSa24suAdM455TdQsQXBi8ycaZdsTt--j5vRoTH5OcnubcsDMfChsCwaNnMM6nG1EB6926m4z9YiwzsJieeUrE7RHOvQP3bv48jbn10eXK9G9HPOzQidRsd0tVBRhg3eyiCtzw7cbwZn4Sn00ZXICvPO862YZJKiqbcvMWysM32kO8WhqWY72d-" />
+              </div>
+              <div className="flex items-center gap-3 mb-3 relative z-10">
+                <span className="material-symbols-outlined text-primary text-[24px]">coffee</span>
+                <h3 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Mug Sim</h3>
+              </div>
+              <p className="font-body-md text-body-md text-on-surface-variant relative z-10">Simulador de personalização de canecas em tempo real. Teste materiais, estampas e reflexos com precisão milimétrica.</p>
+            </Link> */}
+
             {/* Mug Sim Card */}
-            <Link href="/mug-simulator" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
+            <Link href="/mug-coffee" className="glass-panel rounded-xl p-8 hover:glass-panel-active transition-all duration-500 group flex flex-col h-full cursor-pointer relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-electric-glow/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="mb-6 h-48 w-full rounded-lg overflow-hidden relative border border-white/5">
                 <img alt="Mug Sim" className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCR83Wptz43BKcUdES_89T9qVSVts2fxDRE7cWbolhEX0_nqsnTDZrd9tsPfT7dUsSa24suAdM455TdQsQXBi8ycaZdsTt--j5vRoTH5OcnubcsDMfChsCwaNnMM6nG1EB6926m4z9YiwzsJieeUrE7RHOvQP3bv48jbn10eXK9G9HPOzQidRsd0tVBRhg3eyiCtzw7cbwZn4Sn00ZXICvPO862YZJKiqbcvMWysM32kO8WhqWY72d-" />

@@ -35,7 +35,7 @@ export default function Scene(): ReactElement | null {
     );
   }
 
-  if (pathname === '/studio') {
+  if (pathname === '/studio' || pathname === '/mug-coffee') {
     return null;
   }
 
