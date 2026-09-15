@@ -27,6 +27,8 @@ import {
   Lock,
   Unlock,
   Move3D,
+  Globe,
+  Compass,
 } from 'lucide-react';
 
 interface PropertiesSidebarProps {
@@ -807,27 +809,43 @@ export default function PropertiesSidebar({
         </div>
 
         {/* Ambiente & Iluminação PBR */}
+        {/* Ambiente & Iluminação PBR / HDR */}
         <div className="space-y-4 border-t border-white/10 pt-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-              <Sun className="size-3.5 text-primary" /> Ambiente & Iluminação PBR
+              <Sun className="size-3.5 text-primary" /> Ambiente & Iluminação PBR / HDR
             </span>
           </div>
 
-          {/* Presets de Cenário / Ambiente */}
+          {/* Presets de Cenário / Ambiente & Mapas HDR 360 */}
           <div className="space-y-2">
-            <label className="text-[10px] text-on-surface-variant block">Cenário de Fundo & Reflexos</label>
+            <label className="text-[10px] text-on-surface-variant block">Mapas HDR 360° & Estúdios IBL</label>
             <div className="grid grid-cols-3 gap-1.5 bg-white/5 p-1 rounded-xl">
               {[
+                { id: 'hdr_144', label: 'HDR 144 (2K)', desc: 'Praia & Céu', icon: '🏞️' },
+                { id: 'hdr_185', label: 'HDR 185 (1K)', desc: 'Cenário Aberto', icon: '🌅' },
+                { id: 'daylight', label: 'Céu Natural', desc: 'Céu & Sol', icon: '🌤️' },
                 { id: 'dark_studio', label: 'Estúdio Dark', desc: 'Fundo Dark Slate', icon: '🏢' },
                 { id: 'clean_studio', label: 'Estúdio Claro', desc: 'Clean Studio', icon: '☀️' },
-                { id: 'daylight', label: 'Luz Natural', desc: 'Céu & Sol', icon: '🌅' },
               ].map((p) => {
                 const isActive = (room.environmentPreset || 'dark_studio') === p.id;
                 return (
                   <button
                     key={p.id}
-                    onClick={() => onUpdateRoom({ ...room, environmentPreset: p.id as any })}
+                    onClick={() => {
+                      const curHdr = room.hdrSettings || {
+                        intensity: 1.0,
+                        rotation: 0,
+                        showBackground: false,
+                        backgroundBlur: 0.0,
+                        disableManualLights: false,
+                      };
+                      onUpdateRoom({
+                        ...room,
+                        environmentPreset: p.id as any,
+                        hdrSettings: curHdr,
+                      });
+                    }}
                     className={`py-2 px-1 text-center rounded-lg flex flex-col items-center gap-1 transition-all cursor-pointer ${
                       isActive ? 'bg-primary text-white shadow-sm font-bold' : 'text-on-surface-variant hover:text-white hover:bg-white/5'
                     }`}
@@ -839,6 +857,174 @@ export default function PropertiesSidebar({
               })}
             </div>
           </div>
+
+          {/* Controles Especiais para HDR 360 (Quando HDR 144 ou 185 estiver ativo) */}
+          {(room.environmentPreset === 'hdr_144' || room.environmentPreset === 'hdr_185') && (
+            <div className="p-3 rounded-xl bg-primary/10 border border-primary/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-primary" /> Controles do Mapa HDR
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/20 text-primary-light border border-primary/30">
+                  IBL Ativo
+                </span>
+              </div>
+
+              {/* Toggle: 100% Iluminação HDR Pura (Desativa luzes manuais) */}
+              <div className="flex items-center justify-between p-2 rounded-lg bg-black/30 border border-white/5">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-neutral-200">Luz 100% HDR Pura</span>
+                  <span className="text-[10px] text-neutral-400">Desativa lâmpadas artificiais manuais</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = room.hdrSettings || {};
+                    onUpdateRoom({
+                      ...room,
+                      hdrSettings: {
+                        ...cur,
+                        disableManualLights: !cur.disableManualLights,
+                      },
+                    });
+                  }}
+                  className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                    room.hdrSettings?.disableManualLights ? 'bg-primary' : 'bg-white/15'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                      room.hdrSettings?.disableManualLights ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Toggle: Exibir Fundo Panorâmico 360° */}
+              <div className="flex items-center justify-between p-2 rounded-lg bg-black/30 border border-white/5">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-neutral-200 flex items-center gap-1">
+                    <Globe className="size-3 text-primary" /> Fundo Panorâmico 360°
+                  </span>
+                  <span className="text-[10px] text-neutral-400">Exibir o céu/horizonte no fundo 3D</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = room.hdrSettings || {};
+                    onUpdateRoom({
+                      ...room,
+                      hdrSettings: {
+                        ...cur,
+                        showBackground: !cur.showBackground,
+                      },
+                    });
+                  }}
+                  className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                    room.hdrSettings?.showBackground ? 'bg-primary' : 'bg-white/15'
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                      room.hdrSettings?.showBackground ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Slider: Intensidade / Ganho IBL do HDR */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-300 text-[11px] font-medium">Intensidade do HDR (Reflexos & Luz)</span>
+                  <span className="font-mono text-primary text-xs font-bold">
+                    {((room.hdrSettings?.intensity ?? 1.0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.2"
+                  max="3.0"
+                  step="0.05"
+                  value={room.hdrSettings?.intensity ?? 1.0}
+                  onChange={(e) => {
+                    const cur = room.hdrSettings || {};
+                    onUpdateRoom({
+                      ...room,
+                      hdrSettings: {
+                        ...cur,
+                        intensity: parseFloat(e.target.value),
+                      },
+                    });
+                  }}
+                  className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                />
+              </div>
+
+              {/* Slider: Rotação 360° do HDR / Posição do Sol */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-300 text-[11px] font-medium flex items-center gap-1">
+                    <Compass className="size-3 text-amber-400" /> Rotação do HDR (360°)
+                  </span>
+                  <span className="font-mono text-primary text-xs font-bold">
+                    {Math.round(room.hdrSettings?.rotation ?? 0)}°
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="360"
+                  step="2"
+                  value={room.hdrSettings?.rotation ?? 0}
+                  onChange={(e) => {
+                    const cur = room.hdrSettings || {};
+                    onUpdateRoom({
+                      ...room,
+                      hdrSettings: {
+                        ...cur,
+                        rotation: parseFloat(e.target.value),
+                      },
+                    });
+                  }}
+                  className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                />
+              </div>
+
+              {/* Slider: Desfoque do Fundo 360 (Depth of Field) */}
+              {room.hdrSettings?.showBackground && (
+                <div className="space-y-1 pt-1 border-t border-white/10">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-300 text-[11px] font-medium">Desfoque do Fundo 360°</span>
+                    <span className="font-mono text-primary text-xs font-bold">
+                      {Math.round((room.hdrSettings?.backgroundBlur ?? 0) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="1.0"
+                    step="0.05"
+                    value={room.hdrSettings?.backgroundBlur ?? 0.0}
+                    onChange={(e) => {
+                      const cur = room.hdrSettings || {};
+                      onUpdateRoom({
+                        ...room,
+                        hdrSettings: {
+                          ...cur,
+                          backgroundBlur: parseFloat(e.target.value),
+                        },
+                      });
+                    }}
+                    className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[9px] text-white/40">
+                    <span>Nítido (0%)</span>
+                    <span>Desfocado / Bokeh (100%)</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Slider de Exposição / Brilho Geral da Câmera */}
           <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
@@ -853,7 +1039,7 @@ export default function PropertiesSidebar({
             <input
               type="range"
               min="0.5"
-              max="2.0"
+              max="2.5"
               step="0.05"
               value={room.exposure ?? 1.0}
               onChange={(e) => onUpdateRoom({ ...room, exposure: parseFloat(e.target.value) })}
@@ -862,30 +1048,32 @@ export default function PropertiesSidebar({
             <div className="flex justify-between text-[9px] text-white/40">
               <span>Mais Suave (50%)</span>
               <span>Padrão (100%)</span>
-              <span>Mais Claro (200%)</span>
+              <span>Mais Claro (250%)</span>
             </div>
           </div>
 
           {/* Slider de Intensidade Luz Solar / Ambiente */}
-          <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-white/80 flex items-center gap-1.5 text-[11px] font-medium">
-                <Sun className="size-3.5 text-amber-400" /> Luz Solar / Ambiente
-              </span>
-              <span className="font-mono text-primary text-xs font-bold">
-                {Math.round((room.lightIntensity ?? 1.0) * 100)}%
-              </span>
+          {(!room.hdrSettings?.disableManualLights || (room.environmentPreset !== 'hdr_144' && room.environmentPreset !== 'hdr_185')) && (
+            <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-white/80 flex items-center gap-1.5 text-[11px] font-medium">
+                  <Sun className="size-3.5 text-amber-400" /> Luz Solar / Ambiente
+                </span>
+                <span className="font-mono text-primary text-xs font-bold">
+                  {Math.round((room.lightIntensity ?? 1.0) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="2.5"
+                step="0.05"
+                value={room.lightIntensity ?? 1.0}
+                onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
+                className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+              />
             </div>
-            <input
-              type="range"
-              min="0.2"
-              max="2.5"
-              step="0.05"
-              value={room.lightIntensity ?? 1.0}
-              onChange={(e) => onUpdateRoom({ ...room, lightIntensity: parseFloat(e.target.value) })}
-              className="w-full accent-primary bg-white/10 h-1.5 rounded-full appearance-none outline-none cursor-pointer"
-            />
-          </div>
+          )}
         </div>
 
         {/* Iluminação de Área PBR (RectAreaLight / Plafon LED) */}

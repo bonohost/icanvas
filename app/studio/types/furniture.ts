@@ -84,7 +84,21 @@ export interface AreaLightSettings {
   showHelper: boolean; // toggle visible rectangular helper frame
 }
 
-export type EnvironmentPreset = 'dark_studio' | 'clean_studio' | 'daylight';
+export type EnvironmentPreset =
+  | 'dark_studio'
+  | 'clean_studio'
+  | 'daylight'
+  | 'hdr_144'
+  | 'hdr_185';
+
+export interface HdrSettings {
+  hdrUrl?: string;
+  intensity?: number; // 0.1 to 3.0
+  rotation?: number; // 0 to 360 degrees
+  showBackground?: boolean; // Show 360 HDR panorama as background
+  backgroundBlur?: number; // 0.0 to 1.0 depth-of-field blur
+  disableManualLights?: boolean; // 100% pure HDR IBL without artificial directional lights
+}
 
 export interface RoomSettings {
   width: number;
@@ -108,6 +122,7 @@ export interface RoomSettings {
   areaLight?: AreaLightSettings;
   environmentPreset?: EnvironmentPreset;
   exposure?: number;
+  hdrSettings?: HdrSettings;
 }
 
 export interface StudioProject {

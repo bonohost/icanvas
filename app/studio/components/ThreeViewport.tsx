@@ -7,6 +7,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
@@ -105,6 +106,13 @@ export default function ThreeViewport({
   const daylightTextureRef = useRef<THREE.Texture | null>(null);
   const rectLightRef = useRef<THREE.RectAreaLight | null>(null);
   const rectLightHelperRef = useRef<RectAreaLightHelper | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
+  const topLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const exrLoaderRef = useRef<EXRLoader | null>(null);
+  const hdrTextureCacheRef = useRef<Map<string, { raw: THREE.DataTexture; pmrem: THREE.Texture }>>(new Map());
+  const defaultEnvTextureRef = useRef<THREE.Texture | null>(null);
 
   const onUpdatePositionRef = useRef(onUpdatePosition);
   useEffect(() => {
@@ -236,10 +244,6 @@ export default function ThreeViewport({
     onRegisterCapture(captureSnapshot);
   }, [onRegisterCapture]);
 
-  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
-  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
-  const topLightRef = useRef<THREE.DirectionalLight | null>(null);
-
   const createTextSprite = (message: string) => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
@@ -364,6 +368,7 @@ export default function ThreeViewport({
     pmremGenerator.compileEquirectangularShader();
     const roomEnv = new RoomEnvironment();
     const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
+    defaultEnvTextureRef.current = envTexture;
     scene.environment = envTexture;
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -409,6 +414,7 @@ export default function ThreeViewport({
     const fillLight = new THREE.DirectionalLight('#bfdbfe', 0.4);
     fillLight.position.set(-6, 8, -6);
     scene.add(fillLight);
+    fillLightRef.current = fillLight;
 
     // Initialize RectAreaLight Uniforms for PBR materials
     RectAreaLightUniformsLib.init();
@@ -559,33 +565,113 @@ export default function ThreeViewport({
     };
   }, []);
 
-  // 1. Lighting, Exposure & Environment Preset Synchronization
+  // 1. Lighting, Exposure & Environment / HDR Preset Synchronization
   useEffect(() => {
     const preset = room.environmentPreset || 'dark_studio';
     const exposure = room.exposure ?? 1.0;
     const intensity = room.lightIntensity ?? 1.0;
+    const hdr = room.hdrSettings || {};
+    const hdrIntensity = hdr.intensity ?? 1.0;
+    const hdrRotationRad = ((hdr.rotation ?? 0) * Math.PI) / 180;
+    const showHdrBg = hdr.showBackground ?? false;
+    const hdrBlur = hdr.backgroundBlur ?? 0.0;
+    const disableManualLights = hdr.disableManualLights ?? false;
 
     if (rendererRef.current) {
       rendererRef.current.toneMappingExposure = exposure;
     }
 
-    if (sceneRef.current) {
-      if (preset === 'clean_studio') {
-        sceneRef.current.background = new THREE.Color('#dbeafe');
-      } else if (preset === 'daylight') {
-        if (!daylightTextureRef.current) {
-          daylightTextureRef.current = createDaylightGradientTexture();
+    const isHdrPreset = preset === 'hdr_144' || preset === 'hdr_185';
+    const hdrUrl = isHdrPreset
+      ? (preset === 'hdr_144'
+          ? '/textures/hdr/144_hdrmaps_com_free_2K.exr'
+          : '/textures/hdr/185_hdrmaps_com_free_1K.exr')
+      : null;
+
+    if (sceneRef.current && rendererRef.current) {
+      // Rotation
+      if ('environmentRotation' in sceneRef.current) {
+        (sceneRef.current as any).environmentRotation.set(0, hdrRotationRad, 0);
+      }
+      if ('backgroundRotation' in sceneRef.current) {
+        (sceneRef.current as any).backgroundRotation.set(0, hdrRotationRad, 0);
+      }
+      if ('backgroundBlurriness' in sceneRef.current) {
+        (sceneRef.current as any).backgroundBlurriness = isHdrPreset && showHdrBg ? hdrBlur : 0;
+      }
+
+      if (isHdrPreset && hdrUrl) {
+        if (!exrLoaderRef.current) {
+          exrLoaderRef.current = new EXRLoader();
         }
-        sceneRef.current.background = daylightTextureRef.current;
+
+        const cached = hdrTextureCacheRef.current.get(hdrUrl);
+        if (cached) {
+          sceneRef.current.environment = cached.pmrem;
+          if ('environmentIntensity' in sceneRef.current) {
+            (sceneRef.current as any).environmentIntensity = hdrIntensity;
+          }
+          if (showHdrBg) {
+            sceneRef.current.background = cached.raw;
+          } else {
+            sceneRef.current.background = new THREE.Color('#141923');
+          }
+        } else {
+          exrLoaderRef.current.load(
+            hdrUrl,
+            (rawTexture) => {
+              rawTexture.mapping = THREE.EquirectangularReflectionMapping;
+              if (rendererRef.current && sceneRef.current) {
+                const pmremGen = new THREE.PMREMGenerator(rendererRef.current);
+                pmremGen.compileEquirectangularShader();
+                const pmremTex = pmremGen.fromEquirectangular(rawTexture).texture;
+                hdrTextureCacheRef.current.set(hdrUrl, { raw: rawTexture, pmrem: pmremTex });
+
+                if ((roomRef.current.environmentPreset || 'dark_studio') === preset) {
+                  sceneRef.current.environment = pmremTex;
+                  if ('environmentIntensity' in sceneRef.current) {
+                    (sceneRef.current as any).environmentIntensity = hdrIntensity;
+                  }
+                  if (roomRef.current.hdrSettings?.showBackground) {
+                    sceneRef.current.background = rawTexture;
+                  }
+                }
+              }
+            },
+            undefined,
+            (err) => {
+              console.error('Error loading EXR HDR texture:', err);
+            }
+          );
+        }
       } else {
-        sceneRef.current.background = new THREE.Color('#141923');
+        // Standard studio environment
+        if (defaultEnvTextureRef.current) {
+          sceneRef.current.environment = defaultEnvTextureRef.current;
+        }
+        if ('environmentIntensity' in sceneRef.current) {
+          (sceneRef.current as any).environmentIntensity = 1.0;
+        }
+
+        if (preset === 'clean_studio') {
+          sceneRef.current.background = new THREE.Color('#dbeafe');
+        } else if (preset === 'daylight') {
+          if (!daylightTextureRef.current) {
+            daylightTextureRef.current = createDaylightGradientTexture();
+          }
+          sceneRef.current.background = daylightTextureRef.current;
+        } else {
+          sceneRef.current.background = new THREE.Color('#141923');
+        }
       }
     }
 
     if (outdoorMeshRef.current) {
       const mat = outdoorMeshRef.current.material as THREE.MeshStandardMaterial;
       if (mat) {
-        if (preset === 'clean_studio') {
+        if (isHdrPreset) {
+          mat.color.set('#0f172a');
+        } else if (preset === 'clean_studio') {
           mat.color.set('#f1f5f9');
         } else if (preset === 'daylight') {
           mat.color.set('#cbd5e1');
@@ -595,36 +681,47 @@ export default function ThreeViewport({
       }
     }
 
+    // Manual Lights (can be turned off when testing pure 100% HDR IBL)
+    const manualIntensityMultiplier = (isHdrPreset && disableManualLights) ? 0.0 : 1.0;
+
     if (ambientLightRef.current) {
-      ambientLightRef.current.intensity = intensity * (preset === 'clean_studio' ? 0.75 : preset === 'daylight' ? 0.7 : 0.6);
+      ambientLightRef.current.intensity =
+        intensity * manualIntensityMultiplier * (preset === 'clean_studio' ? 0.75 : preset === 'daylight' ? 0.7 : isHdrPreset ? 0.2 : 0.6);
     }
 
     if (hemiLightRef.current) {
       if (preset === 'clean_studio') {
         hemiLightRef.current.color.set('#ffffff');
         hemiLightRef.current.groundColor.set('#cbd5e1');
-        hemiLightRef.current.intensity = intensity * 0.65;
+        hemiLightRef.current.intensity = intensity * manualIntensityMultiplier * 0.65;
       } else if (preset === 'daylight') {
         hemiLightRef.current.color.set('#e0f2fe');
         hemiLightRef.current.groundColor.set('#334155');
-        hemiLightRef.current.intensity = intensity * 0.75;
+        hemiLightRef.current.intensity = intensity * manualIntensityMultiplier * 0.75;
+      } else if (isHdrPreset) {
+        hemiLightRef.current.color.set('#ffffff');
+        hemiLightRef.current.groundColor.set('#1e293b');
+        hemiLightRef.current.intensity = intensity * manualIntensityMultiplier * 0.25;
       } else {
         hemiLightRef.current.color.set('#ffffff');
         hemiLightRef.current.groundColor.set('#334155');
-        hemiLightRef.current.intensity = intensity * 0.5;
+        hemiLightRef.current.intensity = intensity * manualIntensityMultiplier * 0.5;
       }
     }
 
     if (topLightRef.current) {
       if (preset === 'daylight') {
         topLightRef.current.color.set('#fffbeb');
-        topLightRef.current.intensity = intensity * 1.5;
+        topLightRef.current.intensity = intensity * manualIntensityMultiplier * 1.5;
       } else if (preset === 'clean_studio') {
         topLightRef.current.color.set('#ffffff');
-        topLightRef.current.intensity = intensity * 1.1;
+        topLightRef.current.intensity = intensity * manualIntensityMultiplier * 1.1;
+      } else if (isHdrPreset) {
+        topLightRef.current.color.set('#ffffff');
+        topLightRef.current.intensity = intensity * manualIntensityMultiplier * 0.8;
       } else {
         topLightRef.current.color.set('#ffffff');
-        topLightRef.current.intensity = intensity * 1.3;
+        topLightRef.current.intensity = intensity * manualIntensityMultiplier * 1.3;
       }
       const maxRoomDim = Math.max(room.width, room.depth, room.height) * 1.6 + 4;
       topLightRef.current.shadow.camera.left = -maxRoomDim;
@@ -633,7 +730,19 @@ export default function ThreeViewport({
       topLightRef.current.shadow.camera.bottom = -maxRoomDim;
       topLightRef.current.shadow.camera.updateProjectionMatrix();
     }
-  }, [room.environmentPreset, room.exposure, room.lightIntensity, room.width, room.depth, room.height]);
+
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = 0.4 * manualIntensityMultiplier;
+    }
+  }, [
+    room.environmentPreset,
+    room.exposure,
+    room.lightIntensity,
+    room.hdrSettings,
+    room.width,
+    room.depth,
+    room.height,
+  ]);
 
   // 1.5. RectAreaLight & Helper Real-Time Synchronization (Non-destructive)
   useEffect(() => {
