@@ -1,6 +1,24 @@
+'use client';
+
+import React, { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isMobileDevice =
+        window.innerWidth < 768 ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const userPrefersDesktop =
+        sessionStorage.getItem("prefer_desktop") === "1";
+      if (isMobileDevice && !userPrefersDesktop) {
+        router.replace("/mobile");
+      }
+    }
+  }, [router]);
   return (
     <>
       {/* Main Content */}

@@ -226,6 +226,11 @@ export function CoffeeBubblePaintModal({
   const [isLivePreview, setIsLivePreview] = useState<boolean>(true);
   const [activePreset, setActivePreset] = useState<string>('empty');
   const [canUndo, setCanUndo] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(2.5, +(prev + 0.25).toFixed(2)));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(0.75, +(prev - 0.25).toFixed(2)));
+  const handleResetZoom = () => setZoomLevel(1.0);
 
   // Callback Refs para garantir estabilidade máxima
   const onLivePreviewRef = useRef(onLivePreview);
@@ -807,39 +812,47 @@ export function CoffeeBubblePaintModal({
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-neutral-900 border border-white/15 rounded-3xl shadow-2xl max-w-4xl w-full flex flex-col md:flex-row overflow-hidden max-h-[92vh]">
         {/* Left Side: Interactive 2D Circular Coffee Shader Canvas */}
-        <div className="flex-1 bg-gradient-to-b from-neutral-950 via-stone-950 to-black p-6 flex flex-col items-center justify-center relative select-none">
-          {/* Quick Floating Actions on Top-Right of Canvas (Reset & Undo) */}
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-            {/* Botão Desfazer (Ctrl+Z) */}
+        <div className="flex-1 bg-gradient-to-b from-neutral-950 via-stone-950 to-black p-2 sm:p-4 flex flex-col items-center justify-center relative select-none overflow-hidden min-h-0">
+          {/* Botão Desfazer (Canto Superior Esquerdo) */}
+          <div className="absolute top-3 left-3 z-20">
             <button
               type="button"
               onClick={handleUndo}
               disabled={!canUndo}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all backdrop-blur-md border shadow-lg ${
                 canUndo
-                  ? 'bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 border-white/15 cursor-pointer'
-                  : 'bg-neutral-900/60 text-neutral-500 border-white/5 cursor-not-allowed opacity-50'
+                  ? 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 border-white/20 cursor-pointer active:scale-95'
+                  : 'bg-neutral-950/70 text-neutral-600 border-white/5 cursor-not-allowed opacity-40'
               }`}
               title="Desfazer último traço (Ctrl+Z)"
             >
               <span>↩️</span>
-              <span className="hidden sm:inline">Desfazer</span>
-            </button>
-
-            {/* Botão Limpar / Resetar */}
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-3.5 py-1.5 rounded-full text-xs font-bold text-rose-300 hover:text-white bg-rose-950/70 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-400 backdrop-blur-md shadow-lg shadow-rose-950/40 transition-all flex items-center gap-1.5 cursor-pointer group"
-              title="Limpar e resetar toda a espuma do café"
-            >
-              <span className="group-hover:rotate-180 transition-transform duration-300">🔄</span>
-              <span>Limpar / Resetar</span>
+              <span>Desfazer</span>
             </button>
           </div>
 
-          {/* Circular Mug Guide Rim */}
-          <div className="relative w-[320px] h-[320px] sm:w-[380px] sm:h-[380px] rounded-full p-2 bg-gradient-to-tr from-stone-800 via-stone-700 to-stone-900 shadow-[0_0_50px_rgba(0,0,0,0.9)] border-4 border-amber-900/40 flex items-center justify-center">
+          {/* Botão Limpar / Resetar (Canto Superior Direito) */}
+          <div className="absolute top-3 right-3 z-20">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="px-3.5 py-1.5 rounded-full text-xs font-bold text-rose-300 hover:text-white bg-rose-950/80 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-400 backdrop-blur-md shadow-lg shadow-rose-950/40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 group"
+              title="Limpar e resetar toda a espuma do café"
+            >
+              <span className="group-hover:rotate-180 transition-transform duration-300">🔄</span>
+              <span>Limpar</span>
+            </button>
+          </div>
+
+          {/* Circular Mug Guide Rim - Maximized with Dynamic Zoom Scaling */}
+          <div
+            className="relative w-[min(90vw,78vh,460px)] h-[min(90vw,78vh,460px)] aspect-square rounded-full p-2.5 bg-gradient-to-tr from-stone-800 via-stone-700 to-stone-900 shadow-[0_0_50px_rgba(0,0,0,0.9)] border-4 border-amber-900/40 flex items-center justify-center m-auto"
+            style={{
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
             {/* Ceramic Inner Lip Shadow */}
             <div className="absolute inset-2 rounded-full shadow-[inset_0_0_24px_rgba(0,0,0,0.95)] z-10 pointer-events-none" />
 
@@ -862,11 +875,45 @@ export function CoffeeBubblePaintModal({
             </div>
           </div>
 
-          <p className="text-[11px] text-neutral-400 mt-4 text-center font-mono">
-            {brushStyle === 'soft' 
-              ? '☁️ Aerógrafo dinâmico: inicia na escala atual e suaviza até 50 ao mover o mouse'
-              : `🖌️ Pincel ${brushStyle === 'organic' ? '🌿 Orgânico' : brushStyle === 'spray' ? '💦 Spray' : '⏺️ Sólido'} &bull; Arraste o mouse para pintar`}
-          </p>
+          {/* Floating Zoom Controls (Lupas Zoom + e Zoom -) */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-neutral-900/90 backdrop-blur-xl border border-white/20 rounded-full px-3 py-1.5 shadow-2xl">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 0.75}
+              className={`px-2 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
+                zoomLevel <= 0.75
+                  ? 'text-neutral-600 cursor-not-allowed'
+                  : 'text-neutral-200 hover:text-white hover:bg-white/10 active:scale-90 cursor-pointer'
+              }`}
+              title="Diminuir Zoom"
+            >
+              <span>🔍−</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              className="px-2 text-xs font-mono font-bold text-amber-400 hover:text-amber-300 transition-colors"
+              title="Resetar Zoom para 100%"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </button>
+
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 2.5}
+              className={`px-2 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
+                zoomLevel >= 2.5
+                  ? 'text-neutral-600 cursor-not-allowed'
+                  : 'text-neutral-200 hover:text-white hover:bg-white/10 active:scale-90 cursor-pointer'
+              }`}
+              title="Aumentar Zoom"
+            >
+              <span>🔍+</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Side: Tools & Presets Controls */}

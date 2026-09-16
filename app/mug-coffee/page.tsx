@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CoffeeMugScene } from '../components/coffee/CoffeeMugScene';
@@ -30,6 +31,22 @@ const EXTERIOR_TEXT_PRESETS = [
 type MainTabType = 'coffee' | 'mug_print' | 'ceramic';
 
 export default function MugCoffeePage() {
+  const router = useRouter();
+
+  // Auto-redirect mobile devices to /mobile/mug-coffee
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile =
+        window.innerWidth < 768 ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const userPrefersDesktop =
+        sessionStorage.getItem('prefer_desktop') === '1';
+      if (isMobile && !userPrefersDesktop) {
+        router.replace('/mobile/mug-coffee');
+      }
+    }
+  }, [router]);
+
   // Navigation Studio Tab
   const [activeMainTab, setActiveMainTab] = useState<MainTabType>('coffee');
 

@@ -25,6 +25,7 @@ import {
   saveAutoSaveState,
   exportProjectAsJson,
 } from './lib/project-storage';
+import { useRouter } from 'next/navigation';
 import {
   Grid3x3,
   Magnet,
@@ -82,6 +83,21 @@ const enrichFurnitureWithCatalog = (items: FurnitureInstance[]): FurnitureInstan
 };
 
 export default function StudioPage() {
+  const router = useRouter();
+
+  // Auto-redirect mobile devices to /mobile/studio
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile =
+        window.innerWidth < 768 ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const userPrefersDesktop =
+        sessionStorage.getItem('prefer_desktop') === '1';
+      if (isMobile && !userPrefersDesktop) {
+        router.replace('/mobile/studio');
+      }
+    }
+  }, [router]);
   const [projectId, setProjectId] = useState<string>('proj_default');
   const [projectName, setProjectName] = useState<string>('Cozinha & Living Integrado');
   const [isSaved, setIsSaved] = useState<boolean>(true);

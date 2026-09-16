@@ -17,6 +17,10 @@ export default function Header() {
   const pathname = usePathname();
   const [isContactOpen, setIsContactOpen] = useState(false);
 
+  if (pathname.startsWith('/mobile')) {
+    return null;
+  }
+
   return (
     <>
       {/* Desktop TopNavBar */}
