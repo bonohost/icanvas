@@ -98,7 +98,7 @@ export default function ThreeViewport({
   const transformControlsRef = useRef<TransformControls | null>(null);
   const furnitureGroupRef = useRef<THREE.Group>(new THREE.Group());
   const wallsGroupRef = useRef<THREE.Group>(new THREE.Group());
-  const floorRef = useRef<THREE.Mesh | null>(null);
+  const floorGroupRef = useRef<THREE.Group>(new THREE.Group());
   const floorMeshRef = useRef<THREE.Mesh | null>(null);
   const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const outdoorMeshRef = useRef<THREE.Mesh | null>(null);
@@ -296,7 +296,7 @@ export default function ThreeViewport({
       const otherObjects = [
         ...furnitureGroupRef.current.children,
         ...wallsGroupRef.current.children,
-        floorRef.current!,
+        ...floorGroupRef.current.children,
       ].filter((c) => c && c !== selectedObj);
       raycasterRef.current.set(start, dir);
       const intersects = raycasterRef.current.intersectObjects(otherObjects, true);
@@ -455,6 +455,7 @@ export default function ThreeViewport({
     scene.add(rectHelper);
     rectLightHelperRef.current = rectHelper;
 
+    scene.add(floorGroupRef.current);
     scene.add(furnitureGroupRef.current);
     scene.add(wallsGroupRef.current);
     scene.add(rulersGroupRef.current);
@@ -607,6 +608,14 @@ export default function ThreeViewport({
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
       }
+      floorGroupRef.current.clear();
+      wallsGroupRef.current.clear();
+      furnitureGroupRef.current.clear();
+      rulersGroupRef.current.clear();
+      floorMeshRef.current = null;
+      floorMatRef.current = null;
+      outdoorMeshRef.current = null;
+      sceneRef.current = null;
     };
   }, []);
 
@@ -824,16 +833,15 @@ export default function ThreeViewport({
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    // Check if floor geometry exists with matching dimensions
-    if (
+    // Check if floor geometry exists with matching dimensions inside floorGroupRef
+    const needsRebuild =
       !floorMeshRef.current ||
+      floorGroupRef.current.children.length === 0 ||
       floorMeshRef.current.userData?.w !== room.width ||
-      floorMeshRef.current.userData?.d !== room.depth
-    ) {
-      if (floorRef.current) {
-        sceneRef.current.remove(floorRef.current);
-      }
-      const floorGroup = new THREE.Group();
+      floorMeshRef.current.userData?.d !== room.depth;
+
+    if (needsRebuild) {
+      floorGroupRef.current.clear();
 
       const floorGeo = new THREE.PlaneGeometry(room.width, room.depth);
       const floorMat = new THREE.MeshStandardMaterial({
@@ -863,7 +871,7 @@ export default function ThreeViewport({
       floor.receiveShadow = true;
       floor.userData = { isFloor: true, w: room.width, d: room.depth };
       floorMeshRef.current = floor;
-      floorGroup.add(floor);
+      floorGroupRef.current.add(floor);
 
       const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
       const outdoorMat = new THREE.MeshStandardMaterial({
@@ -876,10 +884,7 @@ export default function ThreeViewport({
       outdoor.rotation.x = -Math.PI / 2;
       outdoor.receiveShadow = true;
       outdoorMeshRef.current = outdoor;
-      floorGroup.add(outdoor);
-
-      sceneRef.current.add(floorGroup);
-      floorRef.current = floorGroup as any;
+      floorGroupRef.current.add(outdoor);
     } else if (floorMatRef.current) {
       // In-place material updates without mesh re-instantiation or flickering
       floorMatRef.current.color.set(room.floorColor);
