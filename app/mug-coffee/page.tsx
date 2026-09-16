@@ -34,7 +34,7 @@ export default function MugCoffeePage() {
   const [activeMainTab, setActiveMainTab] = useState<MainTabType>('coffee');
 
   // --- TAB 1: COFFEE & LATTE ART STATES ---
-  const [mixValue, setMixValue] = useState<number>(1.0);
+  const [mixValue, setMixValue] = useState<number>(.33);
   const [activePreset, setActivePreset] = useState<PresetArtType | 'custom'>('text');
 
   // Custom Coffee Text Message States (Duas Linhas no Leite)
@@ -751,8 +751,8 @@ export default function MugCoffeePage() {
                     type="button"
                     onClick={() => setUsePhotoFoam(true)}
                     className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${usePhotoFoam
-                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
-                        : 'text-neutral-400 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
+                      : 'text-neutral-400 hover:text-white'
                       }`}
                   >
                     <span>📸</span> Fotográfico Real
@@ -761,8 +761,8 @@ export default function MugCoffeePage() {
                     type="button"
                     onClick={() => setUsePhotoFoam(false)}
                     className={`py-2 px-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${!usePhotoFoam
-                        ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
-                        : 'text-neutral-400 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow ring-1 ring-amber-400/50'
+                      : 'text-neutral-400 hover:text-white'
                       }`}
                   >
                     <span>✨</span> Procedural 3D

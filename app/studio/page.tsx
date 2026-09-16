@@ -7,6 +7,7 @@ import PropertiesSidebar from './components/PropertiesSidebar';
 import ProjectManagerModal from './components/ProjectManagerModal';
 import TemplatesModal from './components/TemplatesModal';
 import AiRenderModal from './components/AiRenderModal';
+import SceneCartModal from './components/SceneCartModal';
 import {
   FurnitureInstance,
   FurnitureSpec,
@@ -15,7 +16,7 @@ import {
   WallOpening,
   WallSide,
 } from './types/furniture';
-import { OpeningPreset } from './lib/furniture-data';
+import { OpeningPreset, CATALOG } from './lib/furniture-data';
 import { RoomTemplatePreset } from './lib/room-templates';
 import {
   saveProject,
@@ -48,12 +49,37 @@ import {
   ZoomIn,
   Undo2,
   Redo2,
+  ShoppingCart,
+  Tag,
 } from 'lucide-react';
 
 interface HistorySnapshot {
   furniture: FurnitureInstance[];
   room: RoomSettings;
 }
+
+// Helper to enrich/fallback product from CATALOG if missing on existing instances
+const enrichFurnitureWithCatalog = (items: FurnitureInstance[]): FurnitureInstance[] => {
+  const catalogMap = new Map<string, FurnitureSpec>();
+  CATALOG.forEach((cat) => {
+    cat.items.forEach((item) => {
+      catalogMap.set(item.id, item);
+    });
+  });
+
+  return items.map((item) => {
+    if (!item.product) {
+      const catalogItem = catalogMap.get(item.id);
+      if (catalogItem?.product) {
+        return {
+          ...item,
+          product: JSON.parse(JSON.stringify(catalogItem.product)),
+        };
+      }
+    }
+    return item;
+  });
+};
 
 export default function StudioPage() {
   const [projectId, setProjectId] = useState<string>('proj_default');
@@ -62,6 +88,8 @@ export default function StudioPage() {
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [showProductPins, setShowProductPins] = useState<boolean>(true);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const isInitialMount = useRef(true);
   const captureSnapshotRef = useRef<() => string>(() => '');
@@ -82,6 +110,23 @@ export default function StudioPage() {
       z: -0.8,
       rot: 0,
       scl: 1,
+      product: {
+        id: '238826200',
+        title: 'Balcão de Cozinha Telasul Aço 3 Portas 3 Gavetas Cristal',
+        imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+        brand: 'Telasul',
+        category: 'Cozinha & Gabinetes',
+        showPin: true,
+        stores: [
+          {
+            store: 'Magazine Luiza',
+            price: 849.0,
+            originalPrice: 999.0,
+            url: 'https://www.magazinevoce.com.br/magazinevendas3d/balcao-de-cozinha-telasul-aco-3-portas-3-gavetas-cristal/p/238826200/mo/buff/?seller_id=magazineluiza',
+            installments: '10x de R$ 84,90 sem juros',
+          },
+        ],
+      },
     },
     {
       id: 'cab-wall-1',
@@ -98,6 +143,23 @@ export default function StudioPage() {
       z: -0.8,
       rot: 0,
       scl: 1,
+      product: {
+        id: 'jf5gf650dc',
+        title: 'Armário Aéreo Itatiaia em Aço 2 Portas Branco Florença',
+        imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+        brand: 'Itatiaia',
+        category: 'Cozinha & Gabinetes',
+        showPin: true,
+        stores: [
+          {
+            store: 'Magazine Luiza',
+            price: 259.90,
+            originalPrice: 319.90,
+            url: 'https://www.magazinevoce.com.br/magazinevendas3d/armario-aereo-itatiaia-em-aco-2-portas-branco-florenca/p/jf5gf650dc/mo/moac/?seller_id=itatiaiamoveiseeletro',
+            installments: '10x de R$ 25,99 sem juros',
+          },
+        ],
+      },
     },
     {
       id: 'fridge-large',
@@ -114,6 +176,23 @@ export default function StudioPage() {
       z: -0.7,
       rot: 0,
       scl: 1,
+      product: {
+        id: '240941300',
+        title: 'Geladeira Refrigerador Brastemp Frost Free French Door Inox 559L BRO85MK',
+        imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+        brand: 'Brastemp',
+        category: 'Eletrodomésticos',
+        showPin: true,
+        stores: [
+          {
+            store: 'Magazine Luiza',
+            price: 6899.0,
+            originalPrice: 7999.0,
+            url: 'https://www.magazinevoce.com.br/magazinevendas3d/geladeira-refrigerador-brastemp-frost-free-french-door-inox-559l-bro85mkana/p/240941300/ed/grfd/?seller_id=magazineluiza',
+            installments: '10x de R$ 689,90 sem juros',
+          },
+        ],
+      },
     },
   ]);
 
@@ -124,6 +203,19 @@ export default function StudioPage() {
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
+
+  // Shoppable Scene Cart Summary Calculation (Automatic sum of primary store [0])
+  const { cartCount, cartTotal } = React.useMemo(() => {
+    let total = 0;
+    let count = 0;
+    furniture.forEach((item) => {
+      if (item.product && item.product.stores && item.product.stores.length > 0) {
+        total += item.product.stores[0].price;
+        count += 1;
+      }
+    });
+    return { cartCount: count, cartTotal: total };
+  }, [furniture]);
 
   // Undo / Redo History System (Max 50 states)
   const [pastStates, setPastStates] = useState<HistorySnapshot[]>([]);
@@ -202,7 +294,7 @@ export default function StudioPage() {
       setProjectId(autosave.id || 'proj_default');
       setProjectName(autosave.name || 'Projeto Studio 3D');
       setRoom(autosave.room);
-      setFurniture(autosave.furniture || []);
+      setFurniture(enrichFurnitureWithCatalog(autosave.furniture || []));
       if (autosave.cameraSettings) setCameraSettings(autosave.cameraSettings);
     }
   }, []);
@@ -414,6 +506,7 @@ export default function StudioPage() {
       pushHistory();
       const newInstance: FurnitureInstance = {
         ...spec,
+        product: spec.product ? JSON.parse(JSON.stringify(spec.product)) : undefined,
         uid: Date.now(),
         x: position?.x ?? (Math.random() - 0.5) * (room.width - 1),
         z: position?.z ?? (Math.random() - 0.5) * (room.depth - 1),
@@ -726,6 +819,31 @@ export default function StudioPage() {
               </span>
             </button>
 
+            {/* Shoppable Scene Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border ${
+                cartCount > 0
+                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
+                  : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
+              }`}
+              title="Abrir Carrinho do Ambiente / Lista de Compras"
+            >
+              <div className="relative">
+                <ShoppingCart className="size-3.5 text-emerald-400" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </div>
+              <span>
+                {cartCount > 0
+                  ? `Carrinho (${cartCount}) • ${cartTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                  : 'Carrinho da Cena'}
+              </span>
+            </button>
+
             <button
               onClick={handleSaveCurrent}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${isSaved
@@ -874,6 +992,19 @@ export default function StudioPage() {
             <span>Paredes Auto</span>
           </button>
 
+          <button
+            onClick={() => setShowProductPins(!showProductPins)}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
+              showProductPins
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+            }`}
+            title={showProductPins ? 'Ocultar Tags 2D de Preço' : 'Exibir Tags 2D de Preço'}
+          >
+            <Tag className="size-3.5" />
+            <span>Tags 2D</span>
+          </button>
+
           <div className="w-px h-5 bg-white/10 mx-1" />
 
           <button
@@ -921,6 +1052,8 @@ export default function StudioPage() {
             gizmoEnabled={transformMode !== 'locked'}
             gizmoMode={transformMode === 'locked' ? 'translate' : transformMode}
             onDragStart={pushHistory}
+            showProductPins={showProductPins}
+            onOpenCart={() => setIsCartOpen(true)}
             onRegisterCapture={(fn) => {
               captureSnapshotRef.current = fn;
             }}
@@ -1135,6 +1268,17 @@ export default function StudioPage() {
         room={room}
         furniture={furniture}
         projectName={projectName}
+      />
+
+      {/* Shoppable Scene Cart Modal */}
+      <SceneCartModal
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        furniture={furniture}
+        onSelectItem={(uid) => {
+          setSelectedUid(uid);
+          setIsCartOpen(false);
+        }}
       />
     </div>
   );

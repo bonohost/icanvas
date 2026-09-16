@@ -120,16 +120,232 @@ export const CATALOG: CatalogCategory[] = [
     label: 'Cozinha & Gabinetes',
     icon: 'CookingPot',
     items: [
-      { id: 'cab-base-2', name: 'Balcão Base 2 Portas', w: 0.8, d: 0.6, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenCabinet.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'cab-base-drawers', name: 'Balcão com Gaveteiro', w: 0.8, d: 0.6, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenCabinetDrawer.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'cab-corner-in', name: 'Gabinete de Canto Interno', w: 0.9, d: 0.9, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenCabinetCornerInner.glb', dm: { t: 'wood', c: '#ffffff' } },
+      {
+        id: 'cab-base-2',
+        name: 'Balcão Base 2 Portas',
+        w: 0.8,
+        d: 0.6,
+        h: 0.85,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenCabinet.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: '238826200',
+          title: 'Balcão de Cozinha Telasul Aço 3 Portas 3 Gavetas Cristal',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Telasul',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 849.00,
+              originalPrice: 999.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/balcao-de-cozinha-telasul-aco-3-portas-3-gavetas-cristal/p/238826200/mo/buff/?seller_id=magazineluiza',
+              installments: '10x de R$ 84,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'cab-base-drawers',
+        name: 'Balcão com Gaveteiro',
+        w: 0.8,
+        d: 0.6,
+        h: 0.85,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenCabinetDrawer.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: 'aj7fhb3720',
+          title: 'Balcão de Cozinha 3 Portas e 2 Gavetas Adele Cinamomo Off White CHF',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'CHF Móveis',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 489.90,
+              originalPrice: 599.90,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/balcao-de-cozinha-3-portas-e-2-gavetas-adele-bege-cinamomo-off-white-acetinado-chf/p/aj7fhb3720/mo/gcbc/?seller_id=madeiramadeira-openapi',
+              installments: '10x de R$ 48,99 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'cab-corner-in',
+        name: 'Gabinete de Canto Interno',
+        w: 0.9,
+        d: 0.9,
+        h: 0.85,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenCabinetCornerInner.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: 'jjfj454akj',
+          title: 'Balcão para Cooktop 4 ou 5 Bocas Multiuso 80cm 2 Portas ANunes',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'ANunes',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 289.00,
+              originalPrice: 349.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/balcao-para-cooktop-4-ou-5-bocas-armario-multiuso-de-cozinha-80cm-com-2-portas-anunes/p/jjfj454akj/mo/otmo/?seller_id=anunesstore',
+              installments: '10x de R$ 28,90 sem juros'
+            }
+          ]
+        }
+      },
       { id: 'cab-corner-round', name: 'Gabinete Terminal Curvo', w: 0.6, d: 0.6, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenCabinetCornerRound.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'cab-wall-single', name: 'Armário Aéreo 1 Porta', w: 0.6, d: 0.35, h: 0.7, by: 1.5, pr: 'wall', modelUrl: '/models/kitchenCabinetUpper.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'cab-wall-double', name: 'Armário Aéreo 2 Portas', w: 1.0, d: 0.35, h: 0.7, by: 1.5, pr: 'wall', modelUrl: '/models/kitchenCabinetUpperDouble.glb', dm: { t: 'wood', c: '#ffffff' } },
+      {
+        id: 'cab-wall-single',
+        name: 'Armário Aéreo 1 Porta',
+        w: 0.6,
+        d: 0.35,
+        h: 0.7,
+        by: 1.5,
+        pr: 'wall',
+        modelUrl: '/models/kitchenCabinetUpper.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: 'ceg8bcbkfh',
+          title: 'Armário Módulo Aéreo Suspenso Parede Cozinha Branco Beauty Móveis',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Beauty Móveis',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 219.00,
+              originalPrice: 279.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/armario-modulo-aereo-suspenso-4-portas-parede-cozinha-branco-beauty-moveis/p/ceg8bcbkfh/mo/moac/?seller_id=beautymoveis02',
+              installments: '10x de R$ 21,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'cab-wall-double',
+        name: 'Armário Aéreo 2 Portas',
+        w: 1.0,
+        d: 0.35,
+        h: 0.7,
+        by: 1.5,
+        pr: 'wall',
+        modelUrl: '/models/kitchenCabinetUpperDouble.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: 'jf5gf650dc',
+          title: 'Armário Aéreo Itatiaia em Aço 2 Portas Branco Florença',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Itatiaia',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 259.90,
+              originalPrice: 319.90,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/armario-aereo-itatiaia-em-aco-2-portas-branco-florenca/p/jf5gf650dc/mo/moac/?seller_id=itatiaiamoveiseeletro',
+              installments: '10x de R$ 25,99 sem juros'
+            }
+          ]
+        }
+      },
       { id: 'cab-wall-corner', name: 'Armário Aéreo de Canto', w: 0.65, d: 0.65, h: 0.7, by: 1.5, pr: 'wall', modelUrl: '/models/kitchenCabinetUpperCorner.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'cab-wall-low', name: 'Armário Aéreo Basculante', w: 0.8, d: 0.35, h: 0.4, by: 1.7, pr: 'wall', modelUrl: '/models/kitchenCabinetUpperLow.glb', dm: { t: 'wood', c: '#ffffff' } },
-      { id: 'kitchen-sink', name: 'Pia Inox com Bancada', w: 0.9, d: 0.6, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenSink.glb', dm: { t: 'metal', c: '#d4d4d8' } },
-      { id: 'kitchen-bar', name: 'Bancada Gourmet / Ilha', w: 1.4, d: 0.7, h: 0.9, by: 0, pr: 'base', modelUrl: '/models/kitchenBar.glb', dm: { t: 'wood', c: '#2c2c2c' } },
+      {
+        id: 'cab-wall-low',
+        name: 'Armário Aéreo Basculante',
+        w: 0.8,
+        d: 0.35,
+        h: 0.4,
+        by: 1.7,
+        pr: 'wall',
+        modelUrl: '/models/kitchenCabinetUpperLow.glb',
+        dm: { t: 'wood', c: '#ffffff' },
+        product: {
+          id: 'gadebac5f3',
+          title: 'Armário Aéreo de Cozinha Modular 2 Portas Básculas Nesher Imperatriz 80cm MDF',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Nesher',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 389.00,
+              originalPrice: 469.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/armario-aereo-de-cozinha-modular-2-portas-basculas-nesher-imperatriz-80cm-mdf/p/gadebac5f3/mo/otmo/?seller_id=lojaaguila',
+              installments: '10x de R$ 38,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'kitchen-sink',
+        name: 'Pia Inox com Bancada',
+        w: 0.9,
+        d: 0.6,
+        h: 0.85,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenSink.glb',
+        dm: { t: 'metal', c: '#d4d4d8' },
+        product: {
+          id: 'dk14gafhc1',
+          title: 'Gabinete de Cozinha 120cm Preto 3 Portas 1 Gaveta ShoppingRM',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'ShoppingRM',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 349.00,
+              originalPrice: 429.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/gabinete-de-cozinha-120cm-preto-3-portas-1-gaveta-s-tampo-shoppingrm/p/dk14gafhc1/mo/bgdb/',
+              installments: '10x de R$ 34,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'kitchen-bar',
+        name: 'Bancada Gourmet / Ilha',
+        w: 1.4,
+        d: 0.7,
+        h: 0.9,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenBar.glb',
+        dm: { t: 'wood', c: '#2c2c2c' },
+        product: {
+          id: 'add4bc4bac',
+          title: 'Bancada Gourmet Ilha para Cozinha com Nichos e 1 Porta Preto Genialflex',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Genialflex',
+          category: 'Cozinha & Gabinetes',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 499.00,
+              originalPrice: 629.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/bancada-gourmet-ilha-para-cozinha-com-nichos-e-1-porta-preto-genialflex/p/add4bc4bac/mo/bccz/?seller_id=madeiramadeira-openapi',
+              installments: '10x de R$ 49,90 sem juros'
+            }
+          ]
+        }
+      },
       { id: 'kitchen-bar-end', name: 'Terminal de Bancada Bar', w: 0.7, d: 0.7, h: 0.9, by: 0, pr: 'base', modelUrl: '/models/kitchenBarEnd.glb', dm: { t: 'wood', c: '#2c2c2c' } },
     ],
   },
@@ -138,17 +354,287 @@ export const CATALOG: CatalogCategory[] = [
     label: 'Eletrodomésticos',
     icon: 'Zap',
     items: [
-      { id: 'fridge-large', name: 'Geladeira Duplex Inox', w: 0.85, d: 0.8, h: 1.9, by: 0, pr: 'fr', modelUrl: '/models/kitchenFridgeLarge.glb', dm: { t: 'metal', c: '#e4e4e7' } },
+      {
+        id: 'fridge-large',
+        name: 'Geladeira Duplex Inox',
+        w: 0.85,
+        d: 0.8,
+        h: 1.9,
+        by: 0,
+        pr: 'fr',
+        modelUrl: '/models/kitchenFridgeLarge.glb',
+        dm: { t: 'metal', c: '#e4e4e7' },
+        product: {
+          id: '240941300',
+          title: 'Geladeira Refrigerador Brastemp Frost Free French Door Inox 559L BRO85MK',
+          imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+          brand: 'Brastemp',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 6899.00,
+              originalPrice: 7999.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/geladeira-refrigerador-brastemp-frost-free-french-door-inox-559l-bro85mkana/p/240941300/ed/grfd/?seller_id=magazineluiza',
+              installments: '10x de R$ 689,90 sem juros'
+            }
+          ]
+        }
+      },
       { id: 'fridge-builtin', name: 'Geladeira Embutida', w: 0.75, d: 0.75, h: 1.85, by: 0, pr: 'fr', modelUrl: '/models/kitchenFridgeBuiltIn.glb', dm: { t: 'metal', c: '#d4d4d8' } },
-      { id: 'fridge-small', name: 'Frigobar / Geladeira Compacta', w: 0.55, d: 0.6, h: 0.9, by: 0, pr: 'fr', modelUrl: '/models/kitchenFridgeSmall.glb', dm: { t: 'metal', c: '#ffffff' } },
-      { id: 'stove-gas', name: 'Fogão 4 Bocas com Forno', w: 0.6, d: 0.65, h: 0.9, by: 0, pr: 'fr', modelUrl: '/models/kitchenStove.glb', dm: { t: 'metal', c: '#18181b' } },
-      { id: 'stove-electric', name: 'Cooktop Elétrico & Forno', w: 0.6, d: 0.6, h: 0.85, by: 0, pr: 'base', modelUrl: '/models/kitchenStoveElectric.glb', dm: { t: 'metal', c: '#27272a' } },
-      { id: 'microwave', name: 'Forno Micro-ondas', w: 0.55, d: 0.4, h: 0.35, by: 1.0, pr: 'wall', modelUrl: '/models/kitchenMicrowave.glb', dm: { t: 'metal', c: '#27272a' } },
-      { id: 'coffee-machine', name: 'Cafeteira Expresso', w: 0.3, d: 0.35, h: 0.4, by: 0.85, pr: 'base', modelUrl: '/models/kitchenCoffeeMachine.glb', dm: { t: 'metal', c: '#e11d48' } },
-      { id: 'blender', name: 'Liquidificador', w: 0.25, d: 0.25, h: 0.45, by: 0.85, pr: 'base', modelUrl: '/models/kitchenBlender.glb', dm: { t: 'metal', c: '#2563eb' } },
-      { id: 'toaster', name: 'Torradeira Elétrica', w: 0.3, d: 0.2, h: 0.22, by: 0.85, pr: 'base', modelUrl: '/models/toaster.glb', dm: { t: 'metal', c: '#e2e8f0' } },
-      { id: 'hood-large', name: 'Coifa Ilha Inox Pro', w: 0.9, d: 0.6, h: 0.8, by: 1.8, pr: 'ce', modelUrl: '/models/hoodLarge.glb', dm: { t: 'metal', c: '#d4d4d8' } },
-      { id: 'hood-modern', name: 'Depurador Slim de Parede', w: 0.8, d: 0.5, h: 0.4, by: 1.6, pr: 'wall', modelUrl: '/models/hoodModern.glb', dm: { t: 'metal', c: '#18181b' } },
+      {
+        id: 'fridge-small',
+        name: 'Frigobar / Geladeira Compacta',
+        w: 0.55,
+        d: 0.6,
+        h: 0.9,
+        by: 0,
+        pr: 'fr',
+        modelUrl: '/models/kitchenFridgeSmall.glb',
+        dm: { t: 'metal', c: '#ffffff' },
+        product: {
+          id: '237218200',
+          title: 'Frigobar Electrolux 122L Branco Efficient com Controle de Temperatura EM120',
+          imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+          brand: 'Electrolux',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 1299.00,
+              originalPrice: 1549.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/frigobar-electrolux-122l-branco-efficient-com-controle-de-temperatura-em120/p/237218200/ed/rcom/?seller_id=magazineluiza',
+              installments: '10x de R$ 129,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'stove-gas',
+        name: 'Fogão 4 Bocas com Forno',
+        w: 0.6,
+        d: 0.65,
+        h: 0.9,
+        by: 0,
+        pr: 'fr',
+        modelUrl: '/models/kitchenStove.glb',
+        dm: { t: 'metal', c: '#18181b' },
+        product: {
+          id: '240695200',
+          title: 'Fogão 4 Bocas Electrolux Preto Duplo Forno Experience FE4DB',
+          imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+          brand: 'Electrolux',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 2199.00,
+              originalPrice: 2599.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/fogao-4-bocas-electrolux-preto-duplo-forno-experience-fe4db/p/240695200/ed/fg4b/?seller_id=magazineluiza',
+              installments: '10x de R$ 219,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'stove-electric',
+        name: 'Cooktop Elétrico & Forno',
+        w: 0.6,
+        d: 0.6,
+        h: 0.85,
+        by: 0,
+        pr: 'base',
+        modelUrl: '/models/kitchenStoveElectric.glb',
+        dm: { t: 'metal', c: '#27272a' },
+        product: {
+          id: 'ckh156dj07',
+          title: 'Kit Cozinha Black Cooktop Touch 4 Bocas e Forno de Embutir 75L Oster',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Oster',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 2499.00,
+              originalPrice: 2999.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/kit-cozinha-black-cooktop-touch-4-bocas-e-forno-de-embutir-75l-oster/p/ckh156dj07/mo/otmo/?seller_id=osteroficial',
+              installments: '10x de R$ 249,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'microwave',
+        name: 'Forno Micro-ondas',
+        w: 0.55,
+        d: 0.4,
+        h: 0.35,
+        by: 1.0,
+        pr: 'wall',
+        modelUrl: '/models/kitchenMicrowave.glb',
+        dm: { t: 'metal', c: '#27272a' },
+        product: {
+          id: 'jcec5200cd',
+          title: 'Micro-ondas 36 Litros Electrolux ME36B Efficient 1600W Branco',
+          imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+          brand: 'Electrolux',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 679.00,
+              originalPrice: 799.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/microondas-36-litros-electrolux-me36b-efficient-1600w-branco/p/jcec5200cd/ed/mond/?seller_id=bumpermagazine',
+              installments: '10x de R$ 67,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'coffee-machine',
+        name: 'Cafeteira Expresso',
+        w: 0.3,
+        d: 0.35,
+        h: 0.4,
+        by: 0.85,
+        pr: 'base',
+        modelUrl: '/models/kitchenCoffeeMachine.glb',
+        dm: { t: 'metal', c: '#e11d48' },
+        product: {
+          id: '236950500',
+          title: 'Cafeteira Espresso Três Corações LOV Preto',
+          imageUrl: 'https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6?w=400&q=80',
+          brand: '3 Corações',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 389.00,
+              originalPrice: 499.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/cafeteira-espresso-tres-lov-preto/p/236950500/ep/ctcr/?seller_id=magazineluiza',
+              installments: '10x de R$ 38,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'blender',
+        name: 'Liquidificador',
+        w: 0.25,
+        d: 0.25,
+        h: 0.45,
+        by: 0.85,
+        pr: 'base',
+        modelUrl: '/models/kitchenBlender.glb',
+        dm: { t: 'metal', c: '#2563eb' },
+        product: {
+          id: 'jafbgdbged',
+          title: 'Liquidificador Oster 1400 Full Preto 1400W OLIQ610',
+          imageUrl: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=400&q=80',
+          brand: 'Oster',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 169.90,
+              originalPrice: 219.90,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/liquidificador-oster-1400-full-preto-127v-1400w-oliq610-127/p/jafbgdbged/ep/liqu/?seller_id=continentalcenter',
+              installments: '10x de R$ 16,99 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'toaster',
+        name: 'Torradeira Elétrica / Air Fryer',
+        w: 0.3,
+        d: 0.2,
+        h: 0.22,
+        by: 0.85,
+        pr: 'base',
+        modelUrl: '/models/toaster.glb',
+        dm: { t: 'metal', c: '#e2e8f0' },
+        product: {
+          id: 'fak5a8ef19',
+          title: 'Fritadeira Elétrica Sem Óleo Air Fryer Amvox ARF 1412 Oven 12L',
+          imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
+          brand: 'Amvox',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 489.00,
+              originalPrice: 599.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/fritadeira-eletrica-sem-oleo-air-fryer-amvox-arf-1412-oven-12l-220v/p/fak5a8ef19/ep/efso/?seller_id=qcompra',
+              installments: '10x de R$ 48,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'hood-large',
+        name: 'Coifa Ilha Inox Pro',
+        w: 0.9,
+        d: 0.6,
+        h: 0.8,
+        by: 1.8,
+        pr: 'ce',
+        modelUrl: '/models/hoodLarge.glb',
+        dm: { t: 'metal', c: '#d4d4d8' },
+        product: {
+          id: 'ce60gd2g8k',
+          title: 'Coifa de Ilha 90cm Smart Pro Touch Midea',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Midea',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 2699.00,
+              originalPrice: 3299.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/coifa-de-ilha-90cm-smart-pro-touch-midea/p/ce60gd2g8k/ed/copa/?seller_id=mideacarrier',
+              installments: '10x de R$ 269,90 sem juros'
+            }
+          ]
+        }
+      },
+      {
+        id: 'hood-modern',
+        name: 'Depurador Slim de Parede',
+        w: 0.8,
+        d: 0.5,
+        h: 0.4,
+        by: 1.6,
+        pr: 'wall',
+        modelUrl: '/models/hoodModern.glb',
+        dm: { t: 'metal', c: '#18181b' },
+        product: {
+          id: 'ce60gd2g8k',
+          title: 'Coifa e Depurador de Parede 90cm Touch Midea',
+          imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
+          brand: 'Midea',
+          category: 'Eletrodomésticos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 2699.00,
+              originalPrice: 3299.00,
+              url: 'https://www.magazinevoce.com.br/magazinevendas3d/coifa-de-ilha-90cm-smart-pro-touch-midea/p/ce60gd2g8k/ed/copa/?seller_id=mideacarrier',
+              installments: '10x de R$ 269,90 sem juros'
+            }
+          ]
+        }
+      },
     ],
   },
   {
@@ -156,7 +642,34 @@ export const CATALOG: CatalogCategory[] = [
     label: 'Salas & Estar',
     icon: 'Sofa',
     items: [
-      { id: 'sofa-design', name: 'Sofá Design 3 Lugares', w: 2.2, d: 0.95, h: 0.85, by: 0, pr: 'up', modelUrl: '/models/loungeDesignSofa.glb', dm: { t: 'fabric', c: '#8C8578' } },
+      {
+        id: 'sofa-design',
+        name: 'Sofá Design 3 Lugares',
+        w: 2.2,
+        d: 0.95,
+        h: 0.85,
+        by: 0,
+        pr: 'up',
+        modelUrl: '/models/loungeDesignSofa.glb',
+        dm: { t: 'fabric', c: '#8C8578' },
+        product: {
+          id: 'magalu_sofa_design',
+          title: 'Sofá 3 Lugares Retrátil e Reclinável Linho Premium',
+          imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80',
+          brand: 'Mobly',
+          category: 'Salas & Estar',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 1899.90,
+              originalPrice: 2299.00,
+              url: 'https://www.magazineluiza.com.br',
+              installments: '10x de R$ 189,99 sem juros'
+            }
+          ]
+        }
+      },
       { id: 'sofa-corner', name: 'Sofá em L de Canto', w: 2.4, d: 2.0, h: 0.85, by: 0, pr: 'up', modelUrl: '/models/loungeDesignSofaCorner.glb', dm: { t: 'fabric', c: '#64748b' } },
       { id: 'sofa-long', name: 'Sofá Modular 4 Lugares', w: 2.6, d: 0.95, h: 0.8, by: 0, pr: 'up', modelUrl: '/models/loungeSofaLong.glb', dm: { t: 'fabric', c: '#334155' } },
       { id: 'sofa-lounge-std', name: 'Sofá Compacto 2 Lugares', w: 1.6, d: 0.85, h: 0.8, by: 0, pr: 'up', modelUrl: '/models/loungeSofa.glb', dm: { t: 'fabric', c: '#a8a29e' } },
@@ -164,7 +677,46 @@ export const CATALOG: CatalogCategory[] = [
       { id: 'chair-armchair', name: 'Poltrona Lounge', w: 0.9, d: 0.85, h: 0.85, by: 0, pr: 'up', modelUrl: '/models/loungeChair.glb', dm: { t: 'leather', c: '#C4853A' } },
       { id: 'chair-relax', name: 'Poltrona Relax Reclinável', w: 0.85, d: 0.9, h: 0.9, by: 0, pr: 'up', modelUrl: '/models/loungeChairRelax.glb', dm: { t: 'fabric', c: '#1e293b' } },
       { id: 'chair-design', name: 'Poltrona Escandinava', w: 0.8, d: 0.75, h: 0.8, by: 0, pr: 'up', modelUrl: '/models/loungeDesignChair.glb', dm: { t: 'fabric', c: '#e2e8f0' } },
-      { id: 'tv-modern', name: 'Smart TV 65" Ultra HD', w: 1.45, d: 0.1, h: 0.85, by: 0.7, pr: 'wall', modelUrl: '/models/televisionModern.glb', dm: { t: 'metal', c: '#0f172a' } },
+      {
+        id: 'tv-modern',
+        name: 'Smart TV 65" Ultra HD',
+        w: 1.45,
+        d: 0.1,
+        h: 0.85,
+        by: 0.7,
+        pr: 'wall',
+        modelUrl: '/models/televisionModern.glb',
+        dm: { t: 'metal', c: '#0f172a' },
+        product: {
+          id: 'magalu_tv_65',
+          title: 'Smart TV 65" 4K UHD Samsung Crystal com Wi-Fi e Alexa',
+          imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=400&q=80',
+          brand: 'Samsung',
+          category: 'Eletrônicos',
+          showPin: true,
+          stores: [
+            {
+              store: 'Magazine Luiza',
+              price: 3499.00,
+              originalPrice: 4199.00,
+              url: 'https://www.magazineluiza.com.br',
+              installments: '10x de R$ 349,90 sem juros'
+            },
+            {
+              store: 'Amazon',
+              price: 3540.00,
+              url: 'https://www.amazon.com.br',
+              installments: '10x de R$ 354,00'
+            },
+            {
+              store: 'Mercado Livre',
+              price: 3590.00,
+              url: 'https://www.mercadolivre.com.br',
+              installments: '12x de R$ 299,16'
+            }
+          ]
+        }
+      },
       { id: 'tv-cabinet', name: 'Rack para TV com Painel', w: 1.8, d: 0.45, h: 0.55, by: 0, pr: 'fr', modelUrl: '/models/cabinetTelevision.glb', dm: { t: 'wood', c: '#3b2f2f' } },
       { id: 'tv-cabinet-doors', name: 'Rack TV com Portas e Nichos', w: 1.6, d: 0.45, h: 0.6, by: 0, pr: 'fr', modelUrl: '/models/cabinetTelevisionDoors.glb', dm: { t: 'wood', c: '#ffffff' } },
       { id: 'table-coffee-rect', name: 'Mesa de Centro Carvalho', w: 1.2, d: 0.6, h: 0.4, by: 0, pr: 'fr', modelUrl: '/models/tableCoffee.glb', dm: { t: 'wood', c: '#C4A67D' } },

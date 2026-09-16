@@ -1,5 +1,25 @@
 export type MaterialType = 'fabric' | 'leather' | 'wood' | 'metal' | 'ceramic' | 'gltf';
 
+export interface ProductStoreLink {
+  store: 'Magazine Luiza' | 'Amazon' | 'Shopee' | 'Mercado Livre' | string;
+  price: number;
+  url: string;
+  originalPrice?: number;
+  installments?: string;
+  storeLogoUrl?: string;
+}
+
+export interface ProductMetadata {
+  id?: string;
+  title: string;
+  imageUrl?: string;
+  brand?: string;
+  category?: string;
+  description?: string;
+  showPin?: boolean; // Default is true if product is set
+  stores: ProductStoreLink[];
+}
+
 export interface FurnitureSpec {
   id: string;
   name: string;
@@ -9,6 +29,7 @@ export interface FurnitureSpec {
   by?: number; // Base Y (elevation from floor in meters)
   pr: 'up' | 'fr' | 'mt' | 'ce' | 'wall' | 'base'; // wall = wall unit, base = counter/floor base
   modelUrl?: string; // Optional GLB / GLTF model URL
+  product?: ProductMetadata; // Optional e-commerce / affiliate metadata
   dm: {
     t: MaterialType;
     c: string;

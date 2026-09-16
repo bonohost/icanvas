@@ -1785,6 +1785,278 @@ export default function PropertiesSidebar({
           </div>
         )}
       </div>
+
+      {/* Product & Affiliate Settings (Shop the Scene / Magalu) */}
+      <div className="space-y-3 border-t border-white/10 pt-4 pb-6">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-300">🛍️</span> Produto &amp; Afiliado
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (selected.product) {
+                // Remove product
+                onUpdate(selected.uid, { product: undefined });
+              } else {
+                // Attach new default Magazine Luiza product
+                onUpdate(selected.uid, {
+                  product: {
+                    title: selected.name,
+                    imageUrl: '',
+                    showPin: true,
+                    stores: [
+                      {
+                        store: 'Magazine Luiza',
+                        price: 99.9,
+                        url: 'https://www.magazineluiza.com.br',
+                        installments: '10x sem juros',
+                      },
+                    ],
+                  },
+                });
+              }
+            }}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded-md border transition-all ${
+              selected.product
+                ? 'bg-red-500/15 border-red-500/30 text-red-300 hover:bg-red-500/25'
+                : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+            }`}
+          >
+            {selected.product ? 'Remover Produto' : '+ Vincular Produto'}
+          </button>
+        </div>
+
+        {selected.product ? (
+          <div className="space-y-3 bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-3">
+            {/* Show Pin Toggle */}
+            <div className="flex items-center justify-between border-b border-emerald-500/10 pb-2.5">
+              <span className="text-[11px] text-zinc-300 font-medium">
+                🏷️ Exibir Tag 2D no 3D
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const curr = selected.product?.showPin !== false;
+                  onUpdate(selected.uid, {
+                    product: {
+                      ...selected.product!,
+                      showPin: !curr,
+                    },
+                  });
+                }}
+                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                  selected.product.showPin !== false ? 'bg-emerald-500' : 'bg-white/10'
+                }`}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                    selected.product.showPin !== false ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Product Title */}
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1">Título do Anúncio</label>
+              <input
+                type="text"
+                value={selected.product.title || ''}
+                onChange={(e) => {
+                  onUpdate(selected.uid, {
+                    product: {
+                      ...selected.product!,
+                      title: e.target.value,
+                    },
+                  });
+                }}
+                placeholder="Ex: Smart TV 55 UHD 4K Samsung"
+                className="w-full bg-black/40 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-400"
+              />
+            </div>
+
+            {/* Product Image URL */}
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1">URL da Foto / Imagem 2D</label>
+              <input
+                type="text"
+                value={selected.product.imageUrl || ''}
+                onChange={(e) => {
+                  onUpdate(selected.uid, {
+                    product: {
+                      ...selected.product!,
+                      imageUrl: e.target.value,
+                    },
+                  });
+                }}
+                placeholder="https://..."
+                className="w-full bg-black/40 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-400"
+              />
+            </div>
+
+            {/* Stores List (Primary store [0] is Magazine Luiza) */}
+            <div className="space-y-2 border-t border-emerald-500/10 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">
+                  Lojas &amp; Preços (Principal: 1ª Loja)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentStores = selected.product?.stores || [];
+                    onUpdate(selected.uid, {
+                      product: {
+                        ...selected.product!,
+                        stores: [
+                          ...currentStores,
+                          {
+                            store: 'Amazon',
+                            price: currentStores[0]?.price || 99.9,
+                            url: 'https://www.amazon.com.br',
+                          },
+                        ],
+                      },
+                    });
+                  }}
+                  className="text-[9px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+                >
+                  + Adicionar Loja
+                </button>
+              </div>
+
+              {selected.product.stores.map((store, sIdx) => (
+                <div
+                  key={sIdx}
+                  className="p-2.5 rounded-lg bg-black/30 border border-emerald-500/20 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {sIdx === 0 ? '⭐ Loja Principal' : `Loja ${sIdx + 1}`}
+                    </span>
+                    {sIdx > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newStores = selected.product!.stores.filter((_, idx) => idx !== sIdx);
+                          onUpdate(selected.uid, {
+                            product: {
+                              ...selected.product!,
+                              stores: newStores,
+                            },
+                          });
+                        }}
+                        className="text-[10px] text-red-400 hover:text-red-300"
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-zinc-400 block mb-0.5">Nome da Loja</label>
+                      <input
+                        type="text"
+                        value={store.store}
+                        onChange={(e) => {
+                          const newStores = [...selected.product!.stores];
+                          newStores[sIdx] = { ...newStores[sIdx], store: e.target.value };
+                          onUpdate(selected.uid, {
+                            product: { ...selected.product!, stores: newStores },
+                          });
+                        }}
+                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-zinc-400 block mb-0.5">Preço (R$)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={store.price}
+                        onChange={(e) => {
+                          const newStores = [...selected.product!.stores];
+                          newStores[sIdx] = {
+                            ...newStores[sIdx],
+                            price: parseFloat(e.target.value) || 0,
+                          };
+                          onUpdate(selected.uid, {
+                            product: { ...selected.product!, stores: newStores },
+                          });
+                        }}
+                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-zinc-400 block mb-0.5">De (R$ Original)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={store.originalPrice || ''}
+                        onChange={(e) => {
+                          const newStores = [...selected.product!.stores];
+                          newStores[sIdx] = {
+                            ...newStores[sIdx],
+                            originalPrice: e.target.value ? parseFloat(e.target.value) : undefined,
+                          };
+                          onUpdate(selected.uid, {
+                            product: { ...selected.product!, stores: newStores },
+                          });
+                        }}
+                        placeholder="Opcional"
+                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-zinc-400 focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-zinc-400 block mb-0.5">Parcelamento</label>
+                      <input
+                        type="text"
+                        value={store.installments || ''}
+                        onChange={(e) => {
+                          const newStores = [...selected.product!.stores];
+                          newStores[sIdx] = { ...newStores[sIdx], installments: e.target.value };
+                          onUpdate(selected.uid, {
+                            product: { ...selected.product!, stores: newStores },
+                          });
+                        }}
+                        placeholder="Ex: 10x s/ juros"
+                        className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] text-zinc-400 block mb-0.5">Link de Afiliado (URL)</label>
+                    <input
+                      type="url"
+                      value={store.url}
+                      onChange={(e) => {
+                        const newStores = [...selected.product!.stores];
+                        newStores[sIdx] = { ...newStores[sIdx], url: e.target.value };
+                        onUpdate(selected.uid, {
+                          product: { ...selected.product!, stores: newStores },
+                        });
+                      }}
+                      placeholder="https://www.magazinevoce.com.br/..."
+                      className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-400 font-mono"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11px] text-zinc-500 italic">
+            Nenhum produto vinculado. Clique em <b>+ Vincular Produto</b> para cadastrar link da Magazine Luiza e tag no 3D.
+          </p>
+        )}
+      </div>
     </aside>
   );
 }

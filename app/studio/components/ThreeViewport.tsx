@@ -11,6 +11,7 @@ import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
+import { ShoppingCart } from 'lucide-react';
 
 interface ViewportProps {
   room: RoomSettings;
@@ -32,6 +33,8 @@ interface ViewportProps {
   gizmoEnabled?: boolean;
   gizmoMode?: 'translate' | 'rotate_y' | 'rotate_full';
   onDragStart?: () => void;
+  showProductPins?: boolean;
+  onOpenCart?: () => void;
 }
 
 const SNAP_THRESHOLD = 0.15;
@@ -84,6 +87,8 @@ export default function ThreeViewport({
   gizmoEnabled = false,
   gizmoMode = 'translate',
   onDragStart,
+  showProductPins = true,
+  onOpenCart,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -138,6 +143,11 @@ export default function ThreeViewport({
   useEffect(() => {
     collisionOnRef.current = collisionOn;
   }, [collisionOn]);
+
+  const furnitureRef = useRef(furniture);
+  useEffect(() => {
+    furnitureRef.current = furniture;
+  }, [furniture]);
 
   const onSelectRef = useRef(onSelect);
   useEffect(() => {
@@ -530,6 +540,41 @@ export default function ThreeViewport({
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
+      }
+
+      // Update 2D Shoppable Product Pins on screen
+      if (cameraRef.current && containerRef.current) {
+        const container = containerRef.current;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        const pinElements = container.querySelectorAll<HTMLElement>('[data-product-pin-uid]');
+
+        pinElements.forEach((pinEl) => {
+          const uidStr = pinEl.getAttribute('data-product-pin-uid');
+          if (!uidStr) return;
+          const uid = parseInt(uidStr, 10);
+          const item = furnitureRef.current.find((f) => f.uid === uid);
+          if (!item) {
+            pinEl.style.opacity = '0';
+            pinEl.style.pointerEvents = 'none';
+            return;
+          }
+
+          const pos = new THREE.Vector3(item.x, (item.by || 0) + item.h + 0.15, item.z);
+          pos.project(cameraRef.current!);
+
+          // Check if behind camera or far off screen
+          if (pos.z > 1.0 || pos.z < -1.0) {
+            pinEl.style.opacity = '0';
+            pinEl.style.pointerEvents = 'none';
+          } else {
+            const screenX = (pos.x * 0.5 + 0.5) * w;
+            const screenY = (-(pos.y * 0.5) + 0.5) * h;
+            pinEl.style.opacity = '1';
+            pinEl.style.pointerEvents = 'auto';
+            pinEl.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translate(-50%, -100%)`;
+          }
+        });
       }
     };
     animate();
@@ -1653,5 +1698,56 @@ export default function ThreeViewport({
     };
   }, [updateRulers]);
 
-  return <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden" />;
+  return (
+    <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden">
+      {/* 2D Shoppable Product Hotspots Overlay */}
+      {showProductPins && (
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+          {furniture
+            .filter(
+              (item) =>
+                item.product &&
+                item.product.stores &&
+                item.product.stores.length > 0 &&
+                item.product.showPin !== false
+            )
+            .map((item) => {
+              const product = item.product!;
+              const primaryStore = product.stores[0];
+              const isSelected = selectedUid === item.uid;
+
+              return (
+                <div
+                  key={item.uid}
+                  data-product-pin-uid={item.uid}
+                  className="absolute top-0 left-0 transition-opacity duration-150 pointer-events-auto"
+                  style={{ opacity: 0 }}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(item.uid);
+                      if (onOpenCart) onOpenCart();
+                    }}
+                    className={`group relative w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-2xl transition-all duration-300 cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500 text-white shadow-emerald-500/60 ring-2 ring-white scale-110'
+                        : 'bg-zinc-900/90 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-400/50 hover:border-emerald-300 shadow-black/90 hover:scale-110'
+                    }`}
+                    title={`${product.title || item.name} • Clique para ver no Carrinho`}
+                  >
+                    {/* Pulsing Radar Ring */}
+                    <span className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping pointer-events-none" />
+                    
+                    {/* Center Icon */}
+                    <ShoppingCart className="w-4 h-4 transition-transform group-hover:scale-110" />
+                  </button>
+                </div>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
 }
