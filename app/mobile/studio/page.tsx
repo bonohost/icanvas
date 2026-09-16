@@ -36,11 +36,15 @@ import {
   Sliders,
   Sun,
   Grid,
-  Box
+  Box,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
+import TemplatesModal from '../../studio/components/TemplatesModal';
 import { CATALOG, FLOOR_PBR_PRESETS } from '../../studio/lib/furniture-data';
+import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templates';
 import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
 import { getAutoSavedProject, saveAutoSaveState } from '../../studio/lib/project-storage';
 
@@ -77,6 +81,9 @@ export default function MobileStudioPage() {
   const [isLandscape, setIsLandscape] = useState<boolean>(false);
   const [isLandscapePanelOpen, setIsLandscapePanelOpen] = useState<boolean>(true);
   const [isCartModalOpen, setIsCartModalOpen] = useState<boolean>(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [templateToast, setTemplateToast] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showProductPins, setShowProductPins] = useState<boolean>(true);
@@ -89,9 +96,9 @@ export default function MobileStudioPage() {
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
 
   const [room, setRoom] = useState<RoomSettings>({
-    width: 4.5,
-    depth: 3.2,
-    height: 2.6,
+    width: 4.8,
+    depth: 3.6,
+    height: 2.7,
     floorColor: '#ffffff',
     floorTextureUrl: '/textures/floor-porcelain.webp',
     floorTileX: 4,
@@ -99,13 +106,20 @@ export default function MobileStudioPage() {
     floorRoughness: 0.15,
     floorMetalness: 0.05,
     walls: {
-      back: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      front: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      left: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      right: { color: '#f8fafc', tileX: 2, tileY: 1 },
+      back: {
+        color: '#ffffff',
+        textureUrl: '/textures/subway-tile.webp',
+        tileX: 4,
+        tileY: 2,
+        roughness: 0.18,
+        metalness: 0.05,
+      },
+      front: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
+      left: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
+      right: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
     },
     openings: [],
-    lightIntensity: 1.0,
+    lightIntensity: 1.4,
     exposure: 1.0,
     environmentPreset: 'daylight',
     reflectionOpacity: 0.05,
@@ -119,13 +133,48 @@ export default function MobileStudioPage() {
     fov: 45,
   });
 
-  // Load auto-save on mount
+  // Apply room template preset
+  const handleApplyTemplate = useCallback(
+    (template: RoomTemplatePreset, mode: 'replace' | 'append') => {
+      const timestamp = Date.now();
+      const newItems: FurnitureInstance[] = template.furniture.map((item, idx) => ({
+        ...item,
+        uid: timestamp + idx,
+      }));
+
+      if (mode === 'replace') {
+        setRoom(template.room);
+        setFurniture(enrichFurnitureWithCatalog(newItems));
+        setSelectedUid(null);
+        setTemplateToast(`Ambiente "${template.name}" aplicado!`);
+      } else {
+        setFurniture((prev) => enrichFurnitureWithCatalog([...prev, ...newItems]));
+        setTemplateToast(`${newItems.length} móveis adicionados!`);
+      }
+      setTimeout(() => setTemplateToast(null), 3000);
+    },
+    []
+  );
+
+  // Load auto-save or default to Kitchen template
   useEffect(() => {
     const autosave = getAutoSavedProject();
-    if (autosave) {
+    if (autosave && autosave.furniture && autosave.furniture.length > 0) {
       if (autosave.room) setRoom(autosave.room);
-      if (autosave.furniture) setFurniture(enrichFurnitureWithCatalog(autosave.furniture));
+      setFurniture(enrichFurnitureWithCatalog(autosave.furniture));
       if (autosave.cameraSettings) setCameraSettings(autosave.cameraSettings);
+    } else {
+      // Default: Initial Gourmet Kitchen Scene
+      const kitchenTpl = ROOM_TEMPLATES.find((t) => t.id === 'kitchen-gourmet') || ROOM_TEMPLATES[0];
+      if (kitchenTpl) {
+        setRoom(kitchenTpl.room);
+        const timestamp = Date.now();
+        const initialItems: FurnitureInstance[] = kitchenTpl.furniture.map((item, idx) => ({
+          ...item,
+          uid: timestamp + idx,
+        }));
+        setFurniture(enrichFurnitureWithCatalog(initialItems));
+      }
     }
   }, []);
 
@@ -153,6 +202,62 @@ export default function MobileStudioPage() {
     window.addEventListener('resize', checkOrientation);
     return () => window.removeEventListener('resize', checkOrientation);
   }, []);
+
+  // Fullscreen state listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isDocFull = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isDocFull);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      const doc = document as any;
+      const docEl = document.documentElement as any;
+
+      if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement && !doc.msFullscreenElement) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          await docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen();
+        }
+      } else {
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle failed:', err);
+    }
+  };
 
   // Selected Furniture Item Helper
   const selectedItem = useMemo(() => {
@@ -352,37 +457,38 @@ export default function MobileStudioPage() {
       {/* ========================================================= */}
       {/* TOP FLOATING HUD (HEADER & CONTROLS)                      */}
       {/* ========================================================= */}
-      <div className="absolute top-3.5 left-16 right-3.5 z-30 flex items-center justify-between pointer-events-none">
-        {/* Camera Quick Presets */}
-        <div className="flex items-center gap-1 bg-neutral-900/85 backdrop-blur-xl border border-white/15 rounded-full p-1 shadow-2xl pointer-events-auto">
-          <button
-            onClick={() => setCameraPreset('iso')}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-              cameraSettings.id === 'iso' ? 'bg-blue-600 text-white shadow' : 'text-neutral-300 hover:text-white'
-            }`}
-          >
-            3D Iso
-          </button>
-          <button
-            onClick={() => setCameraPreset('top')}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-              cameraSettings.id === 'top' ? 'bg-blue-600 text-white shadow' : 'text-neutral-300 hover:text-white'
-            }`}
-          >
-            Planta
-          </button>
-          <button
-            onClick={() => setCameraPreset('front')}
-            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-              cameraSettings.id === 'front' ? 'bg-blue-600 text-white shadow' : 'text-neutral-300 hover:text-white'
-            }`}
-          >
-            Frente
-          </button>
+      <div className="absolute top-3.5 left-16 right-3.5 z-30 flex items-center justify-between pointer-events-none gap-2">
+        {/* Camera Select Dropdown (Compact for maximum screen space) */}
+        <div className="relative pointer-events-auto">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-900/90 backdrop-blur-xl border border-white/15 rounded-full shadow-2xl text-white">
+            <Camera className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <select
+              value={cameraSettings.id}
+              onChange={(e) => setCameraPreset(e.target.value as 'iso' | 'top' | 'front')}
+              className="bg-transparent text-[11px] font-bold text-white outline-none cursor-pointer pr-1 appearance-none"
+            >
+              <option value="iso" className="bg-neutral-900 text-white">3D Iso</option>
+              <option value="top" className="bg-neutral-900 text-white">Planta 2D</option>
+              <option value="front" className="bg-neutral-900 text-white">Frente</option>
+            </select>
+            <ChevronDown className="w-3 h-3 text-neutral-400 pointer-events-none shrink-0" />
+          </div>
         </div>
 
         {/* Right Floating Quick Tools */}
-        <div className="flex items-center gap-1.5 pointer-events-auto">
+        <div className="flex items-center gap-1.5 pointer-events-auto shrink-0">
+          {/* Templates / Ambientes Prontos Button (Visible only in Landscape if space permits) */}
+          {isLandscape && (
+            <button
+              onClick={() => setIsTemplatesOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[10px] shadow-lg border border-blue-400/40 active:scale-95 transition-all"
+              title="Biblioteca de Ambientes 3D Prontos (Cozinha, Sala, etc)"
+            >
+              <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+              <span>Ambientes</span>
+            </button>
+          )}
+
           {/* Pins Toggle Button */}
           <button
             onClick={() => setShowProductPins(!showProductPins)}
@@ -396,12 +502,12 @@ export default function MobileStudioPage() {
             <ShoppingBag className="w-3.5 h-3.5" />
           </button>
 
-          {/* Cart Modal Button */}
+          {/* Cart Modal Button (Spacious & Visible) */}
           <button
             onClick={() => setIsCartModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs shadow-xl shadow-emerald-950/50 border border-emerald-400/40 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs shadow-xl shadow-emerald-950/50 border border-emerald-400/40 active:scale-95 transition-all whitespace-nowrap shrink-0"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse shrink-0" />
             <span>
               {cartCount > 0
                 ? `R$ ${cartTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -431,6 +537,18 @@ export default function MobileStudioPage() {
           showProductPins={showProductPins}
           onOpenCart={() => setIsCartModalOpen(true)}
         />
+
+        {/* Fullscreen Toggle Button (Bottom-Left of Viewport) */}
+        <button
+          onClick={toggleFullscreen}
+          className={`absolute bottom-3 left-3 z-30 px-3 py-1.5 rounded-2xl bg-neutral-900/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer hover:bg-neutral-800 pointer-events-auto ${
+            isFullscreen ? 'border-blue-400/80 text-blue-300 ring-1 ring-blue-400/40' : 'text-neutral-200'
+          }`}
+          title={isFullscreen ? 'Sair da Tela Cheia' : 'Entrar em Tela Cheia (Imersivo)'}
+        >
+          {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-blue-400" /> : <Maximize className="w-3.5 h-3.5 text-neutral-300" />}
+          <span className="text-[10px] font-bold">{isFullscreen ? 'Sair Fullscreen' : 'Tela Cheia'}</span>
+        </button>
 
         {/* Selected Item Quick Action Badge (Top Center of Viewport) */}
         {selectedItem && (
@@ -846,6 +964,24 @@ export default function MobileStudioPage() {
           {/* ================= TAB 1: CATÁLOGO DE MÓVEIS ================= */}
           {activeTab === 'catalog' && (
             <div className="space-y-3.5 animate-in fade-in duration-200">
+              {/* Quick Template Switcher Card */}
+              <div
+                onClick={() => setIsTemplatesOpen(true)}
+                className="p-2.5 rounded-2xl bg-gradient-to-r from-blue-950/80 via-indigo-950/70 to-blue-900/80 border border-blue-500/40 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:border-blue-400 shadow-lg"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shrink-0">
+                    <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                  </div>
+                  <h4 className="text-xs font-bold text-white">
+                    Ambientes Prontos 3D
+                  </h4>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] shadow shrink-0">
+                  Explorar
+                </div>
+              </div>
+
               {/* Search Bar & Category Filter */}
               <div className="space-y-2">
                 <div className="relative">
@@ -1063,6 +1199,15 @@ export default function MobileStudioPage() {
           {/* ================= TAB 3: SALA, PISO & PAREDES ================= */}
           {activeTab === 'room' && (
             <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Preset Environments Switcher Button */}
+              <button
+                onClick={() => setIsTemplatesOpen(true)}
+                className="w-full py-3 px-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                <span>Trocar por Ambiente Pronto (Cozinhas, Salas...)</span>
+              </button>
+
               {/* Room Dimensions */}
               <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
                 <span className="text-xs font-bold text-neutral-200 block">
@@ -1150,6 +1295,20 @@ export default function MobileStudioPage() {
           setActiveTab('properties');
         }}
       />
+
+      {/* Room Templates Modal */}
+      <TemplatesModal
+        isOpen={isTemplatesOpen}
+        onClose={() => setIsTemplatesOpen(false)}
+        onApplyTemplate={handleApplyTemplate}
+      />
+
+      {/* Toast Notification */}
+      {templateToast && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-blue-600 text-white font-bold text-xs shadow-2xl border border-blue-400/40 animate-in fade-in slide-in-from-top-3 duration-200">
+          {templateToast}
+        </div>
+      )}
     </div>
   );
 }
