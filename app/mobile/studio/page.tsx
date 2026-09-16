@@ -35,7 +35,8 @@ import {
   Compass,
   Sliders,
   Sun,
-  Grid
+  Grid,
+  Box
 } from 'lucide-react';
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
@@ -896,16 +897,25 @@ export default function MobileStudioPage() {
                       className="group rounded-2xl p-2.5 bg-white/[0.03] border border-white/10 hover:border-blue-500/50 flex flex-col justify-between cursor-pointer active:scale-95 transition-all relative overflow-hidden"
                     >
                       <div>
-                        {spec.product?.imageUrl && (
-                          <div className="h-24 w-full rounded-xl overflow-hidden mb-2 bg-neutral-950 border border-white/5">
-                            <img
-                              alt={spec.name}
-                              src={spec.product.imageUrl}
-                              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                            />
+                        {/* 3D Blueprint / Isometric Representation (Prepared for Future 3D Snapshots) */}
+                        <div className="h-20 w-full rounded-xl mb-2 bg-gradient-to-br from-white/[0.07] via-white/[0.02] to-black/60 border border-white/10 flex flex-col items-center justify-center relative overflow-hidden group-hover:border-blue-500/40 transition-colors">
+                          {/* Subtle background grid pattern */}
+                          <div
+                            className="absolute inset-0 opacity-15 pointer-events-none"
+                            style={{
+                              backgroundImage:
+                                'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)',
+                              backgroundSize: '12px 12px',
+                            }}
+                          />
+                          <div className="relative z-10 flex items-center justify-center">
+                            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 shadow-inner group-hover:scale-110 group-hover:bg-blue-500/20 transition-all duration-300">
+                              <Box className="w-5 h-5" />
+                            </div>
                           </div>
-                        )}
-                        <h4 className="text-xs font-bold text-white leading-tight line-clamp-1">
+                        </div>
+
+                        <h4 className="text-xs font-bold text-white leading-tight line-clamp-1 group-hover:text-blue-300 transition-colors">
                           {spec.name}
                         </h4>
                         <span className="text-[10px] text-neutral-400 font-mono">
