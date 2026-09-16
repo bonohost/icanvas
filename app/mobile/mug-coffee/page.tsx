@@ -14,7 +14,9 @@ import {
   RefreshCw,
   Type,
   Check,
-  Upload
+  Upload,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 import { CoffeeMugScene } from '../../components/coffee/CoffeeMugScene';
 import { CoffeeBubblePaintModal } from '../../components/coffee/CoffeeBubblePaintModal';
@@ -45,7 +47,7 @@ type MobileTab = 'coffee' | 'print' | 'ceramic';
 
 export default function MobileMugCoffeePage() {
   const [activeTab, setActiveTab] = useState<MobileTab>('coffee');
-  const [sheetExpanded, setSheetExpanded] = useState<boolean>(false);
+  const [sheetCollapsed, setSheetCollapsed] = useState<boolean>(false);
   const [isLandscape, setIsLandscape] = useState<boolean>(false);
   const [isLandscapePanelOpen, setIsLandscapePanelOpen] = useState<boolean>(true);
   const [isBubblePaintModalOpen, setIsBubblePaintModalOpen] = useState<boolean>(false);
@@ -93,6 +95,63 @@ export default function MobileMugCoffeePage() {
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [photoFoamTexture, setPhotoFoamTexture] = useState<THREE.Texture | null>(null);
   const [currentCoffeeTexture, setCurrentCoffeeTexture] = useState<THREE.Texture | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Fullscreen state listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isDocFull = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isDocFull);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      const doc = document as any;
+      const docEl = document.documentElement as any;
+
+      if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement && !doc.msFullscreenElement) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          await docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen();
+        }
+      } else {
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle not permitted or failed:', err);
+    }
+  };
 
   // Detect Orientation
   useEffect(() => {
@@ -259,14 +318,26 @@ export default function MobileMugCoffeePage() {
         </button>
       </div>
 
+      {/* Floating Bottom Left Action - Fullscreen Toggle (especially for Landscape mobile) */}
+      <button
+        onClick={toggleFullscreen}
+        className={`absolute bottom-3 left-3 z-30 px-3 py-2 rounded-2xl bg-neutral-900/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer hover:bg-neutral-800 ${
+          isFullscreen ? 'border-amber-400/80 text-amber-300 ring-1 ring-amber-400/40' : 'text-neutral-200'
+        }`}
+        title={isFullscreen ? 'Sair da Tela Cheia' : 'Entrar em Tela Cheia (Imersivo)'}
+      >
+        {isFullscreen ? <Minimize className="w-4 h-4 text-amber-400" /> : <Maximize className="w-4 h-4 text-neutral-300" />}
+        <span className="text-[11px] font-semibold">{isFullscreen ? 'Sair Fullscreen' : 'Tela Cheia'}</span>
+      </button>
+
       {/* 3D Canvas Viewport (Dynamic Height depending on orientation and sheet) */}
       <div
         className={`w-full transition-all duration-300 relative ${
           isLandscape
             ? 'h-full'
-            : sheetExpanded
-            ? 'h-[32dvh]'
-            : 'h-[58dvh]'
+            : sheetCollapsed
+            ? 'h-[calc(100dvh-36px)]'
+            : 'h-[56dvh]'
         }`}
       >
         {currentCoffeeTexture && (
@@ -329,65 +400,67 @@ export default function MobileMugCoffeePage() {
       {/* MOBILE BOTTOM SHEET (PORTRAIT) / SIDE DRAWER (LANDSCAPE) */}
       {/* ========================================================= */}
       <div
-        className={`z-40 bg-neutral-900/95 backdrop-blur-2xl border-white/15 flex flex-col transition-transform duration-300 shadow-2xl ${
+        className={`z-40 bg-neutral-900/95 backdrop-blur-2xl border-white/15 flex flex-col transition-all duration-300 shadow-2xl ${
           isLandscape
             ? `fixed top-0 bottom-0 right-0 w-[340px] h-full rounded-l-3xl border-l ${
                 isLandscapePanelOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
               }`
-            : sheetExpanded
-            ? 'flex-1 h-[65dvh] border-t rounded-t-3xl'
-            : 'flex-1 h-[42dvh] border-t rounded-t-3xl'
+            : sheetCollapsed
+            ? 'h-[36px] border-t rounded-t-2xl overflow-hidden'
+            : 'flex-1 h-[44dvh] border-t rounded-t-3xl'
         }`}
       >
-        {/* Drag Handle & Expand Toggle (Portrait only) */}
+        {/* Drag Handle & Expand/Collapse Toggle (Portrait only) */}
         {!isLandscape && (
           <div
-            onClick={() => setSheetExpanded(!sheetExpanded)}
-            className="w-full py-2.5 flex flex-col items-center justify-center cursor-pointer active:opacity-70"
+            onClick={() => setSheetCollapsed(!sheetCollapsed)}
+            className="w-full h-[36px] flex flex-col items-center justify-center cursor-pointer active:opacity-70 select-none shrink-0"
           >
-            <div className="w-12 h-1 rounded-full bg-white/30" />
-            <div className="flex items-center gap-1 text-[10px] text-neutral-400 mt-1 font-medium">
-              <span>{sheetExpanded ? 'Recolher Painel' : 'Puxar para Expandir'}</span>
-              {sheetExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+            <div className="w-10 h-1 rounded-full bg-white/30" />
+            <div className="flex items-center gap-1 text-[10px] text-neutral-400 font-medium">
+              <span>{sheetCollapsed ? 'Puxar para Expandir' : 'Recolher Painel'}</span>
+              {sheetCollapsed ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </div>
           </div>
         )}
 
-        {/* 3 Main Navigation Tabs */}
-        <div className="px-4 pb-2">
-          <div className="grid grid-cols-3 gap-1 p-1 bg-black/50 rounded-2xl border border-white/10 text-xs font-semibold">
-            <button
-              onClick={() => setActiveTab('coffee')}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'coffee'
-                  ? 'bg-amber-500 text-white shadow-lg font-bold'
-                  : 'text-neutral-400 hover:text-white'
-                }`}
-            >
-              <Coffee className="w-3.5 h-3.5" />
-              <span>Café</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('print')}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'print'
-                  ? 'bg-amber-500 text-white shadow-lg font-bold'
-                  : 'text-neutral-400 hover:text-white'
-                }`}
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span>Estampa</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('ceramic')}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'ceramic'
-                  ? 'bg-amber-500 text-white shadow-lg font-bold'
-                  : 'text-neutral-400 hover:text-white'
-                }`}
-            >
-              <Palette className="w-3.5 h-3.5" />
-              <span>Cores</span>
-            </button>
+        {/* Inner Content (Tabs + Options) - Hidden completely when collapsed */}
+        <div className={`flex-1 flex flex-col min-h-0 transition-opacity duration-200 ${sheetCollapsed && !isLandscape ? 'hidden' : 'opacity-100'}`}>
+          {/* 3 Main Navigation Tabs */}
+          <div className="px-4 pb-2 shrink-0">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-black/50 rounded-2xl border border-white/10 text-xs font-semibold">
+              <button
+                onClick={() => setActiveTab('coffee')}
+                className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'coffee'
+                    ? 'bg-amber-500 text-white shadow-lg font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                  }`}
+              >
+                <Coffee className="w-3.5 h-3.5" />
+                <span>Café</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('print')}
+                className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'print'
+                    ? 'bg-amber-500 text-white shadow-lg font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                  }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Estampa</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('ceramic')}
+                className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1.5 transition-all ${activeTab === 'ceramic'
+                    ? 'bg-amber-500 text-white shadow-lg font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                  }`}
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>Cores</span>
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Tab Content Container */}
         <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4">
@@ -738,6 +811,7 @@ export default function MobileMugCoffeePage() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
