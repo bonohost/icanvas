@@ -216,9 +216,13 @@ export default function MobileStudioPage() {
 
   // Update Object Position
   const handleUpdatePosition = useCallback(
-    (uid: number, x: number, z: number, by: number, rot: number) => {
+    (uid: number, x: number, z: number, by?: number, rot?: number) => {
       setFurniture((prev) =>
-        prev.map((item) => (item.uid === uid ? { ...item, x, z, by, rot } : item))
+        prev.map((item) =>
+          item.uid === uid
+            ? { ...item, x, z, by: by !== undefined ? by : item.by, rot: rot !== undefined ? rot : item.rot }
+            : item
+        )
       );
     },
     []
@@ -1105,8 +1109,8 @@ export default function MobileStudioPage() {
                           floorColor: tex.color || '#ffffff',
                           floorRoughness: tex.roughness,
                           floorMetalness: tex.metalness,
-                          floorTileX: tex.tileX,
-                          floorTileY: tex.tileY,
+                          floorTileX: tex.tileX ?? prev.floorTileX ?? 4,
+                          floorTileY: tex.tileY ?? prev.floorTileY ?? 4,
                         }))
                       }
                       className={`p-2.5 rounded-xl border text-xs font-semibold text-left flex items-center gap-2 transition-all ${
@@ -1131,7 +1135,7 @@ export default function MobileStudioPage() {
         isOpen={isCartModalOpen}
         onClose={() => setIsCartModalOpen(false)}
         furniture={furniture}
-        onSelectFurniture={(uid) => {
+        onSelectItem={(uid: number) => {
           setSelectedUid(uid);
           setActiveTab('properties');
         }}
