@@ -8,6 +8,7 @@ import ProjectManagerModal from './components/ProjectManagerModal';
 import TemplatesModal from './components/TemplatesModal';
 import AiRenderModal from './components/AiRenderModal';
 import SceneCartModal from './components/SceneCartModal';
+import PanoramaViewerModal from './components/PanoramaViewerModal';
 import {
   FurnitureInstance,
   FurnitureSpec,
@@ -52,6 +53,7 @@ import {
   Redo2,
   ShoppingCart,
   Tag,
+  Compass,
 } from 'lucide-react';
 
 interface HistorySnapshot {
@@ -104,11 +106,13 @@ export default function StudioPage() {
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
+  const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [showProductPins, setShowProductPins] = useState<boolean>(true);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const isInitialMount = useRef(true);
   const captureSnapshotRef = useRef<() => string>(() => '');
+  const capturePanoramaRef = useRef<((options: { eyeHeight?: number; width?: number; height?: number }) => string) | null>(null);
 
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([
     {
@@ -835,6 +839,21 @@ export default function StudioPage() {
               </span>
             </button>
 
+            {/* 360 Panorama Tour Button */}
+            <button
+              onClick={() => setIsPanoramaOpen(true)}
+              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-md shadow-blue-600/30 border border-cyan-400/40 transition-all active:scale-95 animate-in fade-in"
+              title="Gerar Panorama Equirretangular 360° (4K) e navegar imersivamente"
+            >
+              <Compass className="size-3.5 text-cyan-200 animate-spin-slow" />
+              <span className="bg-gradient-to-r from-white via-cyan-100 to-blue-200 bg-clip-text text-transparent">
+                Tour 360°
+              </span>
+              <span className="px-1 py-0.2 rounded text-[8px] font-black bg-cyan-400/25 text-cyan-200 tracking-widest uppercase border border-cyan-300/30">
+                4K
+              </span>
+            </button>
+
             {/* Shoppable Scene Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
@@ -1071,6 +1090,9 @@ export default function StudioPage() {
             onRegisterCapture={(fn) => {
               captureSnapshotRef.current = fn;
             }}
+            onRegisterPanoramaCapture={(fn) => {
+              capturePanoramaRef.current = fn;
+            }}
           />
 
           {/* Floating Toggle Controls inside 3D Viewport */}
@@ -1282,6 +1304,15 @@ export default function StudioPage() {
         room={room}
         furniture={furniture}
         projectName={projectName}
+      />
+
+      {/* 360 Panorama Tour Modal */}
+      <PanoramaViewerModal
+        isOpen={isPanoramaOpen}
+        onClose={() => setIsPanoramaOpen(false)}
+        onCapturePanorama={(options) => capturePanoramaRef.current?.(options) || ''}
+        projectName={projectName}
+        roomHeight={room.height}
       />
 
       {/* Shoppable Scene Cart Modal */}

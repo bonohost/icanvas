@@ -11,6 +11,7 @@ import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
+import { captureEquirectangularPanorama } from '../lib/equirectangularExporter';
 import { ShoppingCart } from 'lucide-react';
 
 interface ViewportProps {
@@ -30,6 +31,7 @@ interface ViewportProps {
   autoTransparency?: boolean;
   cameraSettings: { x: number; y: number; z: number; fov: number };
   onRegisterCapture?: (captureFn: () => string) => void;
+  onRegisterPanoramaCapture?: (captureFn: (options: { eyeHeight?: number; width?: number; height?: number }) => string) => void;
   gizmoEnabled?: boolean;
   gizmoMode?: 'translate' | 'rotate_y' | 'rotate_full';
   onDragStart?: () => void;
@@ -85,6 +87,7 @@ export default function ThreeViewport({
   autoTransparency = true,
   cameraSettings,
   onRegisterCapture,
+  onRegisterPanoramaCapture,
   gizmoEnabled = false,
   gizmoMode = 'translate',
   onDragStart,
@@ -260,6 +263,85 @@ export default function ThreeViewport({
 
     onRegisterCapture(captureSnapshot);
   }, [onRegisterCapture]);
+
+  // Expose Equirectangular 360 Panorama Capture (4K / 2K)
+  useEffect(() => {
+    if (!onRegisterPanoramaCapture) return;
+
+    const capturePanorama = (options: { eyeHeight?: number; width?: number; height?: number } = {}) => {
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      if (!renderer || !scene) return '';
+
+      const width = options.width || 4096;
+      const height = options.height || 2048;
+      const eyeHeight = options.eyeHeight ?? 1.55;
+
+      const gridPrev = gridHelperRef.current?.visible ?? false;
+      const selectPrev = selectionHelperRef.current?.visible ?? false;
+      const rulersPrev = rulersGroupRef.current?.visible ?? false;
+      const rectPrev = rectLightHelperRef.current?.visible ?? false;
+      const gizmoPrev = transformControlsRef.current?.getHelper().visible ?? false;
+
+      // Hide non-photorealistic guides
+      if (gridHelperRef.current) gridHelperRef.current.visible = false;
+      if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
+      if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
+      if (rectLightHelperRef.current) rectLightHelperRef.current.visible = false;
+      if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = false;
+
+      // Make sure all walls are solid and visible for 360 interior view
+      const wallsToRestore: { mat: any; transparent: boolean; opacity: number; depthWrite: boolean }[] = [];
+      if (wallsGroupRef.current) {
+        wallsGroupRef.current.children.forEach((wallGroup: any) => {
+          wallGroup.traverse((child: any) => {
+            if (child.isMesh && child.material && !child.userData?.isOpening) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((m: any) => {
+                wallsToRestore.push({
+                  mat: m,
+                  transparent: m.transparent,
+                  opacity: m.opacity,
+                  depthWrite: m.depthWrite,
+                });
+                m.transparent = false;
+                m.opacity = 1.0;
+                m.depthWrite = true;
+              });
+            }
+          });
+        });
+      }
+
+      // Render 360 equirectangular image
+      const dataUrl = captureEquirectangularPanorama(renderer, scene, {
+        width,
+        height,
+        position: new THREE.Vector3(0, eyeHeight, 0),
+        cubeSize: Math.min(width / 2, 2048),
+        format: 'image/jpeg',
+        quality: 0.95,
+      });
+
+      // Restore wall materials
+      wallsToRestore.forEach((w) => {
+        w.mat.transparent = w.transparent;
+        w.mat.opacity = w.opacity;
+        w.mat.depthWrite = w.depthWrite;
+      });
+
+      // Restore guides
+      if (gridHelperRef.current) gridHelperRef.current.visible = gridPrev;
+      if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
+      if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
+      if (rectLightHelperRef.current) rectLightHelperRef.current.visible = rectPrev;
+      if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = gizmoPrev;
+
+      return dataUrl;
+    };
+
+    onRegisterPanoramaCapture(capturePanorama);
+  }, [onRegisterPanoramaCapture]);
 
   const createTextSprite = (message: string) => {
     const canvas = document.createElement('canvas');
