@@ -176,8 +176,6 @@ export default function PanoramaViewerModal({
     controls.autoRotateSpeed = 0.6;
     controls.minDistance = 0.05;
     controls.maxDistance = 1.0;
-    controls.minFov = 35;
-    controls.maxFov = 95;
     controlsRef.current = controls;
 
     const sphereGeo = new THREE.SphereGeometry(500, 64, 40);
