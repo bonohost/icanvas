@@ -38,7 +38,9 @@ import {
   Grid,
   Box,
   Maximize,
-  Minimize
+  Minimize,
+  Lightbulb,
+  Globe
 } from 'lucide-react';
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
@@ -48,7 +50,7 @@ import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templa
 import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
 import { getAutoSavedProject, saveAutoSaveState } from '../../studio/lib/project-storage';
 
-type MobileStudioTab = 'catalog' | 'properties' | 'room' | 'cart';
+type MobileStudioTab = 'catalog' | 'properties' | 'room' | 'lighting' | 'cart';
 type JoystickMode = 'object' | 'camera';
 
 function enrichFurnitureWithCatalog(items: FurnitureInstance[]): FurnitureInstance[] {
@@ -120,10 +122,25 @@ export default function MobileStudioPage() {
       right: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
     },
     openings: [],
-    lightIntensity: 1.4,
-    exposure: 1.0,
-    environmentPreset: 'daylight',
+    lightIntensity: 2.25,
+    exposure: 1.75,
+    environmentPreset: 'hdr_144',
     reflectionOpacity: 0.05,
+    areaLight: {
+      enabled: false,
+      intensity: 2.0,
+      width: 2.2,
+      height: 1.6,
+      color: '#ffffff',
+      showHelper: false,
+    },
+    hdrSettings: {
+      intensity: 0.4,
+      rotation: 50,
+      showBackground: true,
+      backgroundBlur: 0.3,
+      disableManualLights: false,
+    },
   });
 
   const [cameraSettings, setCameraSettings] = useState({
@@ -165,10 +182,23 @@ export default function MobileStudioPage() {
       setFurniture(enrichFurnitureWithCatalog(autosave.furniture));
       if (autosave.cameraSettings) setCameraSettings(autosave.cameraSettings);
     } else {
-      // Default: Initial Gourmet Kitchen Scene
+      // Default: Initial Gourmet Kitchen Scene with Mobile Default Living HDR Lighting
       const kitchenTpl = ROOM_TEMPLATES.find((t) => t.id === 'kitchen-gourmet') || ROOM_TEMPLATES[0];
       if (kitchenTpl) {
-        setRoom(kitchenTpl.room);
+        setRoom({
+          ...kitchenTpl.room,
+          environmentPreset: 'hdr_144',
+          exposure: 1.75,
+          lightIntensity: 2.25,
+          reflectionOpacity: 0.05,
+          hdrSettings: {
+            intensity: 0.4,
+            rotation: 50,
+            showBackground: true,
+            backgroundBlur: 0.3,
+            disableManualLights: false,
+          },
+        });
         const timestamp = Date.now();
         const initialItems: FurnitureInstance[] = kitchenTpl.furniture.map((item, idx) => ({
           ...item,
@@ -966,20 +996,20 @@ export default function MobileStudioPage() {
           </div>
         )}
 
-        {/* 4 Navigation Tabs */}
-        <div className="px-4 pb-2">
-          <div className="grid grid-cols-4 gap-1 p-1 bg-black/50 rounded-2xl border border-white/10 text-[11px] font-semibold">
+        {/* 5 Navigation Tabs */}
+        <div className="px-3 pb-2">
+          <div className="grid grid-cols-5 gap-1 p-1 bg-black/50 rounded-2xl border border-white/10 text-[10px] font-semibold">
             <button
               onClick={() => {
                 setActiveTab('catalog');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'catalog'
+              className={`py-2 px-0.5 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'catalog'
                 ? 'bg-blue-600 text-white shadow font-bold'
                 : 'text-neutral-400 hover:text-white'
                 }`}
             >
-              <Layers className="w-3.5 h-3.5" />
+              <Layers className="w-3.5 h-3.5 shrink-0" />
               <span>Catálogo</span>
             </button>
 
@@ -988,12 +1018,12 @@ export default function MobileStudioPage() {
                 setActiveTab('properties');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all relative ${activeTab === 'properties'
+              className={`py-2 px-0.5 rounded-xl flex items-center justify-center gap-1 transition-all relative ${activeTab === 'properties'
                 ? 'bg-blue-600 text-white shadow font-bold'
                 : 'text-neutral-400 hover:text-white'
                 }`}
             >
-              <Palette className="w-3.5 h-3.5" />
+              <Palette className="w-3.5 h-3.5 shrink-0" />
               <span>Móvel</span>
               {selectedItem && (
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 absolute top-1.5 right-1.5" />
@@ -1005,20 +1035,34 @@ export default function MobileStudioPage() {
                 setActiveTab('room');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'room'
+              className={`py-2 px-0.5 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'room'
                 ? 'bg-blue-600 text-white shadow font-bold'
                 : 'text-neutral-400 hover:text-white'
                 }`}
             >
-              <Home className="w-3.5 h-3.5" />
+              <Home className="w-3.5 h-3.5 shrink-0" />
               <span>Sala</span>
             </button>
 
             <button
-              onClick={() => setIsCartModalOpen(true)}
-              className="py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-bold"
+              onClick={() => {
+                setActiveTab('lighting');
+                if (sheetState === 'collapsed') setSheetState('standard');
+              }}
+              className={`py-2 px-0.5 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'lighting'
+                ? 'bg-blue-600 text-white shadow font-bold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
+              <Sun className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span>Luz</span>
+            </button>
+
+            <button
+              onClick={() => setIsCartModalOpen(true)}
+              className="py-2 px-0.5 rounded-xl flex items-center justify-center gap-1 transition-all bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-bold"
+            >
+              <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
               <span>{cartCount}</span>
             </button>
           </div>
@@ -1340,6 +1384,503 @@ export default function MobileStudioPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB 4: ILUMINAÇÃO & CENÁRIOS 3D ================= */}
+          {activeTab === 'lighting' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Presets de Cenários & Iluminação */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-200 flex items-center gap-1.5">
+                    <Sun className="w-3.5 h-3.5 text-amber-400" /> Cenários & Ambiente 3D
+                  </span>
+                  <span className="text-[10px] text-blue-400 font-mono font-bold uppercase">
+                    {(room.environmentPreset || 'daylight').replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'daylight', label: 'Luz do Dia', icon: '☀️' },
+                    { id: 'clean_studio', label: 'Estúdio Clean', icon: '💡' },
+                    { id: 'dark_studio', label: 'Estúdio Dark', icon: '🌙' },
+                    { id: 'hdr_144', label: 'Living HDR', icon: '🏙️' },
+                    { id: 'hdr_185', label: 'Apartment HDR', icon: '🛋️' },
+                  ].map((p) => {
+                    const isActive = (room.environmentPreset || 'daylight') === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          const curHdr = room.hdrSettings || {
+                            intensity: p.id === 'hdr_144' ? 0.4 : 1.0,
+                            rotation: p.id === 'hdr_144' ? 50 : 0,
+                            showBackground: p.id === 'hdr_144' ? true : false,
+                            backgroundBlur: p.id === 'hdr_144' ? 0.3 : 0.0,
+                            disableManualLights: false,
+                          };
+                          setRoom((prev) => ({
+                            ...prev,
+                            environmentPreset: p.id as any,
+                            exposure: p.id === 'hdr_144' ? 1.75 : prev.exposure ?? 1.0,
+                            lightIntensity: p.id === 'hdr_144' ? 2.25 : prev.lightIntensity ?? 1.0,
+                            hdrSettings: {
+                              ...curHdr,
+                              ...(p.id === 'hdr_144' && !prev.hdrSettings
+                                ? { intensity: 0.4, rotation: 50, showBackground: true, backgroundBlur: 0.3 }
+                                : {}),
+                            },
+                          }));
+                        }}
+                        className={`p-2 rounded-xl text-center flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-md font-bold ring-1 ring-blue-400'
+                            : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="text-base">{p.icon}</span>
+                        <span className="text-[10px] leading-tight font-semibold">{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Controles do Mapa HDR 360 (quando HDR estiver ativo) */}
+              {(room.environmentPreset === 'hdr_144' || room.environmentPreset === 'hdr_185') && (
+                <div className="p-3.5 rounded-2xl bg-blue-950/30 border border-blue-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Controles HDR 360°
+                    </span>
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                      IBL Ativo
+                    </span>
+                  </div>
+
+                  {/* Toggle Luz 100% HDR Pura */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/5">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-white">Luz 100% HDR Pura</span>
+                      <span className="text-[10px] text-neutral-400">Desativa lâmpadas artificiais</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = room.hdrSettings || {};
+                        setRoom((prev) => ({
+                          ...prev,
+                          hdrSettings: {
+                            ...cur,
+                            disableManualLights: !cur.disableManualLights,
+                          },
+                        }));
+                      }}
+                      className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                        room.hdrSettings?.disableManualLights ? 'bg-blue-600' : 'bg-white/15'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                          room.hdrSettings?.disableManualLights ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Toggle Fundo Panorâmico 360 */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/5">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-white flex items-center gap-1">
+                        <Globe className="w-3 h-3 text-blue-400" /> Fundo Panorâmico 360°
+                      </span>
+                      <span className="text-[10px] text-neutral-400">Exibir o horizonte no fundo 3D</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = room.hdrSettings || {};
+                        setRoom((prev) => ({
+                          ...prev,
+                          hdrSettings: {
+                            ...cur,
+                            showBackground: !cur.showBackground,
+                          },
+                        }));
+                      }}
+                      className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                        room.hdrSettings?.showBackground ? 'bg-blue-600' : 'bg-white/15'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                          room.hdrSettings?.showBackground ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Slider: Intensidade do HDR */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-300 text-[11px] font-medium">Intensidade do HDR</span>
+                      <span className="font-mono text-blue-400 font-bold">
+                        {Math.round((room.hdrSettings?.intensity ?? 1.0) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="3.0"
+                      step="0.05"
+                      value={room.hdrSettings?.intensity ?? 1.0}
+                      onChange={(e) => {
+                        const cur = room.hdrSettings || {};
+                        setRoom((prev) => ({
+                          ...prev,
+                          hdrSettings: {
+                            ...cur,
+                            intensity: parseFloat(e.target.value),
+                          },
+                        }));
+                      }}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider: Rotação 360 do HDR */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-300 text-[11px] font-medium flex items-center gap-1">
+                        <Compass className="w-3 h-3 text-amber-400" /> Rotação do Sol / HDR
+                      </span>
+                      <span className="font-mono text-blue-400 font-bold">
+                        {Math.round(room.hdrSettings?.rotation ?? 0)}°
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      step="2"
+                      value={room.hdrSettings?.rotation ?? 0}
+                      onChange={(e) => {
+                        const cur = room.hdrSettings || {};
+                        setRoom((prev) => ({
+                          ...prev,
+                          hdrSettings: {
+                            ...cur,
+                            rotation: parseFloat(e.target.value),
+                          },
+                        }));
+                      }}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Slider: Desfoque do Fundo */}
+                  {room.hdrSettings?.showBackground && (
+                    <div className="space-y-1 pt-1 border-t border-white/10">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-neutral-300 text-[11px] font-medium">Desfoque do Fundo (Bokeh)</span>
+                        <span className="font-mono text-blue-400 font-bold">
+                          {Math.round((room.hdrSettings?.backgroundBlur ?? 0) * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.0"
+                        max="1.0"
+                        step="0.05"
+                        value={room.hdrSettings?.backgroundBlur ?? 0.0}
+                        onChange={(e) => {
+                          const cur = room.hdrSettings || {};
+                          setRoom((prev) => ({
+                            ...prev,
+                            hdrSettings: {
+                              ...cur,
+                              backgroundBlur: parseFloat(e.target.value),
+                            },
+                          }));
+                        }}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sliders Principais: Brilho & Luz Solar */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3.5">
+                <span className="text-xs font-bold text-neutral-200 block">
+                  🎛️ Brilho & Ajuste de Luz
+                </span>
+
+                {/* Slider Exposição da Câmera */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-300 text-[11px] font-medium flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-blue-400" /> Brilho / Exposição Geral
+                    </span>
+                    <span className="font-mono text-blue-400 font-bold text-xs">
+                      {Math.round((room.exposure ?? 1.0) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="2.2"
+                    step="0.05"
+                    value={room.exposure ?? 1.0}
+                    onChange={(e) => setRoom((prev) => ({ ...prev, exposure: parseFloat(e.target.value) }))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="flex justify-between text-[9px] text-neutral-500">
+                    <span>Mais Suave (40%)</span>
+                    <span>Padrão (100%)</span>
+                    <span>Mais Claro (220%)</span>
+                  </div>
+                </div>
+
+                {/* Slider Luz Solar / Ambiente */}
+                <div className="space-y-1 pt-1 border-t border-white/5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-300 text-[11px] font-medium flex items-center gap-1.5">
+                      <Sun className="w-3.5 h-3.5 text-amber-400" /> Luz Solar / Ambiente
+                    </span>
+                    <span className="font-mono text-amber-400 font-bold text-xs">
+                      {Math.round((room.lightIntensity ?? 1.0) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="2.5"
+                    step="0.05"
+                    value={room.lightIntensity ?? 1.0}
+                    onChange={(e) => setRoom((prev) => ({ ...prev, lightIntensity: parseFloat(e.target.value) }))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[9px] text-neutral-500">
+                    <span>Penumbra (20%)</span>
+                    <span>Natural (100%)</span>
+                    <span>Solar Intenso (250%)</span>
+                  </div>
+                </div>
+
+                {/* Slider Reflexo no Piso */}
+                <div className="space-y-1 pt-1 border-t border-white/5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-300 text-[11px] font-medium">Reflexo no Piso</span>
+                    <span className="font-mono text-blue-400 font-bold text-xs">
+                      {Math.round((room.reflectionOpacity ?? 0.05) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="0.35"
+                    step="0.01"
+                    value={room.reflectionOpacity ?? 0.05}
+                    onChange={(e) => setRoom((prev) => ({ ...prev, reflectionOpacity: parseFloat(e.target.value) }))}
+                    className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Iluminação de Área PBR (Plafon LED no Teto) */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Lightbulb className="w-3.5 h-3.5 text-amber-300" /> Luz de Área (Plafon LED)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = room.areaLight || {
+                        enabled: true,
+                        intensity: 2.0,
+                        width: 2.2,
+                        height: 1.6,
+                        color: '#ffffff',
+                        showHelper: true,
+                      };
+                      setRoom((prev) => ({
+                        ...prev,
+                        areaLight: {
+                          ...cur,
+                          enabled: !cur.enabled,
+                        },
+                      }));
+                    }}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                      room.areaLight?.enabled ? 'bg-blue-600' : 'bg-white/10'
+                    }`}
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        room.areaLight?.enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {room.areaLight?.enabled && (
+                  <div className="space-y-3 pt-2 border-t border-white/10">
+                    {/* Moldura Guia Visual */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-neutral-300">Moldura Guia 3D (Teto)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cur = room.areaLight || {
+                            enabled: true,
+                            intensity: 2.0,
+                            width: 2.2,
+                            height: 1.6,
+                            color: '#ffffff',
+                            showHelper: true,
+                          };
+                          setRoom((prev) => ({
+                            ...prev,
+                            areaLight: {
+                              ...cur,
+                              showHelper: !cur.showHelper,
+                            },
+                          }));
+                        }}
+                        className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
+                          room.areaLight?.showHelper ? 'bg-blue-600' : 'bg-white/10'
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                            room.areaLight?.showHelper ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Intensidade do Plafon */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-neutral-300 text-[11px] font-medium">Intensidade do Plafon</span>
+                        <span className="font-mono text-amber-400 font-bold">
+                          {Math.round((room.areaLight.intensity ?? 2.0) * 50)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.2"
+                        max="6.0"
+                        step="0.1"
+                        value={room.areaLight.intensity ?? 2.0}
+                        onChange={(e) => {
+                          setRoom((prev) => ({
+                            ...prev,
+                            areaLight: {
+                              ...prev.areaLight!,
+                              intensity: parseFloat(e.target.value),
+                            },
+                          }));
+                        }}
+                        className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                    </div>
+
+                    {/* Dimensões do Plafon (Largura e Comprimento) */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10px] text-neutral-400">
+                          <span>Largura (X)</span>
+                          <span className="font-mono text-blue-400">{(room.areaLight.width ?? 2.2).toFixed(1)}m</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.4"
+                          max="5.0"
+                          step="0.1"
+                          value={room.areaLight.width ?? 2.2}
+                          onChange={(e) => {
+                            setRoom((prev) => ({
+                              ...prev,
+                              areaLight: {
+                                ...prev.areaLight!,
+                                width: parseFloat(e.target.value),
+                              },
+                            }));
+                          }}
+                          className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10px] text-neutral-400">
+                          <span>Comprimento (Z)</span>
+                          <span className="font-mono text-blue-400">{(room.areaLight.height ?? 1.6).toFixed(1)}m</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.4"
+                          max="5.0"
+                          step="0.1"
+                          value={room.areaLight.height ?? 1.6}
+                          onChange={(e) => {
+                            setRoom((prev) => ({
+                              ...prev,
+                              areaLight: {
+                                ...prev.areaLight!,
+                                height: parseFloat(e.target.value),
+                              },
+                            }));
+                          }}
+                          className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Temperatura / Cor da Luz do Plafon */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-medium text-neutral-400 block">Cor / Temperatura do LED</span>
+                      <div className="flex gap-2">
+                        {[
+                          { name: 'Branco Puro (6000K)', color: '#ffffff' },
+                          { name: 'Branco Neutro (4000K)', color: '#f4f4f5' },
+                          { name: 'Branco Quente (3000K)', color: '#ffe8d6' },
+                          { name: 'Âmbar Aconchegante', color: '#fed7aa' },
+                        ].map((c) => (
+                          <button
+                            key={c.color}
+                            type="button"
+                            onClick={() => {
+                              setRoom((prev) => ({
+                                ...prev,
+                                areaLight: {
+                                  ...prev.areaLight!,
+                                  color: c.color,
+                                },
+                              }));
+                            }}
+                            className={`flex-1 h-8 rounded-xl border transition-all flex items-center justify-center ${
+                              (room.areaLight?.color || '#ffffff') === c.color
+                                ? 'border-blue-400 ring-2 ring-blue-500/40 scale-105 shadow'
+                                : 'border-white/10 hover:border-white/30'
+                            }`}
+                            style={{ backgroundColor: c.color }}
+                            title={c.name}
+                          >
+                            {(room.areaLight?.color || '#ffffff') === c.color && (
+                              <Check className="w-3.5 h-3.5 text-neutral-900" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
