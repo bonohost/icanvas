@@ -42,7 +42,8 @@ import {
   Lightbulb,
   Globe,
   Lock,
-  Unlock
+  Unlock,
+  Save
 } from 'lucide-react';
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
@@ -50,7 +51,7 @@ import TemplatesModal from '../../studio/components/TemplatesModal';
 import { CATALOG, FLOOR_PBR_PRESETS } from '../../studio/lib/furniture-data';
 import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templates';
 import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
-import { getAutoSavedProject, saveAutoSaveState } from '../../studio/lib/project-storage';
+import { getAutoSavedProject, saveAutoSaveState, saveProject } from '../../studio/lib/project-storage';
 
 type MobileStudioTab = 'catalog' | 'properties' | 'room' | 'lighting' | 'cart';
 type JoystickMode = 'object' | 'camera';
@@ -95,6 +96,7 @@ export default function MobileStudioPage() {
   const [joystickOpen, setJoystickOpen] = useState<boolean>(true);
   const [isCameraMenuOpen, setIsCameraMenuOpen] = useState<boolean>(false);
   const [isObjectLocked, setIsObjectLocked] = useState<boolean>(true);
+  const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
 
   // 3D Scene States
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([]);
@@ -223,6 +225,34 @@ export default function MobileStudioPage() {
       furniture,
       cameraSettings,
     });
+  }, [room, furniture, cameraSettings]);
+
+  // Manual Project Save Handler
+  const handleManualSave = useCallback(() => {
+    try {
+      const now = new Date().toISOString();
+      const proj = {
+        id: 'mobile_proj',
+        name: 'Meu Projeto 3D',
+        createdAt: now,
+        updatedAt: now,
+        room,
+        furniture,
+        cameraSettings,
+      };
+      saveProject(proj);
+      saveAutoSaveState(proj);
+      setIsSavedRecently(true);
+      setTemplateToast('💾 Projeto salvo com sucesso!');
+      setTimeout(() => {
+        setIsSavedRecently(false);
+        setTemplateToast(null);
+      }, 2500);
+    } catch (err) {
+      console.error('Error saving project:', err);
+      setTemplateToast('Erro ao salvar projeto');
+      setTimeout(() => setTemplateToast(null), 2500);
+    }
   }, [room, furniture, cameraSettings]);
 
   // Orientation Check
@@ -711,8 +741,8 @@ export default function MobileStudioPage() {
 
           {joystickOpen && (
             <div className="flex flex-col bg-neutral-950/90 backdrop-blur-2xl border border-white/20 rounded-2xl p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ring-1 ring-black/50">
-              {/* Header Mode Switcher: Móvel vs Câmera */}
-              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10">
+              {/* Header Mode Switcher: Móvel vs Câmera & Quick Save */}
+              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10 gap-1.5">
                 <div className="flex items-center gap-1 bg-black/40 rounded-xl p-0.5">
                   <button
                     onClick={() => setJoystickMode('object')}
@@ -738,6 +768,23 @@ export default function MobileStudioPage() {
                     <span>Câmera</span>
                   </button>
                 </div>
+
+                {/* Quick Save Icon-Only Button */}
+                <button
+                  onClick={handleManualSave}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-90 border shadow-sm ${
+                    isSavedRecently
+                      ? 'bg-emerald-600 text-white border-emerald-400 shadow-emerald-500/20 ring-1 ring-emerald-400/40'
+                      : 'bg-white/10 hover:bg-white/20 active:bg-white/30 text-white border-white/15'
+                  }`}
+                  title={isSavedRecently ? 'Projeto Salvo com sucesso!' : 'Salvar Projeto'}
+                >
+                  {isSavedRecently ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-200" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5 text-blue-300" />
+                  )}
+                </button>
               </div>
 
               {/* MODE 1: OBJECT PRECISION JOYSTICK */}
@@ -1428,13 +1475,13 @@ export default function MobileStudioPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-neutral-300">
                     <span>Largura (X)</span>
-                    <span className="font-mono text-blue-400 font-bold">{room.width} m</span>
+                    <span className="font-mono text-blue-400 font-bold">{room.width.toFixed(1)} m</span>
                   </div>
                   <input
                     type="range"
-                    min="2.5"
-                    max="9.0"
-                    step="0.1"
+                    min="2.0"
+                    max="30.0"
+                    step="0.5"
                     value={room.width}
                     onChange={(e) => setRoom((prev) => ({ ...prev, width: parseFloat(e.target.value) }))}
                     className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -1444,13 +1491,13 @@ export default function MobileStudioPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-neutral-300">
                     <span>Profundidade (Z)</span>
-                    <span className="font-mono text-blue-400 font-bold">{room.depth} m</span>
+                    <span className="font-mono text-blue-400 font-bold">{room.depth.toFixed(1)} m</span>
                   </div>
                   <input
                     type="range"
                     min="2.0"
-                    max="8.0"
-                    step="0.1"
+                    max="30.0"
+                    step="0.5"
                     value={room.depth}
                     onChange={(e) => setRoom((prev) => ({ ...prev, depth: parseFloat(e.target.value) }))}
                     className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"

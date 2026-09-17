@@ -546,7 +546,7 @@ export default function PropertiesSidebar({
                 type="number"
                 step="0.1"
                 min="1"
-                max="20"
+                max="30"
                 value={room.width}
                 onChange={(e) => onUpdateRoom({ ...room, width: parseFloat(e.target.value) || 1 })}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary"
@@ -558,7 +558,7 @@ export default function PropertiesSidebar({
                 type="number"
                 step="0.1"
                 min="1"
-                max="20"
+                max="30"
                 value={room.depth}
                 onChange={(e) => onUpdateRoom({ ...room, depth: parseFloat(e.target.value) || 1 })}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary"
