@@ -11,7 +11,8 @@ import {
   ShoppingBag,
   ArrowUpRight,
   Store,
-  Layers
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { FurnitureInstance, ProductMetadata, ProductStoreLink } from '../types/furniture';
 
@@ -164,56 +165,57 @@ export default function SceneCartModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 select-none">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-md transition-opacity animate-in fade-in"
+        className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in"
         onClick={onClose}
       />
 
       {/* Modal Card */}
-      <div className="relative w-full max-w-3xl bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] z-10 text-zinc-100">
+      <div className="relative w-full max-w-2xl bg-neutral-900/95 border border-white/15 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[85vh] z-10 text-neutral-100 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/40">
+        <div className="flex items-center justify-between px-4 py-3.5 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
-              <ShoppingCart className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 text-white shrink-0">
+              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white tracking-tight">
+                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
                   Carrinho do Ambiente
                 </h2>
-                <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                <span className="px-2 py-0.5 text-[10px] sm:text-xs font-bold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shrink-0 whitespace-nowrap">
                   <Layers className="w-3 h-3" />
-                  {groupedItems.length} {groupedItems.length === 1 ? 'modelo' : 'modelos'} ({totalUnitsCount} un)
+                  {groupedItems.length} {groupedItems.length === 1 ? 'produto' : 'produtos'}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
-                Produtos reais vinculados aos móveis desta cena 3D agrupados por modelo
+              <p className="text-[10px] sm:text-xs text-neutral-400">
+                Produtos reais vinculados aos móveis desta cena 3D
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors"
+            className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+            title="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4 space-y-2.5 custom-scrollbar">
           {groupedItems.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="w-16 h-16 rounded-full bg-zinc-800/80 flex items-center justify-center text-zinc-500">
-                <ShoppingBag className="w-8 h-8" />
+              <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-500">
+                <ShoppingBag className="w-7 h-7" />
               </div>
-              <h3 className="text-base font-semibold text-zinc-300">
+              <h3 className="text-sm sm:text-base font-bold text-neutral-200">
                 Nenhum produto vinculado nesta cena
               </h3>
-              <p className="text-sm text-zinc-500 max-w-sm">
-                Selecione um móvel na cena e acesse a aba <b>Produto & Afiliado</b> no painel lateral para vincular links da Magazine Luiza ou outras lojas.
+              <p className="text-xs text-neutral-400 max-w-sm px-4">
+                Adicione móveis à cena para visualizar a lista completa de produtos e compras com orçamento automático.
               </p>
             </div>
           ) : (
@@ -227,31 +229,35 @@ export default function SceneCartModal({
               return (
                 <div
                   key={group.groupKey}
-                  className={`group relative rounded-xl border p-4 transition-all ${
+                  className={`group relative rounded-2xl border p-3 sm:p-3.5 transition-all ${
                     checked
-                      ? 'bg-zinc-800/50 border-zinc-700/80 hover:border-indigo-500/50 hover:bg-zinc-800/70'
-                      : 'bg-zinc-900/40 border-zinc-800 opacity-60'
+                      ? 'bg-white/[0.04] border-white/15 hover:border-indigo-500/40 hover:bg-white/[0.07]'
+                      : 'bg-white/[0.01] border-white/5 opacity-50'
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  {/* Item Top: Checkbox + Thumbnail + Details */}
+                  <div className="flex items-start gap-3">
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleCheck(group.groupKey)}
-                      className="text-zinc-400 hover:text-indigo-400 transition-colors shrink-0"
+                      className="mt-1 text-neutral-400 hover:text-indigo-400 active:scale-90 transition-all shrink-0"
                       title={checked ? 'Desmarcar do total' : 'Incluir no total'}
                     >
                       {checked ? (
                         <CheckCircle2 className="w-5 h-5 text-indigo-400 fill-indigo-500/20" />
                       ) : (
-                        <Circle className="w-5 h-5 text-zinc-600" />
+                        <Circle className="w-5 h-5 text-neutral-600" />
                       )}
                     </button>
 
-                    {/* Thumbnail Image with Quantity Badge */}
+                    {/* Thumbnail with Quantity Pill */}
                     <div
-                      className="relative w-16 h-16 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer"
-                      onClick={() => onSelectItem?.(group.uids[0])}
-                      title="Focar item no 3D"
+                      className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-neutral-950 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer group-hover:border-indigo-500/40 transition-colors"
+                      onClick={() => {
+                        onSelectItem?.(group.uids[0]);
+                        onClose();
+                      }}
+                      title="Tocar para selecionar este móvel no 3D"
                     >
                       {product.imageUrl ? (
                         <img
@@ -260,12 +266,12 @@ export default function SceneCartModal({
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
                       ) : (
-                        <ShoppingBag className="w-6 h-6 text-zinc-600" />
+                        <ShoppingBag className="w-5 h-5 text-neutral-600" />
                       )}
 
                       {/* Quantity pill on image */}
                       {group.quantity > 1 && (
-                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-indigo-600/95 text-white font-black text-[10px] shadow-md border border-indigo-400/40">
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-indigo-600 text-white font-black text-[9px] shadow border border-indigo-400/40">
                           {group.quantity}x
                         </span>
                       )}
@@ -273,42 +279,52 @@ export default function SceneCartModal({
 
                     {/* Product Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      {/* Badges */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {group.quantity > 1 && (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                            {group.quantity} unidades na cena
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            {group.quantity} un
                           </span>
                         )}
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white/10 text-neutral-300 border border-white/10 truncate max-w-[120px]">
                           {product.category || group.name}
                         </span>
                         {product.brand && (
-                          <span className="text-xs text-zinc-400">
-                            Marca: {product.brand}
+                          <span className="text-[10px] text-neutral-400 truncate max-w-[100px]">
+                            {product.brand}
                           </span>
                         )}
                       </div>
-                      <h4 className="text-sm font-semibold text-white truncate mt-1">
+
+                      {/* Title */}
+                      <h4
+                        onClick={() => {
+                          onSelectItem?.(group.uids[0]);
+                          onClose();
+                        }}
+                        className="text-xs sm:text-sm font-semibold text-white leading-snug line-clamp-2 mt-1 cursor-pointer hover:text-indigo-300 transition-colors"
+                        title={product.title || group.name}
+                      >
                         {product.title || group.name}
                       </h4>
 
-                      {/* Store Selector (if multiple stores exist) */}
+                      {/* Store Selector or Store Line */}
                       {product.stores.length > 1 ? (
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs text-zinc-400 flex items-center gap-1">
-                            <Store className="w-3.5 h-3.5" /> Loja:
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                            <Store className="w-3 h-3 text-neutral-400" /> Loja:
                           </span>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-1">
                             {product.stores.map((s, sIdx) => {
                               const isStoreActive = (selectedStoreIndex[group.groupKey] || 0) === sIdx;
                               return (
                                 <button
                                   key={sIdx}
                                   onClick={() => handleStoreChange(group.groupKey, sIdx)}
-                                  className={`text-xs px-2 py-0.5 rounded-md border transition-all ${
+                                  className={`text-[10px] px-2 py-0.5 rounded-lg border transition-all ${
                                     isStoreActive
-                                      ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300 font-medium'
-                                      : 'bg-zinc-800/70 border-zinc-700/60 text-zinc-400 hover:text-zinc-200'
+                                      ? 'bg-indigo-500/20 border-indigo-400/50 text-indigo-200 font-bold'
+                                      : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
                                   }`}
                                 >
                                   {s.store} ({formatBRL(s.price * group.quantity)})
@@ -318,42 +334,44 @@ export default function SceneCartModal({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 mt-1 text-xs text-zinc-400">
-                          <Store className="w-3.5 h-3.5 text-zinc-500" />
-                          <span>Loja: <b className="text-zinc-300">{activeStore.store}</b></span>
+                        <div className="flex items-center gap-1 mt-1 text-[11px] text-neutral-400">
+                          <Store className="w-3 h-3 text-neutral-400 shrink-0" />
+                          <span className="truncate">Loja: <b className="text-neutral-200">{activeStore.store}</b></span>
                         </div>
                       )}
                     </div>
+                  </div>
 
-                    {/* Price and Action Button */}
-                    <div className="flex sm:flex-col items-end justify-between w-full sm:w-auto shrink-0 gap-2">
-                      <div className="text-right">
-                        {subtotalOriginal && subtotalOriginal > subtotalPrice && (
-                          <span className="text-xs text-zinc-500 line-through block">
-                            {formatBRL(subtotalOriginal)}
-                          </span>
-                        )}
-                        <span className="text-base font-bold text-emerald-400">
+                  {/* Item Bottom Bar: Pricing + Affiliate CTA */}
+                  <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-white/10">
+                    <div className="flex flex-col">
+                      {subtotalOriginal && subtotalOriginal > subtotalPrice && (
+                        <span className="text-[10px] text-neutral-500 line-through">
+                          {formatBRL(subtotalOriginal)}
+                        </span>
+                      )}
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-sm sm:text-base font-extrabold text-emerald-400">
                           {formatBRL(subtotalPrice)}
                         </span>
                         {group.quantity > 1 && (
-                          <span className="text-[11px] text-zinc-400 block font-mono">
-                            ({formatBRL(activeStore.price)} cada)
+                          <span className="text-[9px] text-neutral-400 font-mono">
+                            ({formatBRL(activeStore.price)} un)
                           </span>
                         )}
                       </div>
-
-                      {/* Direct Affiliate Link */}
-                      <a
-                        href={activeStore.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                      >
-                        Comprar na {activeStore.store}
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </a>
                     </div>
+
+                    {/* Direct Buy Affiliate Link Button */}
+                    <a
+                      href={activeStore.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 active:scale-95 transition-all"
+                    >
+                      <span>Comprar na {activeStore.store.length > 15 ? 'Loja' : activeStore.store}</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
               );
@@ -363,18 +381,18 @@ export default function SceneCartModal({
 
         {/* Footer Summary */}
         {groupedItems.length > 0 && (
-          <div className="border-t border-zinc-800 bg-zinc-950/60 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-start">
+          <div className="border-t border-white/10 bg-black/60 px-4 py-3 sm:px-6 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center justify-between w-full sm:w-auto sm:justify-start gap-3">
               <div>
-                <span className="text-xs text-zinc-400 block">
-                  Total do Ambiente ({totalUnitsCount} {totalUnitsCount === 1 ? 'item' : 'itens'} • {groupedItems.length} {groupedItems.length === 1 ? 'modelo' : 'modelos'})
+                <span className="text-[10px] sm:text-xs text-neutral-400 block">
+                  Total do Ambiente ({totalUnitsCount} {totalUnitsCount === 1 ? 'item' : 'itens'})
                 </span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-extrabold text-white tracking-tight">
+                  <span className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
                     {formatBRL(totalAmount)}
                   </span>
                   {totalSavings > 0 && (
-                    <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] sm:text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                       Economia de {formatBRL(totalSavings)}
                     </span>
                   )}
@@ -382,23 +400,23 @@ export default function SceneCartModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={handleCopyList}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/60 transition-colors"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 active:bg-white/20 text-white text-xs font-bold border border-white/15 transition-all active:scale-95"
                 title="Copiar lista de compras formatada"
               >
                 <Copy className="w-3.5 h-3.5" />
-                {copiedToast ? 'Copiado!' : 'Copiar Lista'}
+                <span>{copiedToast ? 'Copiado!' : 'Copiar Lista'}</span>
               </button>
 
               <button
                 onClick={handleShareWhatsApp}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-medium border border-emerald-500/30 transition-colors"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 border border-emerald-400/30 transition-all active:scale-95"
                 title="Compartilhar no WhatsApp"
               >
                 <Share2 className="w-3.5 h-3.5" />
-                WhatsApp
+                <span>WhatsApp</span>
               </button>
             </div>
           </div>

@@ -511,7 +511,7 @@ export default function MobileStudioPage() {
   // Height for 3D viewport based on sheet state
   const viewportHeightClass = useMemo(() => {
     if (isLandscape) return 'h-full';
-    if (sheetState === 'collapsed') return 'h-[82dvh]';
+    if (sheetState === 'collapsed') return 'h-full flex-1';
     if (sheetState === 'expanded') return 'h-[32dvh]';
     return 'h-[56dvh]';
   }, [isLandscape, sheetState]);
@@ -730,6 +730,17 @@ export default function MobileStudioPage() {
         {/* ERGONOMIC TOUCH JOYSTICK & D-PAD (CANTO INFERIOR DIREITO)  */}
         {/* ========================================================= */}
         <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end pointer-events-auto">
+          {/* Quick Restore Floating Button with Up Arrow (When Bottom Sheet is Collapsed) */}
+          {!isLandscape && sheetState === 'collapsed' && (
+            <button
+              onClick={() => setSheetState('standard')}
+              className="w-11 h-11 mb-2 rounded-2xl bg-neutral-900/95 backdrop-blur-2xl border border-blue-500/60 hover:border-blue-400 text-white shadow-2xl shadow-black/80 flex items-center justify-center active:scale-90 transition-all ring-2 ring-blue-500/40 animate-in fade-in zoom-in-95 group"
+              title="Abrir Painel (Restaurar Menu)"
+            >
+              <ChevronUp className="w-6 h-6 text-blue-400 group-hover:text-blue-300 stroke-[2.5] transition-transform group-active:translate-y-[-2px]" />
+            </button>
+          )}
+
           {/* Toggle Joystick Visibility Mini Button */}
           <button
             onClick={() => setJoystickOpen(!joystickOpen)}
@@ -1089,37 +1100,53 @@ export default function MobileStudioPage() {
           ? `fixed top-0 bottom-0 right-0 w-[360px] h-full rounded-l-3xl border-l ${isLandscapePanelOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
           }`
           : sheetState === 'collapsed'
-            ? 'h-[18dvh] border-t rounded-t-3xl'
+            ? 'hidden pointer-events-none'
             : sheetState === 'expanded'
               ? 'flex-1 h-[68dvh] border-t rounded-t-3xl'
               : 'flex-1 h-[44dvh] border-t rounded-t-3xl'
           }`}
       >
-        {/* Drag Handle & Expand Toggle (Portrait only) */}
+        {/* Drag Handle & Expand / Collapse Controls (Portrait only) */}
         {!isLandscape && (
-          <div
-            onClick={() =>
-              setSheetState((prev) =>
-                prev === 'standard' ? 'expanded' : prev === 'expanded' ? 'collapsed' : 'standard'
-              )
-            }
-            className="w-full py-2 flex flex-col items-center justify-center cursor-pointer active:opacity-70"
-          >
-            <div className="w-12 h-1 rounded-full bg-white/30 mb-1" />
-            <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-medium">
-              <span>
-                {sheetState === 'expanded'
-                  ? 'Toque para Recolher'
-                  : sheetState === 'collapsed'
-                    ? 'Toque para Expandir'
-                    : 'Arraste ou toque para ajustar altura'}
+          <div className="w-full py-1.5 px-3 flex items-center justify-between border-b border-white/5 select-none">
+            {/* Direct Minimize Button to completely hide panel */}
+            <button
+              onClick={() => setSheetState('collapsed')}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 text-neutral-400 hover:text-white text-[10px] font-bold transition-all"
+              title="Ocultar Painel (Ver 3D em Tela Cheia)"
+            >
+              <ChevronDown className="w-3.5 h-3.5 text-blue-400" />
+              <span>Ocultar</span>
+            </button>
+
+            {/* Center Drag Pill / Status */}
+            <div
+              onClick={() =>
+                setSheetState((prev) => (prev === 'expanded' ? 'standard' : 'expanded'))
+              }
+              className="flex flex-col items-center justify-center cursor-pointer active:opacity-70 py-0.5 px-2"
+            >
+              <div className="w-10 h-1 rounded-full bg-white/30 mb-0.5" />
+              <span className="text-[9px] text-neutral-400 font-medium">
+                {sheetState === 'expanded' ? 'Painel Completo' : 'Painel Médio'}
               </span>
-              {sheetState === 'expanded' ? (
-                <ChevronDown className="w-3 h-3 text-blue-400" />
-              ) : (
-                <ChevronUp className="w-3 h-3 text-blue-400" />
-              )}
             </div>
+
+            {/* Toggle Standard <-> Full height */}
+            <button
+              onClick={() =>
+                setSheetState((prev) => (prev === 'expanded' ? 'standard' : 'expanded'))
+              }
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/20 text-neutral-400 hover:text-white text-[10px] font-bold transition-all"
+              title={sheetState === 'expanded' ? 'Tamanho Médio' : 'Expandir Painel'}
+            >
+              <span>{sheetState === 'expanded' ? 'Reduzir' : 'Expandir'}</span>
+              {sheetState === 'expanded' ? (
+                <ChevronDown className="w-3.5 h-3.5 text-blue-400" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5 text-blue-400" />
+              )}
+            </button>
           </div>
         )}
 
