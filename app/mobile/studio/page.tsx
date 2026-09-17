@@ -48,7 +48,7 @@ import {
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
 import TemplatesModal from '../../studio/components/TemplatesModal';
-import { CATALOG, FLOOR_PBR_PRESETS } from '../../studio/lib/furniture-data';
+import { CATALOG, FLOOR_PBR_PRESETS, WALL_PBR_PRESETS } from '../../studio/lib/furniture-data';
 import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templates';
 import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
 import { getAutoSavedProject, saveAutoSaveState, saveProject } from '../../studio/lib/project-storage';
@@ -102,6 +102,7 @@ export default function MobileStudioPage() {
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([]);
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
+  const [activeWallSide, setActiveWallSide] = useState<'back' | 'front' | 'left' | 'right'>('back');
 
   const [room, setRoom] = useState<RoomSettings>({
     width: 4.8,
@@ -254,6 +255,35 @@ export default function MobileStudioPage() {
       setTimeout(() => setTemplateToast(null), 2500);
     }
   }, [room, furniture, cameraSettings]);
+
+  // Wall helper functions for mobile
+  const updateWall = (side: 'back' | 'front' | 'left' | 'right', changes: Partial<RoomSettings['walls']['back']>) => {
+    setRoom((prev) => ({
+      ...prev,
+      walls: {
+        ...prev.walls,
+        [side]: {
+          ...prev.walls[side],
+          ...changes,
+        },
+      },
+    }));
+  };
+
+  const handleApplyWallToAll = () => {
+    const current = room.walls[activeWallSide];
+    setRoom((prev) => ({
+      ...prev,
+      walls: {
+        back: { ...current },
+        front: { ...current },
+        left: { ...current },
+        right: { ...current },
+      },
+    }));
+    setTemplateToast('🎨 Revestimento aplicado a todas as 4 paredes!');
+    setTimeout(() => setTemplateToast(null), 2500);
+  };
 
   // Orientation Check
   useEffect(() => {
@@ -1558,10 +1588,120 @@ export default function MobileStudioPage() {
                         : 'border-white/10 bg-white/5 text-neutral-300'
                         }`}
                     >
-                      <span className="w-3.5 h-3.5 rounded-full border border-white/30" style={{ backgroundColor: tex.color }} />
+                      <span className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0" style={{ backgroundColor: tex.color }} />
                       <span className="truncate">{tex.name}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Wall Materials & Textures Selector */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-200 block">
+                    🧱 Texturas das Paredes (PBR)
+                  </span>
+                  <button
+                    onClick={handleApplyWallToAll}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 active:scale-95 font-bold transition-all px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20"
+                    title="Aplica a textura e cor atual a todas as 4 paredes"
+                  >
+                    Aplicar em Todas
+                  </button>
+                </div>
+
+                {/* Wall Sides Selector (Fundo, Frente, Esquerda, Direita) */}
+                <div className="grid grid-cols-4 gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-[10px] font-semibold">
+                  {(['back', 'front', 'left', 'right'] as const).map((side) => {
+                    const labels = { back: 'Fundo', front: 'Frente', left: 'Esquerda', right: 'Direita' };
+                    return (
+                      <button
+                        key={side}
+                        onClick={() => setActiveWallSide(side)}
+                        className={`py-1.5 rounded-lg transition-all text-center ${
+                          activeWallSide === side
+                            ? 'bg-blue-600 text-white font-bold shadow'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {labels[side]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Wall Presets Grid */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-neutral-400 block font-medium">
+                    Revestimentos (Parede {activeWallSide === 'back' ? 'do Fundo' : activeWallSide === 'front' ? 'da Frente' : activeWallSide === 'left' ? 'da Esquerda' : 'da Direita'}):
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {WALL_PBR_PRESETS.map((preset) => {
+                      const isSelected =
+                        room.walls[activeWallSide]?.textureUrl === preset.textureUrl &&
+                        (!preset.textureUrl || room.walls[activeWallSide]?.color === preset.color);
+
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => {
+                            updateWall(activeWallSide, {
+                              textureUrl: preset.textureUrl,
+                              color: preset.color,
+                              roughness: preset.roughness,
+                              metalness: preset.metalness,
+                              tileX: preset.tileX || 1,
+                              tileY: preset.tileY || 1,
+                            });
+                          }}
+                          className={`p-2.5 rounded-xl border text-xs font-semibold text-left flex items-center gap-2 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/50'
+                              : 'border-white/10 bg-white/5 text-neutral-300'
+                          }`}
+                        >
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border border-white/30 shrink-0"
+                            style={{ backgroundColor: preset.color }}
+                          />
+                          <span className="truncate">{preset.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Wall Color & Texture Repeat Scale */}
+                <div className="p-3 rounded-xl bg-black/30 border border-white/5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-neutral-300 font-medium">Tonalidade / Cor da Parede</span>
+                    <input
+                      type="color"
+                      value={room.walls[activeWallSide]?.color || '#ffffff'}
+                      onChange={(e) => updateWall(activeWallSide, { color: e.target.value })}
+                      className="w-7 h-7 rounded-lg border border-white/20 bg-transparent cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Wall Texture Repeat Scale */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px] text-neutral-400">
+                      <span>Escala da Textura (Repetição)</span>
+                      <span className="font-mono text-blue-400 font-bold">{room.walls[activeWallSide]?.tileX || 1}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      step="1"
+                      value={room.walls[activeWallSide]?.tileX || 1}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value) || 1;
+                        updateWall(activeWallSide, { tileX: v, tileY: Math.max(1, Math.round(v / 1.5)) });
+                      }}
+                      className="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
