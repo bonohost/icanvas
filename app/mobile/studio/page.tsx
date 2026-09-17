@@ -89,6 +89,7 @@ export default function MobileStudioPage() {
   const [showProductPins, setShowProductPins] = useState<boolean>(true);
   const [joystickMode, setJoystickMode] = useState<JoystickMode>('object');
   const [joystickOpen, setJoystickOpen] = useState<boolean>(true);
+  const [isCameraMenuOpen, setIsCameraMenuOpen] = useState<boolean>(false);
 
   // 3D Scene States
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([]);
@@ -308,9 +309,9 @@ export default function MobileStudioPage() {
       dm: spec.dm ? { ...spec.dm } : { t: 'wood', c: '#ffffff' },
       product: spec.product
         ? {
-            ...spec.product,
-            showPin: true,
-          }
+          ...spec.product,
+          showPin: true,
+        }
         : undefined,
     };
 
@@ -458,21 +459,95 @@ export default function MobileStudioPage() {
       {/* TOP FLOATING HUD (HEADER & CONTROLS)                      */}
       {/* ========================================================= */}
       <div className="absolute top-3.5 left-16 right-3.5 z-30 flex items-center justify-between pointer-events-none gap-2">
-        {/* Camera Select Dropdown (Compact for maximum screen space) */}
+        {/* Camera Select Dropdown */}
         <div className="relative pointer-events-auto">
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-900/90 backdrop-blur-xl border border-white/15 rounded-full shadow-2xl text-white">
+          <button
+            type="button"
+            onClick={() => setIsCameraMenuOpen(!isCameraMenuOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900/90 hover:bg-neutral-800 backdrop-blur-xl border border-white/15 rounded-full shadow-2xl text-white text-[11px] font-bold active:scale-95 transition-all"
+          >
             <Camera className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <select
-              value={cameraSettings.id}
-              onChange={(e) => setCameraPreset(e.target.value as 'iso' | 'top' | 'front')}
-              className="bg-transparent text-[11px] font-bold text-white outline-none cursor-pointer pr-1 appearance-none"
-            >
-              <option value="iso" className="bg-neutral-900 text-white">3D Iso</option>
-              <option value="top" className="bg-neutral-900 text-white">Planta 2D</option>
-              <option value="front" className="bg-neutral-900 text-white">Frente</option>
-            </select>
-            <ChevronDown className="w-3 h-3 text-neutral-400 pointer-events-none shrink-0" />
-          </div>
+            <span>
+              {cameraSettings.id === 'top'
+                ? 'Topo'
+                : cameraSettings.id === 'front'
+                ? 'Frontal'
+                : 'Perspectiva'}
+            </span>
+            <ChevronDown
+              className={`w-3 h-3 text-neutral-400 transition-transform duration-200 shrink-0 ${
+                isCameraMenuOpen ? 'rotate-180 text-blue-400' : ''
+              }`}
+            />
+          </button>
+
+          {/* Custom Dropdown Menu */}
+          {isCameraMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsCameraMenuOpen(false)}
+              />
+              <div className="absolute top-full left-0 mt-2 z-50 min-w-[155px] bg-neutral-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCameraPreset('iso');
+                    setIsCameraMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    cameraSettings.id === 'iso'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-neutral-300 hover:bg-white/10 active:bg-white/15'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Box className="w-3.5 h-3.5 text-blue-300" />
+                    Perspectiva
+                  </span>
+                  {cameraSettings.id === 'iso' && <Check className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCameraPreset('top');
+                    setIsCameraMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    cameraSettings.id === 'top'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-neutral-300 hover:bg-white/10 active:bg-white/15'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                    Topo
+                  </span>
+                  {cameraSettings.id === 'top' && <Check className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCameraPreset('front');
+                    setIsCameraMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    cameraSettings.id === 'front'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-neutral-300 hover:bg-white/10 active:bg-white/15'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Eye className="w-3.5 h-3.5 text-amber-300" />
+                    Frontal
+                  </span>
+                  {cameraSettings.id === 'front' && <Check className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right Floating Quick Tools */}
@@ -492,11 +567,10 @@ export default function MobileStudioPage() {
           {/* Pins Toggle Button */}
           <button
             onClick={() => setShowProductPins(!showProductPins)}
-            className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all ${
-              showProductPins
-                ? 'bg-emerald-600/90 border-emerald-400 text-white shadow-lg shadow-emerald-600/30'
-                : 'bg-neutral-900/85 border-white/20 text-neutral-400'
-            }`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all ${showProductPins
+              ? 'bg-emerald-600/90 border-emerald-400 text-white shadow-lg shadow-emerald-600/30'
+              : 'bg-neutral-900/85 border-white/20 text-neutral-400'
+              }`}
             title="Mostrar/Ocultar Tags Magalu 2D"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
@@ -541,9 +615,8 @@ export default function MobileStudioPage() {
         {/* Fullscreen Toggle Button (Bottom-Left of Viewport) */}
         <button
           onClick={toggleFullscreen}
-          className={`absolute bottom-3 left-3 z-30 px-3 py-1.5 rounded-2xl bg-neutral-900/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer hover:bg-neutral-800 pointer-events-auto ${
-            isFullscreen ? 'border-blue-400/80 text-blue-300 ring-1 ring-blue-400/40' : 'text-neutral-200'
-          }`}
+          className={`absolute bottom-3 left-3 z-30 px-3 py-1.5 rounded-2xl bg-neutral-900/85 backdrop-blur-xl border border-white/20 text-white shadow-2xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer hover:bg-neutral-800 pointer-events-auto ${isFullscreen ? 'border-blue-400/80 text-blue-300 ring-1 ring-blue-400/40' : 'text-neutral-200'
+            }`}
           title={isFullscreen ? 'Sair da Tela Cheia' : 'Entrar em Tela Cheia (Imersivo)'}
         >
           {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-blue-400" /> : <Maximize className="w-3.5 h-3.5 text-neutral-300" />}
@@ -586,24 +659,22 @@ export default function MobileStudioPage() {
                   <button
                     onClick={() => setJoystickMode('object')}
                     disabled={!selectedItem}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
-                      joystickMode === 'object' && selectedItem
-                        ? 'bg-blue-600 text-white shadow'
-                        : selectedItem
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'object' && selectedItem
+                      ? 'bg-blue-600 text-white shadow'
+                      : selectedItem
                         ? 'text-neutral-400 hover:text-white'
                         : 'text-neutral-600 cursor-not-allowed'
-                    }`}
+                      }`}
                   >
                     <Move className="w-2.5 h-2.5" />
                     <span>Móvel</span>
                   </button>
                   <button
                     onClick={() => setJoystickMode('camera')}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
-                      joystickMode === 'camera' || !selectedItem
-                        ? 'bg-amber-600 text-white shadow'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'camera' || !selectedItem
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'text-neutral-400 hover:text-white'
+                      }`}
                   >
                     <Camera className="w-2.5 h-2.5" />
                     <span>Câmera</span>
@@ -843,9 +914,8 @@ export default function MobileStudioPage() {
       {isLandscape && (
         <button
           onClick={() => setIsLandscapePanelOpen(!isLandscapePanelOpen)}
-          className={`fixed top-1/2 -translate-y-1/2 z-50 py-3.5 px-2 rounded-l-xl bg-neutral-900/95 border-l border-t border-b border-white/20 text-blue-400 hover:text-white shadow-2xl flex items-center justify-center transition-all duration-300 cursor-pointer active:scale-95 ${
-            isLandscapePanelOpen ? 'right-[360px]' : 'right-0 bg-blue-600 text-white border-blue-400'
-          }`}
+          className={`fixed top-1/2 -translate-y-1/2 z-50 py-3.5 px-2 rounded-l-xl bg-neutral-900/95 border-l border-t border-b border-white/20 text-blue-400 hover:text-white shadow-2xl flex items-center justify-center transition-all duration-300 cursor-pointer active:scale-95 ${isLandscapePanelOpen ? 'right-[360px]' : 'right-0 bg-blue-600 text-white border-blue-400'
+            }`}
           title={isLandscapePanelOpen ? 'Recolher Painel (Tela Cheia)' : 'Abrir Painel'}
         >
           <span className="text-xs font-black select-none">
@@ -858,17 +928,15 @@ export default function MobileStudioPage() {
       {/* MOBILE BOTTOM SHEET (PORTRAIT) / SIDE PANEL (LANDSCAPE)  */}
       {/* ========================================================= */}
       <div
-        className={`z-40 bg-neutral-900/95 backdrop-blur-2xl border-white/15 flex flex-col transition-all duration-300 shadow-2xl ${
-          isLandscape
-            ? `fixed top-0 bottom-0 right-0 w-[360px] h-full rounded-l-3xl border-l ${
-                isLandscapePanelOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-              }`
-            : sheetState === 'collapsed'
+        className={`z-40 bg-neutral-900/95 backdrop-blur-2xl border-white/15 flex flex-col transition-all duration-300 shadow-2xl ${isLandscape
+          ? `fixed top-0 bottom-0 right-0 w-[360px] h-full rounded-l-3xl border-l ${isLandscapePanelOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+          }`
+          : sheetState === 'collapsed'
             ? 'h-[18dvh] border-t rounded-t-3xl'
             : sheetState === 'expanded'
-            ? 'flex-1 h-[68dvh] border-t rounded-t-3xl'
-            : 'flex-1 h-[44dvh] border-t rounded-t-3xl'
-        }`}
+              ? 'flex-1 h-[68dvh] border-t rounded-t-3xl'
+              : 'flex-1 h-[44dvh] border-t rounded-t-3xl'
+          }`}
       >
         {/* Drag Handle & Expand Toggle (Portrait only) */}
         {!isLandscape && (
@@ -886,8 +954,8 @@ export default function MobileStudioPage() {
                 {sheetState === 'expanded'
                   ? 'Toque para Recolher'
                   : sheetState === 'collapsed'
-                  ? 'Toque para Expandir'
-                  : 'Arraste ou toque para ajustar altura'}
+                    ? 'Toque para Expandir'
+                    : 'Arraste ou toque para ajustar altura'}
               </span>
               {sheetState === 'expanded' ? (
                 <ChevronDown className="w-3 h-3 text-blue-400" />
@@ -906,11 +974,10 @@ export default function MobileStudioPage() {
                 setActiveTab('catalog');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                activeTab === 'catalog'
-                  ? 'bg-blue-600 text-white shadow font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'catalog'
+                ? 'bg-blue-600 text-white shadow font-bold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Catálogo</span>
@@ -921,11 +988,10 @@ export default function MobileStudioPage() {
                 setActiveTab('properties');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all relative ${
-                activeTab === 'properties'
-                  ? 'bg-blue-600 text-white shadow font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all relative ${activeTab === 'properties'
+                ? 'bg-blue-600 text-white shadow font-bold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <Palette className="w-3.5 h-3.5" />
               <span>Móvel</span>
@@ -939,11 +1005,10 @@ export default function MobileStudioPage() {
                 setActiveTab('room');
                 if (sheetState === 'collapsed') setSheetState('standard');
               }}
-              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${
-                activeTab === 'room'
-                  ? 'bg-blue-600 text-white shadow font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all ${activeTab === 'room'
+                ? 'bg-blue-600 text-white shadow font-bold'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <Home className="w-3.5 h-3.5" />
               <span>Sala</span>
@@ -999,11 +1064,10 @@ export default function MobileStudioPage() {
                 <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all ${
-                      selectedCategory === 'all'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white/5 text-neutral-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all ${selectedCategory === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white/5 text-neutral-400 hover:text-white'
+                      }`}
                   >
                     Todos
                   </button>
@@ -1011,11 +1075,10 @@ export default function MobileStudioPage() {
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(cat.id)}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all ${
-                        selectedCategory === cat.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white/5 text-neutral-400 hover:text-white'
-                      }`}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all ${selectedCategory === cat.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white/5 text-neutral-400 hover:text-white'
+                        }`}
                     >
                       {cat.label}
                     </button>
@@ -1168,9 +1231,8 @@ export default function MobileStudioPage() {
                               )
                             );
                           }}
-                          className={`h-9 rounded-xl border-2 transition-all active:scale-90 flex items-center justify-center ${
-                            selectedItem.dm?.c === c.color ? 'border-blue-400 scale-105 shadow-md' : 'border-white/20'
-                          }`}
+                          className={`h-9 rounded-xl border-2 transition-all active:scale-90 flex items-center justify-center ${selectedItem.dm?.c === c.color ? 'border-blue-400 scale-105 shadow-md' : 'border-white/20'
+                            }`}
                           style={{ backgroundColor: c.color }}
                           title={c.name}
                         >
@@ -1268,11 +1330,10 @@ export default function MobileStudioPage() {
                           floorTileY: tex.tileY ?? prev.floorTileY ?? 4,
                         }))
                       }
-                      className={`p-2.5 rounded-xl border text-xs font-semibold text-left flex items-center gap-2 transition-all ${
-                        room.floorTextureUrl === tex.textureUrl
-                          ? 'border-blue-500 bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/50'
-                          : 'border-white/10 bg-white/5 text-neutral-300'
-                      }`}
+                      className={`p-2.5 rounded-xl border text-xs font-semibold text-left flex items-center gap-2 transition-all ${room.floorTextureUrl === tex.textureUrl
+                        ? 'border-blue-500 bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/50'
+                        : 'border-white/10 bg-white/5 text-neutral-300'
+                        }`}
                     >
                       <span className="w-3.5 h-3.5 rounded-full border border-white/30" style={{ backgroundColor: tex.color }} />
                       <span className="truncate">{tex.name}</span>
