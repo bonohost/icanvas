@@ -838,11 +838,10 @@ export default function StudioPage() {
             {/* Shoppable Scene Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border ${
-                cartCount > 0
-                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
-                  : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
-              }`}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border ${cartCount > 0
+                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
+                : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
+                }`}
               title="Abrir Carrinho do Ambiente / Lista de Compras"
             >
               <div className="relative">
@@ -911,7 +910,7 @@ export default function StudioPage() {
           <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
 
           {/* Project Title (Editable) */}
-          <div className="flex items-center gap-2 group">
+          {/* <div className="flex items-center gap-2 group">
             <input
               type="text"
               value={projectName}
@@ -923,7 +922,7 @@ export default function StudioPage() {
             <span className="text-[10px] text-on-surface-variant font-mono hidden lg:inline">
               ({room.width.toFixed(1)}m × {room.depth.toFixed(1)}m • {furniture.length} móveis • {(room.openings || []).length} vãos)
             </span>
-          </div>
+          </div> */}
         </div>
 
         {/* Viewport & Scene Utilities */}
@@ -1005,20 +1004,19 @@ export default function StudioPage() {
             title={autoTransparency ? 'Transparência Automática de Paredes: Ativada' : 'Transparência Automática de Paredes: Desativada'}
           >
             {autoTransparency ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-            <span>Paredes Auto</span>
+            <span>Paredes</span>
           </button>
 
           <button
             onClick={() => setShowProductPins(!showProductPins)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-              showProductPins
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
-            }`}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${showProductPins
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+              }`}
             title={showProductPins ? 'Ocultar Tags 2D de Preço' : 'Exibir Tags 2D de Preço'}
           >
             <Tag className="size-3.5" />
-            <span>Tags 2D</span>
+            <span>Tags</span>
           </button>
 
           <div className="w-px h-5 bg-white/10 mx-1" />
