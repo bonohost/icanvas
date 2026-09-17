@@ -457,7 +457,7 @@ export default function MobileStudioPage() {
     setFurniture((prev) =>
       prev.map((item) => {
         if (item.uid !== selectedUid) return item;
-        return { ...item, rot: +(item.rot + dRot).toFixed(2) };
+        return { ...item, rot: +(item.rot + dRot).toFixed(4) };
       })
     );
   };
@@ -835,11 +835,11 @@ export default function MobileStudioPage() {
                   <div className="flex items-center gap-1.5">
                     {/* Left: 3x3 D-Pad */}
                     <div className="grid grid-cols-3 gap-1 w-28 shrink-0">
-                      {/* Row 1: Rotate CCW 45° */}
+                      {/* Row 1: Rotate CCW 10° */}
                       <button
-                        onClick={() => handleJoystickRotate(-Math.PI / 4)}
+                        onClick={() => handleJoystickRotate(-(10 * Math.PI) / 180)}
                         className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                        title="Girar -45°"
+                        title="Girar -10°"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
@@ -853,11 +853,11 @@ export default function MobileStudioPage() {
                         <ArrowUp className="w-4 h-4" />
                       </button>
 
-                      {/* Row 1: Rotate CW 45° */}
+                      {/* Row 1: Rotate CW 10° */}
                       <button
-                        onClick={() => handleJoystickRotate(Math.PI / 4)}
+                        onClick={() => handleJoystickRotate((10 * Math.PI) / 180)}
                         className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                        title="Girar +45°"
+                        title="Girar +10°"
                       >
                         <RotateCw className="w-3.5 h-3.5" />
                       </button>
@@ -977,6 +977,7 @@ export default function MobileStudioPage() {
                     <span>X: {selectedItem.x.toFixed(2)}m</span>
                     <span>Z: {selectedItem.z.toFixed(2)}m</span>
                     <span>Y: {(selectedItem.by || 0).toFixed(2)}m</span>
+                    <span>Rot: {Math.round((((selectedItem.rot || 0) * 180) / Math.PI) % 360 + 360) % 360}°</span>
                   </div>
                 </div>
               )}
