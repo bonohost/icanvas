@@ -35,6 +35,7 @@ interface ViewportProps {
   onDragStart?: () => void;
   showProductPins?: boolean;
   onOpenCart?: () => void;
+  isObjectLocked?: boolean;
 }
 
 const SNAP_THRESHOLD = 0.15;
@@ -89,6 +90,7 @@ export default function ThreeViewport({
   onDragStart,
   showProductPins = true,
   onOpenCart,
+  isObjectLocked = false,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -118,6 +120,11 @@ export default function ThreeViewport({
   const exrLoaderRef = useRef<EXRLoader | null>(null);
   const hdrTextureCacheRef = useRef<Map<string, { raw: THREE.DataTexture; pmrem: THREE.Texture }>>(new Map());
   const defaultEnvTextureRef = useRef<THREE.Texture | null>(null);
+
+  const isObjectLockedRef = useRef(isObjectLocked);
+  useEffect(() => {
+    isObjectLockedRef.current = isObjectLocked;
+  }, [isObjectLocked]);
 
   const onUpdatePositionRef = useRef(onUpdatePosition);
   useEffect(() => {
@@ -1322,11 +1329,13 @@ export default function ThreeViewport({
           onSelectRef.current?.(top.userData.uid);
           onSelectOpeningRef.current?.(null);
 
-          // Natural direct dragging of furniture across floor/walls
-          onDragStartRef.current?.();
-          dragObject = top;
-          isDragging = true;
-          if (controlsRef.current) controlsRef.current.enabled = false;
+          // Natural direct dragging of furniture across floor/walls (only when not locked)
+          if (!isObjectLockedRef.current) {
+            onDragStartRef.current?.();
+            dragObject = top;
+            isDragging = true;
+            if (controlsRef.current) controlsRef.current.enabled = false;
+          }
 
           const objBaseY = top.userData?.spec?.by ?? top.position.y ?? 0;
           plane.set(new THREE.Vector3(0, 1, 0), -objBaseY);

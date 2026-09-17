@@ -40,7 +40,9 @@ import {
   Maximize,
   Minimize,
   Lightbulb,
-  Globe
+  Globe,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
@@ -92,6 +94,7 @@ export default function MobileStudioPage() {
   const [joystickMode, setJoystickMode] = useState<JoystickMode>('object');
   const [joystickOpen, setJoystickOpen] = useState<boolean>(true);
   const [isCameraMenuOpen, setIsCameraMenuOpen] = useState<boolean>(false);
+  const [isObjectLocked, setIsObjectLocked] = useState<boolean>(true);
 
   // 3D Scene States
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([]);
@@ -640,6 +643,7 @@ export default function MobileStudioPage() {
           autoTransparency={true}
           showProductPins={showProductPins}
           onOpenCart={() => setIsCartModalOpen(true)}
+          isObjectLocked={isObjectLocked}
         />
 
         {/* Fullscreen Toggle Button (Bottom-Left of Viewport) */}
@@ -655,12 +659,36 @@ export default function MobileStudioPage() {
 
         {/* Selected Item Quick Action Badge (Top Center of Viewport) */}
         {selectedItem && (
-          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-950/85 backdrop-blur-xl border border-blue-500/40 text-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            <span className="text-[11px] font-bold truncate max-w-[140px]">{selectedItem.name}</span>
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-950/90 backdrop-blur-xl border border-blue-500/40 text-white shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
+            <span className="text-[11px] font-bold truncate max-w-[110px]">{selectedItem.name}</span>
+
+            {/* Lock / Unlock Toggle Pill Button */}
+            <button
+              onClick={() => {
+                const next = !isObjectLocked;
+                setIsObjectLocked(next);
+                setTemplateToast(
+                  next
+                    ? '🔒 Móveis travados contra arrasto acidental'
+                    : '🔓 Móvel liberado para arrastar na tela'
+                );
+                setTimeout(() => setTemplateToast(null), 2500);
+              }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all border shrink-0 ${
+                isObjectLocked
+                  ? 'bg-amber-500/20 border-amber-400/50 text-amber-300 shadow-sm'
+                  : 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-sm'
+              }`}
+              title={isObjectLocked ? 'Móvel Travado: Toque para destravar e arrastar' : 'Móvel Destravado: Toque para travar'}
+            >
+              {isObjectLocked ? <Lock className="w-3 h-3 text-amber-300" /> : <Unlock className="w-3 h-3 text-emerald-300" />}
+              <span>{isObjectLocked ? 'Travado' : 'Livre'}</span>
+            </button>
+
             <button
               onClick={() => setSelectedUid(null)}
-              className="w-4 h-4 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-neutral-300 text-[10px] ml-1"
+              className="w-4 h-4 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-neutral-300 text-[10px] ml-0.5"
               title="Desmarcar"
             >
               <X className="w-2.5 h-2.5" />
@@ -684,12 +712,12 @@ export default function MobileStudioPage() {
           {joystickOpen && (
             <div className="flex flex-col bg-neutral-950/90 backdrop-blur-2xl border border-white/20 rounded-2xl p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200 ring-1 ring-black/50">
               {/* Header Mode Switcher: Móvel vs Câmera */}
-              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10 gap-2">
+              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10">
                 <div className="flex items-center gap-1 bg-black/40 rounded-xl p-0.5">
                   <button
                     onClick={() => setJoystickMode('object')}
                     disabled={!selectedItem}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'object' && selectedItem
+                    className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'object' && selectedItem
                       ? 'bg-blue-600 text-white shadow'
                       : selectedItem
                         ? 'text-neutral-400 hover:text-white'
@@ -701,7 +729,7 @@ export default function MobileStudioPage() {
                   </button>
                   <button
                     onClick={() => setJoystickMode('camera')}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'camera' || !selectedItem
+                    className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${joystickMode === 'camera' || !selectedItem
                       ? 'bg-amber-600 text-white shadow'
                       : 'text-neutral-400 hover:text-white'
                       }`}
@@ -710,127 +738,150 @@ export default function MobileStudioPage() {
                     <span>Câmera</span>
                   </button>
                 </div>
-
-                {/* Reset / Focus Button */}
-                {joystickMode === 'camera' ? (
-                  <button
-                    onClick={() => setCameraPreset('iso')}
-                    className="w-6 h-6 rounded-lg bg-white/10 text-neutral-300 flex items-center justify-center text-[10px] active:scale-90"
-                    title="Reset Câmera"
-                  >
-                    <Focus className="w-3 h-3" />
-                  </button>
-                ) : (
-                  selectedItem && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={handleDuplicateSelected}
-                        className="w-6 h-6 rounded-lg bg-white/10 text-blue-300 flex items-center justify-center text-[10px] active:scale-90"
-                        title="Duplicar"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={handleDeleteSelected}
-                        className="w-6 h-6 rounded-lg bg-rose-600/30 text-rose-300 flex items-center justify-center text-[10px] active:scale-90"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )
-                )}
               </div>
 
               {/* MODE 1: OBJECT PRECISION JOYSTICK */}
               {joystickMode === 'object' && selectedItem && (
-                <div className="flex flex-col items-center gap-1">
-                  {/* D-Pad & Central Rotate */}
-                  <div className="grid grid-cols-3 gap-1 w-28">
-                    {/* Rotate CCW 45° */}
-                    <button
-                      onClick={() => handleJoystickRotate(-Math.PI / 4)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                      title="Girar -45°"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
+                <div className="flex flex-col gap-1">
+                  {/* D-Pad (Left) + 3 Stacked Action Buttons (Right) */}
+                  <div className="flex items-center gap-1.5">
+                    {/* Left: 3x3 D-Pad */}
+                    <div className="grid grid-cols-3 gap-1 w-28 shrink-0">
+                      {/* Row 1: Rotate CCW 45° */}
+                      <button
+                        onClick={() => handleJoystickRotate(-Math.PI / 4)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
+                        title="Girar -45°"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Move Forward (-Z) */}
-                    <button
-                      onClick={() => handleJoystickMove(0, -0.1)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Mover Frente"
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                    </button>
+                      {/* Row 1: Move Forward (-Z) */}
+                      <button
+                        onClick={() => handleJoystickMove(0, -0.1)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Mover Frente"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
 
-                    {/* Rotate CW 45° */}
-                    <button
-                      onClick={() => handleJoystickRotate(Math.PI / 4)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                      title="Girar +45°"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Row 1: Rotate CW 45° */}
+                      <button
+                        onClick={() => handleJoystickRotate(Math.PI / 4)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-blue-600 active:text-white flex items-center justify-center transition-all active:scale-90"
+                        title="Girar +45°"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Move Left (-X) */}
-                    <button
-                      onClick={() => handleJoystickMove(-0.1, 0)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Mover Esquerda"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                    </button>
+                      {/* Row 2: Move Left (-X) */}
+                      <button
+                        onClick={() => handleJoystickMove(-0.1, 0)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Mover Esquerda"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
 
-                    {/* Center Reset Angle */}
-                    <button
-                      onClick={() =>
-                        setFurniture((prev) =>
-                          prev.map((f) => (f.uid === selectedItem.uid ? { ...f, rot: 0 } : f))
-                        )
-                      }
-                      className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-500/40 text-blue-300 active:scale-90 flex items-center justify-center text-[10px] font-black"
-                      title="Reset Rotação 0°"
-                    >
-                      0°
-                    </button>
+                      {/* Row 2: Center Reset Angle */}
+                      <button
+                        onClick={() =>
+                          setFurniture((prev) =>
+                            prev.map((f) => (f.uid === selectedItem.uid ? { ...f, rot: 0 } : f))
+                          )
+                        }
+                        className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-500/40 text-blue-300 active:scale-90 flex items-center justify-center text-[10px] font-black"
+                        title="Reset Rotação 0°"
+                      >
+                        0°
+                      </button>
 
-                    {/* Move Right (+X) */}
-                    <button
-                      onClick={() => handleJoystickMove(0.1, 0)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Mover Direita"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                      {/* Row 2: Move Right (+X) */}
+                      <button
+                        onClick={() => handleJoystickMove(0.1, 0)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Mover Direita"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
 
-                    {/* Height Down */}
-                    <button
-                      onClick={() => handleJoystickElevation(-0.05)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-amber-300 active:bg-amber-600 active:text-white flex items-center justify-center text-[10px] font-bold"
-                      title="Descer Altura Y"
-                    >
-                      ▼ Y
-                    </button>
+                      {/* Row 3: Height Down */}
+                      <button
+                        onClick={() => handleJoystickElevation(-0.05)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-amber-300 active:bg-amber-600 active:text-white flex items-center justify-center text-[10px] font-bold"
+                        title="Descer Altura Y"
+                      >
+                        ▼ Y
+                      </button>
 
-                    {/* Move Backward (+Z) */}
-                    <button
-                      onClick={() => handleJoystickMove(0, 0.1)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Mover Trás"
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                    </button>
+                      {/* Row 3: Move Backward (+Z) */}
+                      <button
+                        onClick={() => handleJoystickMove(0, 0.1)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-blue-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Mover Trás"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
 
-                    {/* Height Up */}
-                    <button
-                      onClick={() => handleJoystickElevation(0.05)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-amber-300 active:bg-amber-600 active:text-white flex items-center justify-center text-[10px] font-bold"
-                      title="Subir Altura Y"
-                    >
-                      ▲ Y
-                    </button>
+                      {/* Row 3: Height Up */}
+                      <button
+                        onClick={() => handleJoystickElevation(0.05)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-amber-300 active:bg-amber-600 active:text-white flex items-center justify-center text-[10px] font-bold"
+                        title="Subir Altura Y"
+                      >
+                        ▲ Y
+                      </button>
+                    </div>
+
+                    {/* Right: 3 Stacked Action Buttons (Aligned with the 3 Rows) */}
+                    <div className="flex flex-col gap-1 w-[82px] shrink-0">
+                      {/* Slot 1 (Row 1): Lock / Unlock Toggle Button */}
+                      <button
+                        onClick={() => {
+                          const next = !isObjectLocked;
+                          setIsObjectLocked(next);
+                          setTemplateToast(
+                            next
+                              ? '🔒 Móveis travados contra arrasto acidental'
+                              : '🔓 Móvel liberado para arrastar na tela'
+                          );
+                          setTimeout(() => setTemplateToast(null), 2500);
+                        }}
+                        className={`w-full h-8 px-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 border ${
+                          isObjectLocked
+                            ? 'bg-amber-500/20 border-amber-400/50 text-amber-300 shadow-sm'
+                            : 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-sm'
+                        }`}
+                        title={
+                          isObjectLocked
+                            ? 'Móvel Travado: Toque para destravar e arrastar na tela'
+                            : 'Móvel Destravado: Toque para travar'
+                        }
+                      >
+                        {isObjectLocked ? <Lock className="w-3.5 h-3.5 text-amber-300 shrink-0" /> : <Unlock className="w-3.5 h-3.5 text-emerald-300 shrink-0" />}
+                        <span className="truncate">{isObjectLocked ? 'Travado' : 'Livre'}</span>
+                      </button>
+
+                      {/* Slot 2 (Row 2): Duplicate Button */}
+                      <button
+                        onClick={handleDuplicateSelected}
+                        className="w-full h-8 px-2 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 border border-white/10 text-neutral-200 flex items-center justify-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-sm"
+                        title="Duplicar Móvel"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                        <span className="truncate">Duplicar</span>
+                      </button>
+
+                      {/* Slot 3 (Row 3): Delete Button */}
+                      <button
+                        onClick={handleDeleteSelected}
+                        className="w-full h-8 px-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 active:bg-rose-600/40 border border-rose-500/30 text-rose-300 flex items-center justify-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-sm"
+                        title="Excluir Móvel"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <span className="truncate">Excluir</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Coordinates Info */}
@@ -844,91 +895,120 @@ export default function MobileStudioPage() {
 
               {/* MODE 2: CAMERA NAVIGATION CONTROLS */}
               {(joystickMode === 'camera' || !selectedItem) && (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="grid grid-cols-3 gap-1 w-28">
-                    {/* Zoom In */}
-                    <button
-                      onClick={() => handleCameraZoom(0.85)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-200 active:bg-amber-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                      title="Zoom In"
-                    >
-                      <ZoomIn className="w-3.5 h-3.5" />
-                    </button>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    {/* Left: 3x3 Camera Controls */}
+                    <div className="grid grid-cols-3 gap-1 w-28 shrink-0">
+                      {/* Zoom In */}
+                      <button
+                        onClick={() => handleCameraZoom(0.85)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-200 active:bg-amber-600 active:text-white flex items-center justify-center transition-all active:scale-90"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Camera Height Up */}
-                    <button
-                      onClick={() => handleCameraHeight(0.5)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Câmera para Cima"
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                    </button>
+                      {/* Camera Height Up */}
+                      <button
+                        onClick={() => handleCameraHeight(0.5)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Câmera para Cima"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
 
-                    {/* Zoom Out */}
-                    <button
-                      onClick={() => handleCameraZoom(1.15)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-200 active:bg-amber-600 active:text-white flex items-center justify-center transition-all active:scale-90"
-                      title="Zoom Out"
-                    >
-                      <ZoomOut className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Zoom Out */}
+                      <button
+                        onClick={() => handleCameraZoom(1.15)}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-200 active:bg-amber-600 active:text-white flex items-center justify-center transition-all active:scale-90"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Orbit Left */}
-                    <button
-                      onClick={() => handleCameraOrbit(-0.25)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Girar Câmera Esquerda"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Orbit Left */}
+                      <button
+                        onClick={() => handleCameraOrbit(-0.25)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Girar Câmera Esquerda"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Center Reset */}
-                    <button
-                      onClick={() => setCameraPreset('iso')}
-                      className="w-8 h-8 rounded-xl bg-amber-600/30 border border-amber-500/40 text-amber-300 active:scale-90 flex items-center justify-center text-[10px] font-bold"
-                      title="Reset View"
-                    >
-                      <Focus className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Center Reset */}
+                      <button
+                        onClick={() => setCameraPreset('iso')}
+                        className="w-8 h-8 rounded-xl bg-amber-600/30 border border-amber-500/40 text-amber-300 active:scale-90 flex items-center justify-center text-[10px] font-bold"
+                        title="Reset View"
+                      >
+                        <Focus className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Orbit Right */}
-                    <button
-                      onClick={() => handleCameraOrbit(0.25)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Girar Câmera Direita"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Orbit Right */}
+                      <button
+                        onClick={() => handleCameraOrbit(0.25)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Girar Câmera Direita"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Preset Planta */}
-                    <button
-                      onClick={() => setCameraPreset('top')}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-amber-600 flex items-center justify-center text-[9px] font-bold"
-                      title="Visão Superior"
-                    >
-                      Top
-                    </button>
+                      {/* Preset Planta */}
+                      <button
+                        onClick={() => setCameraPreset('top')}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-amber-600 flex items-center justify-center text-[9px] font-bold"
+                        title="Visão Superior"
+                      >
+                        Top
+                      </button>
 
-                    {/* Camera Height Down */}
-                    <button
-                      onClick={() => handleCameraHeight(-0.5)}
-                      className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
-                      title="Câmera para Baixo"
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                    </button>
+                      {/* Camera Height Down */}
+                      <button
+                        onClick={() => handleCameraHeight(-0.5)}
+                        className="w-8 h-8 rounded-xl bg-neutral-850 border border-white/15 text-white active:bg-amber-600 active:scale-95 flex items-center justify-center font-bold text-xs shadow-md"
+                        title="Câmera para Baixo"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
 
-                    {/* Preset Frente */}
-                    <button
-                      onClick={() => setCameraPreset('front')}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-amber-600 flex items-center justify-center text-[9px] font-bold"
-                      title="Visão Frontal"
-                    >
-                      Front
-                    </button>
+                      {/* Preset Frente */}
+                      <button
+                        onClick={() => setCameraPreset('front')}
+                        className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-neutral-300 active:bg-amber-600 flex items-center justify-center text-[9px] font-bold"
+                        title="Visão Frontal"
+                      >
+                        Front
+                      </button>
+                    </div>
+
+                    {/* Right: Quick Camera Presets */}
+                    <div className="flex flex-col gap-1 w-[82px] shrink-0">
+                      <button
+                        onClick={() => setCameraPreset('iso')}
+                        className="w-full h-8 px-2 rounded-xl bg-amber-600/20 border border-amber-500/40 text-amber-300 flex items-center justify-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-sm"
+                        title="Perspectiva 3D"
+                      >
+                        <Focus className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">3D 45°</span>
+                      </button>
+                      <button
+                        onClick={() => setCameraPreset('top')}
+                        className="w-full h-8 px-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-neutral-200 flex items-center justify-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-sm"
+                        title="Planta Baixa (Topo)"
+                      >
+                        <span className="truncate">Planta</span>
+                      </button>
+                      <button
+                        onClick={() => setCameraPreset('front')}
+                        className="w-full h-8 px-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-neutral-200 flex items-center justify-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-sm"
+                        title="Visão Frontal"
+                      >
+                        <span className="truncate">Frontal</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <span className="text-[9px] text-neutral-500 mt-1 font-mono">
+                  <span className="text-[9px] text-neutral-500 mt-1 font-mono text-center">
                     Touch &bull; Arraste na tela p/ orbitar
                   </span>
                 </div>
@@ -1204,6 +1284,31 @@ export default function MobileStudioPage() {
                       </div>
 
                       <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            const next = !isObjectLocked;
+                            setIsObjectLocked(next);
+                            setTemplateToast(
+                              next
+                                ? '🔒 Móveis travados contra arrasto acidental'
+                                : '🔓 Móvel liberado para arrastar na tela'
+                            );
+                            setTimeout(() => setTemplateToast(null), 2500);
+                          }}
+                          className={`px-2 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all active:scale-90 ${
+                            isObjectLocked
+                              ? 'bg-amber-500/20 border-amber-400/40 text-amber-300 shadow-sm'
+                              : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300 shadow-sm'
+                          }`}
+                          title={
+                            isObjectLocked
+                              ? 'Móvel Travado: Toque para destravar e arrastar na tela'
+                              : 'Móvel Destravado: Toque para travar'
+                          }
+                        >
+                          {isObjectLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                          <span>{isObjectLocked ? 'Travado' : 'Livre'}</span>
+                        </button>
                         <button
                           onClick={handleDuplicateSelected}
                           className="w-8 h-8 rounded-xl bg-white/10 text-neutral-200 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-transform"
