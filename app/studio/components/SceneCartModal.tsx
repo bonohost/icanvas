@@ -281,11 +281,6 @@ export default function SceneCartModal({
                     <div className="flex-1 min-w-0">
                       {/* Badges */}
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {group.quantity > 1 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                            {group.quantity} un
-                          </span>
-                        )}
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white/10 text-neutral-300 border border-white/10 truncate max-w-[120px]">
                           {product.category || group.name}
                         </span>
@@ -350,15 +345,13 @@ export default function SceneCartModal({
                           {formatBRL(subtotalOriginal)}
                         </span>
                       )}
-                      <div className="flex items-baseline gap-1.5">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm sm:text-base font-extrabold text-emerald-400">
                           {formatBRL(subtotalPrice)}
                         </span>
-                        {group.quantity > 1 && (
-                          <span className="text-[9px] text-neutral-400 font-mono">
-                            ({formatBRL(activeStore.price)} un)
-                          </span>
-                        )}
+                        <span className="text-[12px] text-neutral-400 font-medium">
+                          ({formatBRL(activeStore.price)} un){group.quantity > 1 ? ` X ${group.quantity}` : ''}
+                        </span>
                       </div>
                     </div>
 
