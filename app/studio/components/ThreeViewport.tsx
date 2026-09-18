@@ -369,24 +369,42 @@ export default function ThreeViewport({
   const updateRulers = useCallback((selectedObj: THREE.Object3D) => {
     rulersGroupRef.current.clear();
     selectedObj.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(selectedObj);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
+
+    const objRot = selectedObj.rotation.y;
+    const w = (selectedObj.userData.width || 0.8) * selectedObj.scale.x;
+    const h = (selectedObj.userData.height || 0.8) * selectedObj.scale.y;
+    const d = (selectedObj.userData.depth || 0.6) * selectedObj.scale.z;
+    const pos = selectedObj.position;
+    const centerY = pos.y + h / 2;
+    const centerPos = new THREE.Vector3(pos.x, centerY, pos.z);
+
+    // 4 local cardinal directions in world space based on object orientation:
+    // Right (+X local)
+    const dirRight = new THREE.Vector3(Math.cos(objRot), 0, -Math.sin(objRot)).normalize();
+    // Left (-X local)
+    const dirLeft = dirRight.clone().negate();
+    // Front (+Z local)
+    const dirFront = new THREE.Vector3(Math.sin(objRot), 0, Math.cos(objRot)).normalize();
+    // Back (-Z local)
+    const dirBack = dirFront.clone().negate();
+    // Down (-Y)
+    const dirDown = new THREE.Vector3(0, -1, 0);
 
     const checkDirs = [
-      { dir: new THREE.Vector3(1, 0, 0), start: new THREE.Vector3(box.max.x, center.y, center.z) },
-      { dir: new THREE.Vector3(-1, 0, 0), start: new THREE.Vector3(box.min.x, center.y, center.z) },
-      { dir: new THREE.Vector3(0, 0, 1), start: new THREE.Vector3(center.x, center.y, box.max.z) },
-      { dir: new THREE.Vector3(0, 0, -1), start: new THREE.Vector3(center.x, center.y, box.min.z) },
-      { dir: new THREE.Vector3(0, -1, 0), start: new THREE.Vector3(center.x, box.min.y, center.z) },
+      { dir: dirRight, start: centerPos.clone().add(dirRight.clone().multiplyScalar(w / 2 + 0.005)) },
+      { dir: dirLeft, start: centerPos.clone().add(dirLeft.clone().multiplyScalar(w / 2 + 0.005)) },
+      { dir: dirFront, start: centerPos.clone().add(dirFront.clone().multiplyScalar(d / 2 + 0.005)) },
+      { dir: dirBack, start: centerPos.clone().add(dirBack.clone().multiplyScalar(d / 2 + 0.005)) },
+      { dir: dirDown, start: new THREE.Vector3(pos.x, pos.y - 0.005, pos.z) },
     ];
 
+    const otherObjects = [
+      ...furnitureGroupRef.current.children,
+      ...wallsGroupRef.current.children,
+      ...floorGroupRef.current.children,
+    ].filter((c) => c && c !== selectedObj);
+
     checkDirs.forEach(({ dir, start }) => {
-      const otherObjects = [
-        ...furnitureGroupRef.current.children,
-        ...wallsGroupRef.current.children,
-        ...floorGroupRef.current.children,
-      ].filter((c) => c && c !== selectedObj);
       raycasterRef.current.set(start, dir);
       const intersects = raycasterRef.current.intersectObjects(otherObjects, true);
 
@@ -399,14 +417,14 @@ export default function ThreeViewport({
       }
 
       const distance = start.distanceTo(endPos);
-      if (distance < 0.01) return;
+      if (distance < 0.02 || distance > 10.0) return;
 
       const geometry = new THREE.BufferGeometry().setFromPoints([start, endPos]);
       const material = new THREE.LineBasicMaterial({
         color: '#3b82f6',
         depthTest: false,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.8,
       });
       const line = new THREE.Line(geometry, material);
       line.layers.set(LAYER_TECHNICAL);
@@ -1511,35 +1529,91 @@ export default function ThreeViewport({
           }
         );
 
-        if (validHit) {
-          let wall: any = validHit.object;
-          while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
-          const wallW = wall.userData.w || currentRoom.width;
-          const localHit = wall.worldToLocal(validHit.point.clone());
+        let wall: any = null;
+        let localHitPoint: THREE.Vector3 | null = null;
 
-          let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHit.x));
+        if (validHit) {
+          wall = validHit.object;
+          while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
+          localHitPoint = wall.worldToLocal(validHit.point.clone());
+        } else {
+          // Fallback if cursor slightly drifts off wall: find closest wall
+          const targetElevation = dragObject.userData.spec?.by ?? 1.5;
+          plane.set(new THREE.Vector3(0, 1, 0), -targetElevation);
+          if (raycaster.ray.intersectPlane(plane, intersection)) {
+            const rawX = intersection.x;
+            const rawZ = intersection.z;
+            const dLeft = Math.abs(rawX - (-currentRoom.width / 2));
+            const dRight = Math.abs(rawX - (currentRoom.width / 2));
+            const dBack = Math.abs(rawZ - (-currentRoom.depth / 2));
+            const dFront = Math.abs(rawZ - (currentRoom.depth / 2));
+            const minDist = Math.min(dLeft, dRight, dBack, dFront);
+            let wallId = 'back';
+            if (minDist === dLeft) wallId = 'left';
+            else if (minDist === dRight) wallId = 'right';
+            else if (minDist === dFront) wallId = 'front';
+
+            wall = wallsGroupRef.current.children.find((w: any) => w.userData?.wallId === wallId);
+            if (wall) {
+              localHitPoint = wall.worldToLocal(intersection.clone());
+            }
+          }
+        }
+
+        if (wall && localHitPoint) {
+          const wallW = wall.userData.w || currentRoom.width;
+          let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHitPoint.x));
           const targetElevation = dragObject.userData.spec?.by ?? 1.5;
           let targetLocalY = Math.max(itemH / 2, Math.min(currentRoom.height - itemH / 2, targetElevation));
 
-          // Side-by-side magnetic snapping for wall cabinets on the same wall
+          // Side-by-side magnetic snapping for wall cabinets on the same wall and corners
           if (currentSnapOn) {
+            // A. Corner snapping (left / right edges of this wall)
+            const cornerLeft = -wallW / 2 + itemW / 2;
+            const cornerRight = wallW / 2 - itemW / 2;
+            if (Math.abs(targetLocalX - cornerLeft) < SNAP_THRESHOLD) {
+              targetLocalX = cornerLeft;
+            } else if (Math.abs(targetLocalX - cornerRight) < SNAP_THRESHOLD) {
+              targetLocalX = cornerRight;
+            }
+
+            // B. Snapping against neighboring furniture items
             otherObjects.forEach((other) => {
               const otherLocal = wall.worldToLocal(other.position.clone());
               const oW = (other.userData.width || 0.8) * other.scale.x;
-              // If on the same wall surface (similar Z depth and elevation)
-              if (
-                Math.abs(otherLocal.z - (itemD / 2 + HALF_WALL)) < 0.35 &&
-                Math.abs(otherLocal.y - targetLocalY) < 0.5
-              ) {
-                const snapLeftToRight = Math.abs(targetLocalX - itemW / 2 - (otherLocal.x + oW / 2));
-                const snapRightToLeft = Math.abs(targetLocalX + itemW / 2 - (otherLocal.x - oW / 2));
+              const oD = (other.userData.depth || 0.6) * other.scale.z;
 
-                if (snapLeftToRight < SNAP_THRESHOLD) {
-                  targetLocalX = otherLocal.x + oW / 2 + itemW / 2;
-                  targetLocalY = otherLocal.y; // Level height perfectly with neighbor
-                } else if (snapRightToLeft < SNAP_THRESHOLD) {
-                  targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
-                  targetLocalY = otherLocal.y; // Level height perfectly with neighbor
+              // Check if other object is parallel on the SAME wall
+              const isSameWall = Math.abs(Math.sin(other.rotation.y - wall.rotation.y)) < 0.15;
+
+              if (isSameWall) {
+                if (
+                  Math.abs(otherLocal.z - (itemD / 2 + HALF_WALL)) < 0.35 &&
+                  Math.abs(otherLocal.y - targetLocalY) < 0.6
+                ) {
+                  const snapLeftToRight = Math.abs(targetLocalX - (otherLocal.x + oW / 2 + itemW / 2));
+                  const snapRightToLeft = Math.abs(targetLocalX - (otherLocal.x - oW / 2 - itemW / 2));
+
+                  if (snapLeftToRight < SNAP_THRESHOLD) {
+                    targetLocalX = otherLocal.x + oW / 2 + itemW / 2;
+                    targetLocalY = other.position.y; // Level height perfectly with neighbor
+                  } else if (snapRightToLeft < SNAP_THRESHOLD) {
+                    targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
+                    targetLocalY = other.position.y; // Level height perfectly with neighbor
+                  }
+                }
+              } else {
+                // Perpendicular Wall Neighbor (Corner meeting)
+                if (Math.abs(other.position.y - targetLocalY) < 0.6) {
+                  const snapCornerLeft = -wallW / 2 + oD + itemW / 2;
+                  const snapCornerRight = wallW / 2 - oD - itemW / 2;
+                  if (Math.abs(targetLocalX - snapCornerLeft) < SNAP_THRESHOLD) {
+                    targetLocalX = snapCornerLeft;
+                    targetLocalY = other.position.y;
+                  } else if (Math.abs(targetLocalX - snapCornerRight) < SNAP_THRESHOLD) {
+                    targetLocalX = snapCornerRight;
+                    targetLocalY = other.position.y;
+                  }
                 }
               }
             });
@@ -1626,7 +1700,7 @@ export default function ThreeViewport({
               const { effW: oEffW, effD: oEffD } = getRotatedBounds(oW, oD, other.rotation.y);
 
               // Only snap to objects on similar elevation level
-              const sameElevation = Math.abs((dragObject.position.y || 0) - (other.position.y || 0)) < 0.5;
+              const sameElevation = Math.abs((dragObject?.position.y || 0) - (other.position.y || 0)) < 0.5;
               if (!sameElevation) return;
 
               // 1. Snapping along X (when moving along Back or Front wall)
