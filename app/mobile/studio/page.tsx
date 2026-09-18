@@ -48,6 +48,8 @@ import {
 import ThreeViewport from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
 import TemplatesModal from '../../studio/components/TemplatesModal';
+import AiRenderModal from '../../studio/components/AiRenderModal';
+import PanoramaViewerModal from '../../studio/components/PanoramaViewerModal';
 import { CATALOG, FLOOR_PBR_PRESETS, WALL_PBR_PRESETS } from '../../studio/lib/furniture-data';
 import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templates';
 import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
@@ -87,6 +89,11 @@ export default function MobileStudioPage() {
   const [isLandscapePanelOpen, setIsLandscapePanelOpen] = useState<boolean>(true);
   const [isCartModalOpen, setIsCartModalOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
+  const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
+  const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
+  const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
+  const captureSnapshotRef = useRef<() => string>(() => '');
+  const capturePanoramaRef = useRef<((options: { eyeHeight?: number; width?: number; height?: number }) => string) | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [templateToast, setTemplateToast] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -645,17 +652,25 @@ export default function MobileStudioPage() {
 
         {/* Right Floating Quick Tools */}
         <div className="flex items-center gap-1.5 pointer-events-auto shrink-0">
-          {/* Templates / Ambientes Prontos Button (Visible only in Landscape if space permits) */}
-          {isLandscape && (
-            <button
-              onClick={() => setIsTemplatesOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[10px] shadow-lg border border-blue-400/40 active:scale-95 transition-all"
-              title="Biblioteca de Ambientes 3D Prontos (Cozinha, Sala, etc)"
-            >
-              <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
-              <span>Ambientes</span>
-            </button>
-          )}
+          {/* AI Render Button */}
+          <button
+            onClick={() => setIsAiRenderOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-emerald-600 hover:from-purple-500 hover:to-emerald-500 text-white font-bold text-[10px] shadow-lg border border-purple-400/40 active:scale-95 transition-all"
+            title="Render Fotorrealista OpenAI (gpt-image-1.5) e 360°"
+          >
+            <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+            <span>Render IA</span>
+          </button>
+
+          {/* 360 Panorama Button */}
+          <button
+            onClick={() => setIsPanoramaOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-neutral-200 border border-white/20 text-[10px] font-bold shadow-lg active:scale-95 transition-all"
+            title="Visualizador e Tour 360°"
+          >
+            <Compass className="w-3 h-3 text-indigo-400" />
+            <span>360°</span>
+          </button>
 
           {/* Pins Toggle Button */}
           <button
@@ -704,6 +719,12 @@ export default function MobileStudioPage() {
           showProductPins={showProductPins}
           onOpenCart={() => setIsCartModalOpen(true)}
           isObjectLocked={isObjectLocked}
+          onRegisterCapture={(fn) => {
+            captureSnapshotRef.current = fn;
+          }}
+          onRegisterPanoramaCapture={(fn) => {
+            capturePanoramaRef.current = fn;
+          }}
         />
 
         {/* Fullscreen Toggle Button (Bottom-Left of Viewport) */}
@@ -2223,6 +2244,37 @@ export default function MobileStudioPage() {
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}
         onApplyTemplate={handleApplyTemplate}
+      />
+
+      {/* AI Photorealistic Render Modal */}
+      <AiRenderModal
+        isOpen={isAiRenderOpen}
+        onClose={() => setIsAiRenderOpen(false)}
+        onCaptureSnapshot={() => captureSnapshotRef.current?.() || ''}
+        onCapturePanorama={(options) => capturePanoramaRef.current?.(options) || ''}
+        onOpenPanoramaViewer={(customUrl) => {
+          setCustomPanoramaUrl(customUrl);
+          setIsAiRenderOpen(false);
+          setIsPanoramaOpen(true);
+        }}
+        room={room}
+        furniture={furniture}
+        projectName="Projeto Mobile 3D"
+      />
+
+      {/* 360 Panorama Tour Modal */}
+      <PanoramaViewerModal
+        isOpen={isPanoramaOpen}
+        onClose={() => {
+          setIsPanoramaOpen(false);
+          setCustomPanoramaUrl('');
+        }}
+        onCapturePanorama={(options) => capturePanoramaRef.current?.(options) || ''}
+        projectName="Projeto Mobile 3D"
+        roomHeight={room.height}
+        room={room}
+        furniture={furniture}
+        initialPanoramaUrl={customPanoramaUrl}
       />
 
       {/* Toast Notification */}

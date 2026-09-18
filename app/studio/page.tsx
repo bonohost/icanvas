@@ -107,6 +107,7 @@ export default function StudioPage() {
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
   const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
+  const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [showProductPins, setShowProductPins] = useState<boolean>(true);
   const [saveToast, setSaveToast] = useState<string | null>(null);
@@ -995,34 +996,37 @@ export default function StudioPage() {
 
           <button
             onClick={() => setShowGrid(!showGrid)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${showGrid
-              ? 'bg-primary/20 text-primary border border-primary/40'
-              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all ${showGrid
+              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm shadow-blue-500/10'
+              : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
           >
-            <Grid3x3 className="size-3.5" /> Grid
+            <Grid3x3 className={`size-3.5 ${showGrid ? 'text-blue-400' : 'text-neutral-400'}`} />
+            <span>Grid</span>
           </button>
 
           <button
             onClick={() => setSnapOn(!snapOn)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${snapOn
-              ? 'bg-primary/20 text-primary border border-primary/40'
-              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all ${snapOn
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10'
+              : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
-            title={snapOn ? 'Desativar Snap' : 'Ativar Snap Magnético'}
+            title={snapOn ? 'Snap Magnético: Ativado' : 'Snap Magnético: Desativado'}
           >
-            <Magnet className="size-3.5" /> Snap
+            <Magnet className={`size-3.5 ${snapOn ? 'text-amber-400 animate-pulse' : 'text-neutral-400'}`} />
+            <span>Snap</span>
+            {snapOn && <span className="size-1.5 rounded-full bg-amber-400 shadow-sm" />}
           </button>
 
           <button
             onClick={() => setAutoTransparency(!autoTransparency)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${autoTransparency
-              ? 'bg-primary/20 text-primary border border-primary/40'
-              : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all ${autoTransparency
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10'
+              : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
             title={autoTransparency ? 'Transparência Automática de Paredes: Ativada' : 'Transparência Automática de Paredes: Desativada'}
           >
-            {autoTransparency ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {autoTransparency ? <Eye className="size-3.5 text-purple-400" /> : <EyeOff className="size-3.5 text-neutral-400" />}
             <span>Paredes</span>
           </button>
 
@@ -1301,6 +1305,12 @@ export default function StudioPage() {
         isOpen={isAiRenderOpen}
         onClose={() => setIsAiRenderOpen(false)}
         onCaptureSnapshot={() => captureSnapshotRef.current?.() || ''}
+        onCapturePanorama={(options) => capturePanoramaRef.current?.(options) || ''}
+        onOpenPanoramaViewer={(customUrl) => {
+          setCustomPanoramaUrl(customUrl);
+          setIsAiRenderOpen(false);
+          setIsPanoramaOpen(true);
+        }}
         room={room}
         furniture={furniture}
         projectName={projectName}
@@ -1309,10 +1319,16 @@ export default function StudioPage() {
       {/* 360 Panorama Tour Modal */}
       <PanoramaViewerModal
         isOpen={isPanoramaOpen}
-        onClose={() => setIsPanoramaOpen(false)}
+        onClose={() => {
+          setIsPanoramaOpen(false);
+          setCustomPanoramaUrl('');
+        }}
         onCapturePanorama={(options) => capturePanoramaRef.current?.(options) || ''}
         projectName={projectName}
         roomHeight={room.height}
+        room={room}
+        furniture={furniture}
+        initialPanoramaUrl={customPanoramaUrl}
       />
 
       {/* Shoppable Scene Cart Modal */}

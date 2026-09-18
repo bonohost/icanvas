@@ -40,7 +40,7 @@ interface ViewportProps {
   isObjectLocked?: boolean;
 }
 
-const SNAP_THRESHOLD = 0.15;
+const SNAP_THRESHOLD = 0.22;
 const WALL_THICKNESS = 0.1;
 const HALF_WALL = WALL_THICKNESS / 2;
 const COLLISION_EPSILON = 0.001;
@@ -469,6 +469,7 @@ export default function ThreeViewport({
     const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
     defaultEnvTextureRef.current = envTexture;
     scene.environment = envTexture;
+    scene.background = new THREE.Color('#dbeafe'); // Soft bright daylight horizon for windows and doors
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -964,8 +965,8 @@ export default function ThreeViewport({
 
       const outdoorGeo = new THREE.PlaneGeometry(room.width + 50, room.depth + 50);
       const outdoorMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#1e2738'),
-        roughness: 0.9,
+        color: new THREE.Color('#cbd5e1'), // Bright natural terrace stone
+        roughness: 0.8,
         metalness: 0.05,
       });
       const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
@@ -1520,6 +1521,32 @@ export default function ThreeViewport({
           const targetElevation = dragObject.userData.spec?.by ?? 1.5;
           let targetLocalY = Math.max(itemH / 2, Math.min(currentRoom.height - itemH / 2, targetElevation));
 
+          // Side-by-side magnetic snapping for wall cabinets on the same wall
+          if (currentSnapOn) {
+            otherObjects.forEach((other) => {
+              const otherLocal = wall.worldToLocal(other.position.clone());
+              const oW = (other.userData.width || 0.8) * other.scale.x;
+              // If on the same wall surface (similar Z depth and elevation)
+              if (
+                Math.abs(otherLocal.z - (itemD / 2 + HALF_WALL)) < 0.35 &&
+                Math.abs(otherLocal.y - targetLocalY) < 0.5
+              ) {
+                const snapLeftToRight = Math.abs(targetLocalX - itemW / 2 - (otherLocal.x + oW / 2));
+                const snapRightToLeft = Math.abs(targetLocalX + itemW / 2 - (otherLocal.x - oW / 2));
+
+                if (snapLeftToRight < SNAP_THRESHOLD) {
+                  targetLocalX = otherLocal.x + oW / 2 + itemW / 2;
+                  targetLocalY = otherLocal.y; // Level height perfectly with neighbor
+                } else if (snapRightToLeft < SNAP_THRESHOLD) {
+                  targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
+                  targetLocalY = otherLocal.y; // Level height perfectly with neighbor
+                }
+              }
+            });
+            // Re-clamp within wall limits
+            targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, targetLocalX));
+          }
+
           const localPos = new THREE.Vector3(targetLocalX, targetLocalY, itemD / 2 + HALF_WALL);
           const worldPos = wall.localToWorld(localPos.clone());
 
@@ -1592,25 +1619,40 @@ export default function ThreeViewport({
               tx = maxX;
             }
 
-            // Side-by-side snapping to neighboring floor objects along the walls
+            // Side-by-side snapping to neighboring floor objects along all walls
             otherObjects.forEach((other) => {
               const oW = (other.userData.width || 0.8) * other.scale.x;
               const oD = (other.userData.depth || 0.6) * other.scale.z;
               const { effW: oEffW, effD: oEffD } = getRotatedBounds(oW, oD, other.rotation.y);
 
-              // If on same wall along Z (back or front)
-              if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) {
+              // Only snap to objects on similar elevation level
+              const sameElevation = Math.abs((dragObject.position.y || 0) - (other.position.y || 0)) < 0.5;
+              if (!sameElevation) return;
+
+              // 1. Snapping along X (when moving along Back or Front wall)
+              if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD + Math.abs(effD - oEffD) / 2) {
                 const snapLeftToRight = Math.abs(tx - effW / 2 - (other.position.x + oEffW / 2));
                 const snapRightToLeft = Math.abs(tx + effW / 2 - (other.position.x - oEffW / 2));
-                if (snapLeftToRight < SNAP_THRESHOLD) tx = other.position.x + oEffW / 2 + effW / 2;
-                else if (snapRightToLeft < SNAP_THRESHOLD) tx = other.position.x - oEffW / 2 - effW / 2;
+                if (snapLeftToRight < SNAP_THRESHOLD) {
+                  tx = other.position.x + oEffW / 2 + effW / 2;
+                  if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) tz = other.position.z;
+                } else if (snapRightToLeft < SNAP_THRESHOLD) {
+                  tx = other.position.x - oEffW / 2 - effW / 2;
+                  if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD) tz = other.position.z;
+                }
               }
-              // If on same wall along X (left or right)
-              if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) {
+
+              // 2. Snapping along Z (when moving along Left or Right wall)
+              if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD + Math.abs(effW - oEffW) / 2) {
                 const snapBackToFront = Math.abs(tz - effD / 2 - (other.position.z + oEffD / 2));
                 const snapFrontToBack = Math.abs(tz + effD / 2 - (other.position.z - oEffD / 2));
-                if (snapBackToFront < SNAP_THRESHOLD) tz = other.position.z + oEffD / 2 + effD / 2;
-                else if (snapFrontToBack < SNAP_THRESHOLD) tz = other.position.z - oEffD / 2 - effD / 2;
+                if (snapBackToFront < SNAP_THRESHOLD) {
+                  tz = other.position.z + oEffD / 2 + effD / 2;
+                  if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) tx = other.position.x;
+                } else if (snapFrontToBack < SNAP_THRESHOLD) {
+                  tz = other.position.z - oEffD / 2 - effD / 2;
+                  if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD) tx = other.position.x;
+                }
               }
             });
           }

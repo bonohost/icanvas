@@ -76,9 +76,16 @@ export function captureEquirectangularPanorama(
   // Ensure entire scene hierarchy has updated matrices
   scene.updateMatrixWorld(true);
 
+  // Ensure background is not pitch black during panorama capture
+  const prevBackground = scene.background;
+  if (!scene.background) {
+    scene.background = new THREE.Color('#dbeafe'); // Soft bright daylight sky horizon
+  }
+
   // 2. Render 6-face Cubemap from viewpoint
   cubeCamera.update(renderer, scene);
   scene.remove(cubeCamera);
+  scene.background = prevBackground;
 
   // 3. Setup Offscreen Equirectangular Pass
   const equirectRenderTarget = new THREE.WebGLRenderTarget(width, height, {
@@ -150,3 +157,102 @@ export function captureEquirectangularPanorama(
 
   return dataUrl;
 }
+
+/**
+ * Normalizes an AI generated or uploaded panorama image to exact 2:1 aspect ratio
+ * by extracting a centered 2:1 safe area rectangle (cropping expendable top/bottom margins)
+ * and avoiding any stretching or warping.
+ */
+export async function normalizeEquirectangularPanorama(
+  imageUrl: string,
+  targetWidth = 2048,
+  targetHeight = 1024,
+  blendWidth = 0
+): Promise<string> {
+  if (typeof window === 'undefined' || !imageUrl) return imageUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(imageUrl);
+          return;
+        }
+
+        const natW = img.naturalWidth || img.width;
+        const natH = img.naturalHeight || img.height;
+
+        // Calculate centered 2:1 rect crop (Safe Area extraction)
+        // If master is e.g. 16:9 (3840x2160) or 3:2 (1536x1024), aspect ratio < 2.0
+        let srcX = 0;
+        let srcY = 0;
+        let srcW = natW;
+        let srcH = natH;
+
+        const currentRatio = natW / natH;
+        const targetRatio = 2.0; // 2:1
+
+        if (Math.abs(currentRatio - targetRatio) > 0.01) {
+          if (currentRatio < targetRatio) {
+            // Taller than 2:1 (e.g. 16:9 or 3:2): Crop top and bottom margins (offset)
+            srcW = natW;
+            srcH = natW / targetRatio;
+            srcX = 0;
+            srcY = (natH - srcH) / 2;
+          } else {
+            // Wider than 2:1: Crop left and right margins
+            srcH = natH;
+            srcW = natH * targetRatio;
+            srcY = 0;
+            srcX = (natW - srcW) / 2;
+          }
+        }
+
+        // Draw cropped 2:1 safe area directly onto the 2:1 target canvas without distortion
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetWidth, targetHeight);
+
+        // Sub-pixel edge alignment if specified
+        if (blendWidth > 0) {
+          const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+          const data = imgData.data;
+
+          for (let y = 0; y < targetHeight; y++) {
+            for (let x = 0; x < blendWidth; x++) {
+              const leftIdx = (y * targetWidth + x) * 4;
+              const rightIdx = (y * targetWidth + (targetWidth - 1 - x)) * 4;
+
+              const t = (x + 1) / (blendWidth + 1);
+
+              for (let c = 0; c < 3; c++) {
+                const leftVal = data[leftIdx + c];
+                const rightVal = data[rightIdx + c];
+                const avg = (leftVal + rightVal) / 2;
+
+                data[leftIdx + c] = Math.round(leftVal * t + avg * (1 - t));
+                data[rightIdx + c] = Math.round(rightVal * t + avg * (1 - t));
+              }
+            }
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+        }
+
+        resolve(canvas.toDataURL('image/jpeg', 0.96));
+      } catch (err) {
+        console.warn('Could not normalize 2:1 panorama safe area canvas:', err);
+        resolve(imageUrl);
+      }
+    };
+    img.onerror = () => {
+      resolve(imageUrl);
+    };
+    img.src = imageUrl;
+  });
+}
+

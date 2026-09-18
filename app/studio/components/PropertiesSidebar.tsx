@@ -1338,7 +1338,7 @@ export default function PropertiesSidebar({
               <button
                 type="button"
                 onClick={() => onToggleSnap?.(!snapOn)}
-                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${snapOn ? 'bg-primary' : 'bg-white/10'
+                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${snapOn ? 'bg-amber-500 shadow-md shadow-amber-500/30' : 'bg-white/15'
                   }`}
                 title={snapOn ? 'Desativar Snap' : 'Ativar Snap'}
               >
