@@ -14,6 +14,13 @@ import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
 import { captureEquirectangularPanorama } from '../lib/equirectangularExporter';
 import { ShoppingCart } from 'lucide-react';
 
+export interface CameraController {
+  zoom: (factor: number) => void;
+  orbit: (dTheta: number) => void;
+  panY: (dY: number) => void;
+  setPreset: (type: 'iso' | 'top' | 'front') => void;
+}
+
 interface ViewportProps {
   room: RoomSettings;
   furniture: FurnitureInstance[];
@@ -32,6 +39,7 @@ interface ViewportProps {
   cameraSettings: { x: number; y: number; z: number; fov: number };
   onRegisterCapture?: (captureFn: () => string) => void;
   onRegisterPanoramaCapture?: (captureFn: (options: { eyeHeight?: number; width?: number; height?: number }) => string) => void;
+  onRegisterCameraControl?: (controller: CameraController) => void;
   gizmoEnabled?: boolean;
   gizmoMode?: 'translate' | 'rotate_y' | 'rotate_full';
   onDragStart?: () => void;
@@ -88,6 +96,7 @@ export default function ThreeViewport({
   cameraSettings,
   onRegisterCapture,
   onRegisterPanoramaCapture,
+  onRegisterCameraControl,
   gizmoEnabled = false,
   gizmoMode = 'translate',
   onDragStart,
@@ -342,6 +351,78 @@ export default function ThreeViewport({
 
     onRegisterPanoramaCapture(capturePanorama);
   }, [onRegisterPanoramaCapture]);
+
+  // Expose Real-Time Interactive Camera Controller (Zoom in/out, Orbit, Pan Y, Presets without jumping)
+  useEffect(() => {
+    if (!onRegisterCameraControl) return;
+
+    const controller: CameraController = {
+      zoom: (factor: number) => {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        if (!camera || !controls) return;
+
+        const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+        const currentDistance = offset.length();
+        const newDistance = currentDistance * factor;
+
+        // Prevent zooming too close or too far
+        if (newDistance < 0.3 && factor < 1) return;
+        if (newDistance > 40 && factor > 1) return;
+
+        offset.multiplyScalar(factor);
+        camera.position.copy(controls.target).add(offset);
+        controls.update();
+      },
+
+      orbit: (dTheta: number) => {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        if (!camera || !controls) return;
+
+        const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), dTheta);
+        camera.position.copy(controls.target).add(offset);
+        camera.lookAt(controls.target);
+        controls.update();
+      },
+
+      panY: (dY: number) => {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        if (!camera || !controls) return;
+
+        camera.position.y = Math.max(0.2, camera.position.y + dY);
+        controls.target.y = Math.max(0.1, controls.target.y + dY);
+        controls.update();
+      },
+
+      setPreset: (type: 'iso' | 'top' | 'front') => {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        if (!camera || !controls) return;
+
+        const currentRoom = roomRef.current;
+        const targetY = currentRoom.height * 0.4;
+        controls.target.set(0, targetY, 0);
+
+        if (type === 'top') {
+          const maxDim = Math.max(currentRoom.width, currentRoom.depth);
+          camera.position.set(0, maxDim * 1.6, 0.01);
+        } else if (type === 'front') {
+          camera.position.set(0, 1.6, currentRoom.depth * 1.3);
+        } else {
+          // Iso 45° perspective
+          const dist = Math.max(currentRoom.width, currentRoom.depth) * 1.1;
+          camera.position.set(dist, dist * 0.8, dist);
+        }
+        camera.lookAt(controls.target);
+        controls.update();
+      },
+    };
+
+    onRegisterCameraControl(controller);
+  }, [onRegisterCameraControl]);
 
   const createTextSprite = (message: string) => {
     const canvas = document.createElement('canvas');

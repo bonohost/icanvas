@@ -45,7 +45,7 @@ import {
   Unlock,
   Save
 } from 'lucide-react';
-import ThreeViewport from '../../studio/components/ThreeViewport';
+import ThreeViewport, { CameraController } from '../../studio/components/ThreeViewport';
 import SceneCartModal from '../../studio/components/SceneCartModal';
 import TemplatesModal from '../../studio/components/TemplatesModal';
 import AiRenderModal from '../../studio/components/AiRenderModal';
@@ -94,6 +94,7 @@ export default function MobileStudioPage() {
   const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
   const captureSnapshotRef = useRef<() => string>(() => '');
   const capturePanoramaRef = useRef<((options: { eyeHeight?: number; width?: number; height?: number }) => string) | null>(null);
+  const cameraControlRef = useRef<CameraController | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [templateToast, setTemplateToast] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -469,34 +470,23 @@ export default function MobileStudioPage() {
     );
   };
 
-  // Camera Orbit / Step Controls (When in Camera Joystick mode)
+  // Camera Orbit / Step Controls (When in Camera Joystick mode - Real-Time In-Place)
   const handleCameraOrbit = (dAngle: number) => {
-    setCameraSettings((prev) => {
-      const radius = Math.sqrt(prev.x * prev.x + prev.z * prev.z) || 6;
-      const currentAngle = Math.atan2(prev.z, prev.x);
-      const newAngle = currentAngle + dAngle;
-      return {
-        ...prev,
-        x: +(radius * Math.cos(newAngle)).toFixed(2),
-        z: +(radius * Math.sin(newAngle)).toFixed(2),
-      };
-    });
+    if (cameraControlRef.current) {
+      cameraControlRef.current.orbit(dAngle);
+    }
   };
 
   const handleCameraZoom = (factor: number) => {
-    setCameraSettings((prev) => ({
-      ...prev,
-      x: +(prev.x * factor).toFixed(2),
-      y: +(prev.y * factor).toFixed(2),
-      z: +(prev.z * factor).toFixed(2),
-    }));
+    if (cameraControlRef.current) {
+      cameraControlRef.current.zoom(factor);
+    }
   };
 
   const handleCameraHeight = (dY: number) => {
-    setCameraSettings((prev) => ({
-      ...prev,
-      y: Math.max(1.0, +(prev.y + dY).toFixed(2)),
-    }));
+    if (cameraControlRef.current) {
+      cameraControlRef.current.panY(dY);
+    }
   };
 
   const handleDeleteSelected = () => {
@@ -536,13 +526,10 @@ export default function MobileStudioPage() {
 
   // Camera Presets
   const setCameraPreset = (type: 'iso' | 'top' | 'front') => {
-    if (type === 'iso') {
-      setCameraSettings({ id: 'iso', x: 5.5, y: 4.5, z: 5.5, fov: 45 });
-    } else if (type === 'top') {
-      setCameraSettings({ id: 'top', x: 0, y: 8.0, z: 0.01, fov: 45 });
-    } else if (type === 'front') {
-      setCameraSettings({ id: 'front', x: 0, y: 2.0, z: 6.5, fov: 45 });
+    if (cameraControlRef.current) {
+      cameraControlRef.current.setPreset(type);
     }
+    setCameraSettings((prev) => ({ ...prev, id: type }));
   };
 
   // Height for 3D viewport based on sheet state
@@ -724,6 +711,9 @@ export default function MobileStudioPage() {
           }}
           onRegisterPanoramaCapture={(fn) => {
             capturePanoramaRef.current = fn;
+          }}
+          onRegisterCameraControl={(ctrl) => {
+            cameraControlRef.current = ctrl;
           }}
         />
 
