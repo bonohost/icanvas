@@ -35,7 +35,7 @@ export default function Scene(): ReactElement | null {
     );
   }
 
-  if (pathname.startsWith('/mobile') || pathname === '/studio' || pathname === '/mug-coffee') {
+  if (pathname.startsWith('/mobile') || pathname === '/studio' || pathname === '/mug-coffee' || pathname.startsWith('/pitch') || pathname.startsWith('/invest')) {
     return null;
   }
 

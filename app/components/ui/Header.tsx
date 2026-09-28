@@ -17,7 +17,7 @@ export default function Header() {
   const pathname = usePathname();
   const [isContactOpen, setIsContactOpen] = useState(false);
 
-  if (pathname.startsWith('/mobile')) {
+  if (pathname.startsWith('/mobile') || pathname.startsWith('/pitch') || pathname.startsWith('/invest')) {
     return null;
   }
 
