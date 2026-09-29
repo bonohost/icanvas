@@ -196,7 +196,21 @@ export default function PanoramaViewerModal({
         }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(
+            res.status === 500
+              ? 'Erro 500 no servidor de produção: A chave HUGGINGFACE_API_KEY precisa ser configurada no painel da sua hospedagem (Vercel/Render) em Environment Variables.'
+              : `Erro ${res.status} no servidor de publicação.`
+          );
+        }
+      }
+
       if (!res.ok) {
         throw new Error(data.error || data.message || 'Falha ao gerar render 360° com IA.');
       }

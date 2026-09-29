@@ -129,31 +129,14 @@ function createEquirectangular360Prompt({
   const furnitureList = formatFurnitureDescription(sceneJson?.furniture);
 
   return `
-Professional 360-degree equirectangular panoramic interior photograph, 2:1 aspect ratio, full 360x180 spherical view for VR.
-
-ROOM LAYOUT & ARCHITECTURE:
-* Space: ${roomType}, ${width}m width x ${depth}m depth, ${height}m ceiling height.
-* ${furnitureList}
-* All door openings and windows reveal bright sunlit adjoining rooms or outdoor garden daylight.
-
-STRICT PERSPECTIVE & GEOMETRY (ANTI-DISTORTION RULES):
-* True equirectangular projection with STRAIGHT vertical lines.
-* All walls, door frames, window mullions, and upright furniture MUST be perfectly vertical (perpendicular to the horizontal center line).
-* Flat horizontal ceiling on top without curved arches, dome shapes, or fisheye distortion.
-* Flat level floor plane on bottom without circular or concave warping.
-* Camera positioned at eye-level height in the center of the room.
-* Seamless 360-degree horizontal continuity: the extreme left edge and extreme right edge connect seamlessly with matching walls, lighting, and floor level.
-
-STYLE & FINISHES:
-* ${styleDescription}
-* Photorealistic materials: authentic wood textures, polished stone, brushed metals, luxury fabrics, sharp reflections.
-
-LIGHTING & ATMOSPHERE:
-* ${lightingDescription}
-* Physically accurate global illumination, soft ambient light bounces, crystal clear clarity.
-${customPrompt?.trim() ? `* Special Client Instructions: ${customPrompt.trim()}` : ''}
-
-Master 360° equirectangular architectural panorama, 8k quality, 2:1 ratio, photorealistic, zero barrel distortion, zero curved walls, no watermarks.
+equirectangular 360 degree panorama, 360 degree equirectangular view, VR 360 photograph of a ${roomType}.
+Room layout: ${width}m width x ${depth}m depth, ${height}m ceiling height. ${furnitureList}
+All doorways and windows lead to naturally lit adjoining rooms and sunlit outdoor views.
+Style and materials: ${styleDescription}. Authentic high-end textures, wood grains, polished stone, raytraced reflections.
+Lighting: ${lightingDescription}.
+Geometry: 2:1 aspect ratio, perfectly straight vertical lines for walls and door frames perpendicular to the horizon line, flat horizontal ceiling, flat level floor, zero fisheye, zero curved walls, seamless horizontal 360 continuous loop.
+${customPrompt?.trim() ? `Special details: ${customPrompt.trim()}` : ''}
+Photorealistic 360 architectural interior, 8k quality, sharp details, zero watermarks.
 `.trim();
 }
 
@@ -475,11 +458,18 @@ export async function POST(req: NextRequest) {
       if (!hfKey) return null;
 
       console.log(`[Render AI] Running Hugging Face for renderType=${renderType}`);
-      const hfModels = [
-        'black-forest-labs/FLUX.1-schnell',
-        'black-forest-labs/FLUX.1-dev',
-        'stabilityai/stable-diffusion-3.5-large',
-      ];
+      const hfModels = renderType === '360'
+        ? [
+            'MultiTrickFox/Flux-LoRA-Equirectangular-v3',
+            'black-forest-labs/FLUX.1-schnell',
+            'black-forest-labs/FLUX.1-dev',
+            'stabilityai/stable-diffusion-3.5-large',
+          ]
+        : [
+            'black-forest-labs/FLUX.1-schnell',
+            'black-forest-labs/FLUX.1-dev',
+            'stabilityai/stable-diffusion-3.5-large',
+          ];
 
       const hf = new HfInference(hfKey);
 

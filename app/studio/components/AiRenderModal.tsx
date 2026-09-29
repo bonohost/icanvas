@@ -242,7 +242,20 @@ export default function AiRenderModal({
         }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(
+            response.status === 500
+              ? 'Erro 500 no servidor de produção: Verifique se a variável HUGGINGFACE_API_KEY foi cadastrada no painel da sua hospedagem (Vercel/Render) ou insira sua chave no botão "API Key" acima.'
+              : `Erro ${response.status} na resposta do servidor.`
+          );
+        }
+      }
 
       if (!response.ok) {
         if (data.needsApiKey) {
