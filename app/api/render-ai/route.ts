@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI, { toFile } from 'openai';
 import { HfInference } from '@huggingface/inference';
-import sharp from 'sharp';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // 60 seconds timeout for Serverless / Vercel functions
+
+let sharp: any = null;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.warn('[Render AI] sharp module not available in this environment, continuing with native buffer handling.');
+}
 
 interface RenderRequest {
   imageBase64: string;
@@ -48,6 +57,14 @@ const LIGHTING_PROMPTS: Record<string, string> = {
     'Professional architectural softbox studio lighting, perfectly balanced light distribution, sharp crystal clear reflections on polished surfaces and metals.',
 };
 
+function formatFurnitureDescription(furniture?: any[]): string {
+  if (!furniture || !Array.isArray(furniture) || furniture.length === 0) return '';
+  const names = furniture.map((f: any) => f.name || f.id).filter(Boolean);
+  const uniqueNames = Array.from(new Set(names));
+  if (uniqueNames.length === 0) return '';
+  return `Furnished with: ${uniqueNames.slice(0, 10).join(', ')}.`;
+}
+
 /**
  * Normal 16:9 Architectural Perspective View Prompt
  */
@@ -62,42 +79,37 @@ function createNormalArchitecturalPrompt({
   lightingDescription?: string;
   customPrompt?: string;
 }) {
+  const roomType = sceneJson?.room?.type || 'modern luxury living room and gourmet space';
+  const width = sceneJson?.room?.width || 6;
+  const depth = sceneJson?.room?.depth || 5;
+  const height = sceneJson?.room?.height || 2.8;
+  const furnitureList = formatFurnitureDescription(sceneJson?.furniture);
+
   return `
-Use the provided 3D reference image and scene data as the single SOURCE OF TRUTH.
+Professional architectural interior photograph, 16:9 widescreen perspective, high-end real-estate visualization.
 
-ROLE & OBJECTIVE:
-* Three.js 3D Engine = Ground-truth geometry + exact positions + room dimensions + camera perspective.
-* AI = Visual Realism Layer (textures, physical materials, realistic lighting, shadows, and architectural decor).
+ROOM ARCHITECTURE:
+* Space: ${roomType}, ${width}m wide by ${depth}m deep, ceiling height ${height}m.
+* ${furnitureList}
+* Strictly maintain the architectural layout, room boundaries, wall positions, and furniture scale.
+* Passageways, doors, and windows MUST look out into bright, naturally lit adjoining rooms or lush outdoor landscaping.
 
-STRICT PRESERVATION RULES:
-1. Strictly preserve the exact camera angle, perspective, room dimensions, wall boundaries, and door/window openings defined by the 3D scene.
-2. Strictly preserve the exact position, orientation, scale, and placement of every piece of furniture, appliance, and cabinet shown.
-3. Do NOT move, delete, invent, or hallucinate walls, doors, windows, or unrelated rooms.
-4. Do NOT alter the architectural proportions or geometry.
+STYLE & MATERIALS:
+* ${styleDescription}
+* Authentic physical materials: natural wood grains, polished stone, architectural metals, luxury textiles, realistic glass reflections.
 
-VISUAL REALISM & MATERIALS:
-* Transform the scene into a high-end real-estate architectural visualization.
-* Style: ${styleDescription}
-* Lighting: ${lightingDescription}
-* Convert basic 3D geometry into tangible physical materials: authentic wood grains, polished Calacatta marble, brushed architectural metals, realistic fabric weaves, and glass reflections.
-* Apply physically plausible global illumination, natural shadows, and sharp raytraced highlights.
+LIGHTING:
+* ${lightingDescription}
+* Physically plausible global illumination, soft natural contact shadows, crisp raytraced highlights.
+${customPrompt?.trim() ? `* Client Custom Requests: ${customPrompt.trim()}` : ''}
 
-CRITICAL RULE FOR DOORS, WINDOWS, AND OPENINGS (VÃOS):
-- Through all door openings, windows, and open passageways, render a realistic, naturally illuminated adjoining environment (such as an adjoining sunlit living room, modern architectural corridor/hallway, outdoor landscaped garden with greenery, or bright ambient exterior daylight).
-- NEVER leave door openings, windows, or wall cutouts as pitch-black empty voids, black walls, or dark holes. The space beyond every doorway must look like a real, connected, naturally lit architectural space or garden.
-${customPrompt?.trim() ? `* Client Special Instructions: ${customPrompt.trim()}` : ''}
-
-3D SCENE DATA (JSON):
-${JSON.stringify(sceneJson, null, 2)}
-
-OUTPUT:
-A clean, photorealistic architectural render with 100% spatial fidelity to the 3D scene. Zero watermarks, zero text overlays, zero UI elements.
+Ultra-photorealistic architectural render, 8k resolution, award-winning architectural photography, zero distortion, zero text, zero watermarks.
 `.trim();
 }
 
 /**
  * Specialized 360-Degree Equirectangular Panoramic Prompt
- * Formatted specifically for VR / Three.js 360-degree spherical viewers.
+ * Formatted specifically for VR / Three.js 360-degree spherical viewers without distortion.
  */
 function createEquirectangular360Prompt({
   sceneJson,
@@ -110,99 +122,38 @@ function createEquirectangular360Prompt({
   lightingDescription?: string;
   customPrompt?: string;
 }) {
+  const roomType = sceneJson?.room?.type || 'modern luxury interior living space';
+  const width = sceneJson?.room?.width || 6;
+  const depth = sceneJson?.room?.depth || 5;
+  const height = sceneJson?.room?.height || 2.8;
+  const furnitureList = formatFurnitureDescription(sceneJson?.furniture);
+
   return `
-Create a photorealistic 360° equirectangular architectural panorama.
+Professional 360-degree equirectangular panoramic interior photograph, 2:1 aspect ratio, full 360x180 spherical view for VR.
 
-CRITICAL REQUIREMENT - SEAMLESS 360° LOOP:
-The LEFT EDGE and RIGHT EDGE of the final image MUST represent the exact same continuous environment.
+ROOM LAYOUT & ARCHITECTURE:
+* Space: ${roomType}, ${width}m width x ${depth}m depth, ${height}m ceiling height.
+* ${furnitureList}
+* All door openings and windows reveal bright sunlit adjoining rooms or outdoor garden daylight.
 
-The panorama is a seamless horizontal loop:
-The far-right pixels must continue naturally into the far-left pixels with NO visible seam, discontinuity, duplicated object, sudden change in perspective, lighting mismatch, geometry mismatch or texture break.
+STRICT PERSPECTIVE & GEOMETRY (ANTI-DISTORTION RULES):
+* True equirectangular projection with STRAIGHT vertical lines.
+* All walls, door frames, window mullions, and upright furniture MUST be perfectly vertical (perpendicular to the horizontal center line).
+* Flat horizontal ceiling on top without curved arches, dome shapes, or fisheye distortion.
+* Flat level floor plane on bottom without circular or concave warping.
+* Camera positioned at eye-level height in the center of the room.
+* Seamless 360-degree horizontal continuity: the extreme left edge and extreme right edge connect seamlessly with matching walls, lighting, and floor level.
 
-Imagine the image wrapped around a 360° cylinder and viewed from inside.
+STYLE & FINISHES:
+* ${styleDescription}
+* Photorealistic materials: authentic wood textures, polished stone, brushed metals, luxury fabrics, sharp reflections.
 
-REQUIREMENTS:
-1. True 360° horizontal environment.
-2. Equirectangular composition with 2:1 aspect ratio.
-3. The horizontal axis is cyclic and must wrap seamlessly.
-4. Ensure perfect visual continuity between the first and last columns of pixels.
-5. Maintain consistent perspective, lighting, shadows, materials and architectural geometry across the entire 360°.
-6. Do NOT place important objects directly across the left/right boundary unless they naturally continue across it.
-7. Do NOT mirror the image.
-8. Do NOT duplicate furniture or architectural elements to create the seam.
-9. Do NOT create a visible transition at the boundary.
-10. The ceiling and floor must also remain spatially consistent throughout the panorama.
-11. Preserve doors, windows, openings and architectural proportions from the reference.
+LIGHTING & ATMOSPHERE:
+* ${lightingDescription}
+* Physically accurate global illumination, soft ambient light bounces, crystal clear clarity.
+${customPrompt?.trim() ? `* Special Client Instructions: ${customPrompt.trim()}` : ''}
 
-
-DO NOT redesign the scene.
-DO NOT change the architecture.
-DO NOT change the furniture.
-DO NOT change the camera perspective.
-DO NOT change the lighting style.
-
-The ONLY objective is to fix the horizontal panorama seam.
-
-The LEFT and RIGHT edges of the image represent adjacent points of the same 360° environment and MUST connect perfectly.
-
-Treat the image as a continuous horizontal loop.
-
-SEAM REQUIREMENTS:
-
-Analyze the visual information at the extreme LEFT edge.
-Analyze the visual information at the extreme RIGHT edge.
-Continue the architecture, walls, floor, ceiling, furniture, lighting and textures naturally across the boundary.
-Eliminate any visible discontinuity between the RIGHT edge and LEFT edge.
-Match perspective, scale, lighting, color, shadows and texture across the seam.
-If an object is partially visible near one edge, continue that same object naturally from the opposite edge.
-Do not duplicate objects.
-Do not mirror objects.
-Do not create a new architectural structure at the seam.
-Do not blur the entire image to hide the transition.
-
-IMPORTANT:
-
-Imagine physically wrapping the image around a cylinder and placing the RIGHT edge directly against the LEFT edge.
-
-The observer must be able to rotate continuously through 360° without noticing where the image begins or ends.
-
-The final panorama must behave as a SINGLE CONTINUOUS ENVIRONMENT.
-
-Only modify pixels necessary to create a seamless transition. Preserve everything else.
-
-
-CRITICAL HORIZONTAL ALIGNMENT (ZERO VERTICAL OFFSET):
-  
-- The ceiling line, LED cove light, and floor baseboard MUST meet at the EXACT same Y-pixel height on both the far-left edge (x=0) and far-right edge (x=width).
-- There must be ZERO vertical shift, jump, or step between the left and right ends of the LED strip, ceiling, and floor.
-- Both edges must share the exact same exposure, brightness, and color temperature.
-
-Output:
-A photorealistic seamless 360° equirectangular panorama, 2:1 aspect ratio, ready to be used directly as an A-Frame <a-sky> texture.
-
-
-
-
-CRITICAL RULE FOR DOORS, WINDOWS, AND OPENINGS (VÃOS):
-- Through all door openings, windows, and open passageways, render a realistic, naturally illuminated adjoining environment (such as an adjoining sunlit living room, modern architectural corridor/hallway, outdoor landscaped garden with greenery, or bright ambient exterior daylight).
-- NEVER leave door openings, windows, or wall cutouts as pitch-black empty voids, black walls, or dark holes. The space beyond every doorway must look like a real, connected, naturally lit architectural space or garden.
-
-FINAL TEST:
-Imagine placing the right edge directly next to the left edge: they must look like two adjacent sections of the same photograph, with zero visible transition.
-The resulting image will be used directly as a 360° texture inside a Three.js / WebGL / A-Frame spherical viewer.
-
-STYLE & MATERIALS:
-* Style: ${styleDescription}
-* Lighting: ${lightingDescription}
-* Photorealistic materials: authentic wood grains, polished Calacatta marble, brushed metals, luxury upholstery, and subtle glass reflections.
-* Physically plausible global illumination and natural photon bounces.
-${customPrompt?.trim() ? `* Client Special Requests: ${customPrompt.trim()}` : ''}
-
-3D SCENE DATA (JSON):
-${JSON.stringify(sceneJson, null, 2)}
-
-OUTPUT:
-A clean, seamless, photorealistic 360° equirectangular panoramic master render, zero watermarks, zero borders, zero graphic overlays.
+Master 360° equirectangular architectural panorama, 8k quality, 2:1 ratio, photorealistic, zero barrel distortion, zero curved walls, no watermarks.
 `.trim();
 }
 
@@ -331,26 +282,29 @@ export async function POST(req: NextRequest) {
     // Helper to format output image to exact 2:1 for 360° panoramas or 16:9 for normal photo
     const formatOutputImage = async (rawBuffer: Buffer): Promise<string> => {
       try {
-        if (renderType === '360') {
-          // Equirectangular 2:1 aspect ratio (2048 x 1024 UHD)
-          const formatted = await sharp(rawBuffer)
-            .resize(2048, 1024, {
-              fit: 'fill',
-            })
-            .jpeg({ quality: 96 })
-            .toBuffer();
-          return `data:image/jpeg;base64,${formatted.toString('base64')}`;
-        } else {
-          // Normal photo 16:9 aspect ratio (1920 x 1080 Full HD)
-          const formatted = await sharp(rawBuffer)
-            .resize(1920, 1080, {
-              fit: 'cover',
-              position: 'center',
-            })
-            .jpeg({ quality: 96 })
-            .toBuffer();
-          return `data:image/jpeg;base64,${formatted.toString('base64')}`;
+        if (sharp) {
+          if (renderType === '360') {
+            // Equirectangular 2:1 aspect ratio (2048 x 1024 UHD)
+            const formatted = await sharp(rawBuffer)
+              .resize(2048, 1024, {
+                fit: 'fill',
+              })
+              .jpeg({ quality: 96 })
+              .toBuffer();
+            return `data:image/jpeg;base64,${formatted.toString('base64')}`;
+          } else {
+            // Normal photo 16:9 aspect ratio (1920 x 1080 Full HD)
+            const formatted = await sharp(rawBuffer)
+              .resize(1920, 1080, {
+                fit: 'cover',
+                position: 'center',
+              })
+              .jpeg({ quality: 96 })
+              .toBuffer();
+            return `data:image/jpeg;base64,${formatted.toString('base64')}`;
+          }
         }
+        return `data:image/jpeg;base64,${rawBuffer.toString('base64')}`;
       } catch (err) {
         console.warn('[Render AI] Sharp formatting error, fallback to raw buffer:', err);
         return `data:image/jpeg;base64,${rawBuffer.toString('base64')}`;
