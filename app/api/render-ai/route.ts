@@ -562,29 +562,15 @@ export async function POST(req: NextRequest) {
       return null;
     };
 
-    // Priority execution based on engine param (Defaults to Hugging Face FLUX.1)
-    if (engine === 'huggingface' || !engine) {
-      const hfRes = await runHuggingFace();
-      if (hfRes) return hfRes;
-      const geminiRes = await runGemini();
-      if (geminiRes) return geminiRes;
-    } else if (engine === 'gemini') {
-      const geminiRes = await runGemini();
-      if (geminiRes) return geminiRes;
-      const hfRes = await runHuggingFace();
-      if (hfRes) return hfRes;
-    } else if (engine === 'openai') {
-      const openaiRes = await runOpenAi();
-      if (openaiRes) return openaiRes;
-      const hfRes = await runHuggingFace();
-      if (hfRes) return hfRes;
-    }
+    // Execute Hugging Face (FLUX.1-schnell / FLUX.1-dev)
+    const hfRes = await runHuggingFace();
+    if (hfRes) return hfRes;
 
-    if (lastHfError || lastGeminiError) {
+    if (lastHfError) {
       return NextResponse.json(
         {
-          error: lastHfError ? `Erro na API Hugging Face: ${lastHfError}` : `Erro na API do Google Gemini: ${lastGeminiError}`,
-          engine: engine || 'huggingface',
+          error: `Erro na API Hugging Face: ${lastHfError}`,
+          engine: 'FLUX.1',
         },
         { status: 429 }
       );
@@ -592,9 +578,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        error: 'Chave da API não configurada ou inválida.',
+        error: 'Chave da API Hugging Face não configurada ou inválida.',
         needsApiKey: true,
-        message: 'Configure sua chave HUGGINGFACE_API_KEY ou GEMINI_API_KEY para gerar renders fotorrealistas.',
+        message: 'Configure sua chave HUGGINGFACE_API_KEY no arquivo .env.local para gerar renders com FLUX.1.',
       },
       { status: 401 }
     );

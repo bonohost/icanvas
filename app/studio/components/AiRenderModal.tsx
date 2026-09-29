@@ -116,7 +116,6 @@ export default function AiRenderModal({
   projectName,
 }: AiRenderModalProps) {
   const [renderType, setRenderType] = useState<'normal' | '360'>('normal');
-  const [selectedEngine, setSelectedEngine] = useState<'huggingface' | 'gemini' | 'openai'>('huggingface');
   const [snapshotUrl, setSnapshotUrl] = useState<string>('');
   const [renderedUrl, setRenderedUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -133,10 +132,7 @@ export default function AiRenderModal({
 
   // Load saved API Key from localStorage
   useEffect(() => {
-    const saved =
-      localStorage.getItem('icanvas_hf_api_key') ||
-      localStorage.getItem('icanvas_gemini_api_key') ||
-      localStorage.getItem('icanvas_openai_api_key');
+    const saved = localStorage.getItem('icanvas_hf_api_key');
     if (saved) setUserApiKey(saved);
   }, []);
 
@@ -172,11 +168,7 @@ export default function AiRenderModal({
 
   const handleSaveApiKey = (key: string) => {
     setUserApiKey(key);
-    if (key.startsWith('hf_')) {
-      localStorage.setItem('icanvas_hf_api_key', key.trim());
-    } else {
-      localStorage.setItem('icanvas_gemini_api_key', key.trim());
-    }
+    localStorage.setItem('icanvas_hf_api_key', key.trim());
   };
 
   const handleRecapture = () => {
@@ -241,13 +233,12 @@ export default function AiRenderModal({
         body: JSON.stringify({
           imageBase64: currentShot,
           renderType,
-          engine: selectedEngine,
+          engine: 'huggingface',
           styleId: selectedStyle,
           lightingId: selectedLighting,
           customPrompt,
           sceneJson,
           userApiKey: userApiKey.trim() || undefined,
-          model: 'gpt-image-1.5',
         }),
       });
 
@@ -263,7 +254,7 @@ export default function AiRenderModal({
       if (data.renderedImageUrl) {
         const finalUrl = data.renderedImageUrl;
         setRenderedUrl(finalUrl);
-        setEngineUsed(data.engine || (selectedEngine === 'huggingface' ? 'Hugging Face (FLUX.1 Schnell)' : selectedEngine === 'gemini' ? 'Google Gemini 2.0' : 'OpenAI gpt-image-1.5'));
+        setEngineUsed(data.engine || 'Hugging Face (FLUX.1 Schnell)');
         setSliderPos(50);
       } else {
         throw new Error('Nenhuma imagem foi retornada pelo motor de IA.');
@@ -331,11 +322,7 @@ export default function AiRenderModal({
                   Render IA Fotorrealista
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-widest flex items-center gap-1">
-                  {selectedEngine === 'huggingface'
-                    ? '🤗 FLUX.1 Schnell'
-                    : selectedEngine === 'gemini'
-                    ? '⚡ Gemini 2.0 / Imagen 3'
-                    : '✨ OpenAI'}
+                  🤗 FLUX.1 Schnell
                 </span>
               </div>
               <p className="text-xs text-neutral-400">
@@ -345,34 +332,6 @@ export default function AiRenderModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Engine Switcher (Hugging Face vs Gemini) */}
-            <div className="flex items-center bg-black/50 p-1 rounded-xl border border-white/10">
-              <button
-                onClick={() => setSelectedEngine('huggingface')}
-                disabled={isGenerating}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                  selectedEngine === 'huggingface'
-                    ? 'bg-amber-600 text-white shadow-md'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Hugging Face FLUX.1 (Ultra Rápido & Fotorrealista)"
-              >
-                <span>🤗 FLUX.1</span>
-              </button>
-              <button
-                onClick={() => setSelectedEngine('gemini')}
-                disabled={isGenerating}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
-                  selectedEngine === 'gemini'
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Google Gemini 2.0 / Imagen 3"
-              >
-                <span>⚡ Gemini</span>
-              </button>
-            </div>
-
             {/* Render Type Switcher Tabs */}
             <div className="flex items-center bg-black/50 p-1 rounded-xl border border-white/10">
               <button
@@ -412,7 +371,7 @@ export default function AiRenderModal({
                   ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
                   : 'bg-amber-500/20 border-amber-500/30 text-amber-300 hover:bg-amber-500/30'
               }`}
-              title="Configurar Chave da API (Hugging Face / Gemini)"
+              title="Configurar Chave da API Hugging Face"
             >
               <Key className="size-3.5 text-amber-400" />
               <span>{userApiKey ? 'IA Conectada' : 'API Key'}</span>
@@ -433,13 +392,13 @@ export default function AiRenderModal({
             <div className="flex items-center gap-2 text-amber-200">
               <Info className="size-4 text-amber-400 flex-shrink-0" />
               <span>
-                Chave <strong>Hugging Face (hf_...)</strong> ou <strong>Google Gemini</strong>:
+                Chave <strong>Hugging Face (hf_...)</strong>:
               </span>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <input
                 type="password"
-                placeholder="hf_... ou AIzaSy..."
+                placeholder="hf_..."
                 value={userApiKey}
                 onChange={(e) => handleSaveApiKey(e.target.value)}
                 className="px-3 py-1.5 rounded-lg bg-black/40 border border-amber-500/30 text-white placeholder-white/30 text-xs w-full sm:w-80 focus:outline-none focus:border-amber-400 font-mono"
@@ -504,12 +463,8 @@ export default function AiRenderModal({
                   <div>
                     <h3 className="text-sm font-bold text-white tracking-wide">
                       {renderType === '360'
-                        ? 'Renderizando Panorama 360° Equirretangular...'
-                        : selectedEngine === 'huggingface'
-                        ? 'Gerando Render Fotorrealista (FLUX.1 Schnell)...'
-                        : selectedEngine === 'gemini'
-                        ? 'Gerando Render Fotorrealista Google Gemini...'
-                        : 'Gerando Render Fotorrealista...'}
+                        ? 'Renderizando Panorama 360° Equirretangular (FLUX.1)...'
+                        : 'Gerando Render Fotorrealista (FLUX.1 Schnell)...'}
                     </h3>
                     <p className="text-xs text-neutral-400 mt-1 max-w-sm">
                       {renderType === '360'
@@ -576,7 +531,7 @@ export default function AiRenderModal({
 
                     {/* Badges on preview */}
                     <div className="absolute top-3 left-3 px-2 py-1 rounded bg-amber-600/90 backdrop-blur-md text-[10px] font-bold tracking-wider uppercase border border-amber-400/40 z-10 pointer-events-none flex items-center gap-1 text-white shadow-lg">
-                      {engineUsed || (selectedEngine === 'huggingface' ? '🤗 FLUX.1 Schnell' : selectedEngine === 'gemini' ? '⚡ Google Gemini' : '✨ OpenAI')}
+                      {engineUsed || '🤗 FLUX.1 Schnell'}
                     </div>
                     <div className="absolute top-3 right-3 px-2 py-1 rounded bg-black/70 backdrop-blur-md text-[10px] font-bold tracking-wider uppercase border border-white/20 z-10 pointer-events-none text-white/90">
                       📐 3D Original
@@ -776,7 +731,7 @@ export default function AiRenderModal({
                 <div className="flex justify-between">
                   <span>Engine:</span>
                   <span className="text-amber-300 font-bold">
-                    {selectedEngine === 'huggingface' ? '🤗 Hugging Face FLUX.1' : selectedEngine === 'gemini' ? '⚡ Google Gemini 2.0' : '✨ OpenAI'}
+                    🤗 Hugging Face FLUX.1
                   </span>
                 </div>
               </div>
