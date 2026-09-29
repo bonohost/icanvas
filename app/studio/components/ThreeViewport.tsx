@@ -44,7 +44,7 @@ interface ViewportProps {
   gizmoMode?: 'translate' | 'rotate_y' | 'rotate_full';
   onDragStart?: () => void;
   showProductPins?: boolean;
-  onOpenCart?: () => void;
+  onOpenCart?: (targetUid?: number) => void;
   isObjectLocked?: boolean;
 }
 
@@ -2021,7 +2021,7 @@ export default function ThreeViewport({
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelect(item.uid);
-                      if (onOpenCart) onOpenCart();
+                      if (onOpenCart) onOpenCart(item.uid);
                     }}
                     className={`group relative w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-2xl transition-all duration-300 cursor-pointer ${
                       isSelected

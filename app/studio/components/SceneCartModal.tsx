@@ -21,6 +21,7 @@ interface SceneCartModalProps {
   onClose: () => void;
   furniture: FurnitureInstance[];
   onSelectItem?: (uid: number) => void;
+  initialUid?: number | null;
 }
 
 interface GroupedCartItem {
@@ -36,8 +37,9 @@ export default function SceneCartModal({
   onClose,
   furniture,
   onSelectItem,
+  initialUid,
 }: SceneCartModalProps) {
-  // Group repeated products into a single row with quantity
+  // Group repeated products into a single row with quantity, placing clicked 3D item at index 0
   const groupedItems = useMemo<GroupedCartItem[]>(() => {
     const map = new Map<string, GroupedCartItem>();
 
@@ -66,8 +68,19 @@ export default function SceneCartModal({
       }
     });
 
-    return Array.from(map.values());
-  }, [furniture]);
+    const items = Array.from(map.values());
+
+    // Se o usuário clicou no botão de carrinho de um móvel específico no 3D, move para o topo da lista!
+    if (initialUid != null) {
+      const matchIdx = items.findIndex((g) => g.uids.includes(initialUid));
+      if (matchIdx > 0) {
+        const [targetGroup] = items.splice(matchIdx, 1);
+        items.unshift(targetGroup);
+      }
+    }
+
+    return items;
+  }, [furniture, initialUid]);
 
   // Track which groups are checked in the cart (by default all are checked)
   const [selectedGroups, setSelectedGroups] = useState<Record<string, boolean>>({});
@@ -223,6 +236,7 @@ export default function SceneCartModal({
               const product = group.product;
               const activeStore = getActiveStore(group);
               const checked = isChecked(group.groupKey);
+              const isInitiallySelected = initialUid != null && group.uids.includes(initialUid);
               const subtotalPrice = activeStore.price * group.quantity;
               const subtotalOriginal = activeStore.originalPrice ? activeStore.originalPrice * group.quantity : undefined;
 
@@ -230,7 +244,9 @@ export default function SceneCartModal({
                 <div
                   key={group.groupKey}
                   className={`group relative rounded-2xl border p-3 sm:p-3.5 transition-all ${
-                    checked
+                    isInitiallySelected
+                      ? 'bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                      : checked
                       ? 'bg-white/[0.04] border-white/15 hover:border-indigo-500/40 hover:bg-white/[0.07]'
                       : 'bg-white/[0.01] border-white/5 opacity-50'
                   }`}
@@ -281,6 +297,11 @@ export default function SceneCartModal({
                     <div className="flex-1 min-w-0">
                       {/* Badges */}
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {isInitiallySelected && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                            📍 Clicado na Cena 3D
+                          </span>
+                        )}
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white/10 text-neutral-300 border border-white/10 truncate max-w-[120px]">
                           {product.category || group.name}
                         </span>

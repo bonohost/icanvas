@@ -61,7 +61,7 @@ export default function PanoramaViewerModal({
   const [raw3dPanoramaUrl, setRaw3dPanoramaUrl] = useState<string>('');
   const [ai3dPanoramaUrl, setAi3dPanoramaUrl] = useState<string>('');
   const [viewMode, setViewMode] = useState<'3d' | 'ai' | 'custom'>('3d');
-  const [selectedEngine, setSelectedEngine] = useState<'openai' | 'gemini'>('gemini');
+  const [selectedEngine, setSelectedEngine] = useState<'huggingface' | 'gemini' | 'openai'>('huggingface');
 
   const [isCustomImage, setIsCustomImage] = useState<boolean>(false);
   const [customImageName, setCustomImageName] = useState<string>('');
@@ -180,7 +180,7 @@ export default function PanoramaViewerModal({
     try {
       const savedKey =
         typeof window !== 'undefined'
-          ? localStorage.getItem('icanvas_openai_api_key') || undefined
+          ? localStorage.getItem('icanvas_hf_api_key') || localStorage.getItem('icanvas_gemini_api_key') || localStorage.getItem('icanvas_openai_api_key') || undefined
           : undefined;
 
       const res = await fetch('/api/render-ai', {
@@ -503,9 +503,9 @@ export default function PanoramaViewerModal({
                     </span>
                   </span>
                 ) : viewMode === 'ai' ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-purple-500/30 via-indigo-500/30 to-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                    <Sparkles className="size-3 text-emerald-400" />
-                    <span>{selectedEngine === 'gemini' ? '⚡ Google Gemini 2.0' : '✨ OpenAI gpt-image-1.5'}</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500/30 via-orange-500/30 to-indigo-500/30 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                    <Sparkles className="size-3 text-amber-400" />
+                    <span>{selectedEngine === 'huggingface' ? '🤗 FLUX.1 Schnell' : selectedEngine === 'gemini' ? '⚡ Google Gemini 2.0' : '✨ OpenAI'}</span>
                   </span>
                 ) : (
                   <>
@@ -525,8 +525,20 @@ export default function PanoramaViewerModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Engine Switcher (Gemini vs OpenAI) */}
+            {/* Engine Switcher (Hugging Face vs Gemini) */}
             <div className="flex items-center bg-black/40 p-0.5 rounded-xl border border-white/15">
+              <button
+                onClick={() => setSelectedEngine('huggingface')}
+                disabled={isGeneratingAi}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  selectedEngine === 'huggingface'
+                    ? 'bg-amber-600 text-white shadow'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Hugging Face FLUX.1 (Ultra Rápido & Fotorrealista)"
+              >
+                <span>🤗 FLUX.1</span>
+              </button>
               <button
                 onClick={() => setSelectedEngine('gemini')}
                 disabled={isGeneratingAi}
@@ -535,21 +547,9 @@ export default function PanoramaViewerModal({
                     ? 'bg-purple-600 text-white shadow'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Google Gemini 2.0 Flash / Imagen 3 (Recomendado para 360° sem distorções)"
+                title="Google Gemini 2.0 Flash / Imagen 3"
               >
-                <span>⚡ Gemini 2.0</span>
-              </button>
-              <button
-                onClick={() => setSelectedEngine('openai')}
-                disabled={isGeneratingAi}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                  selectedEngine === 'openai'
-                    ? 'bg-emerald-600 text-white shadow'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="OpenAI gpt-image-1.5"
-              >
-                <span>✨ OpenAI</span>
+                <span>⚡ Gemini</span>
               </button>
             </div>
 
@@ -589,7 +589,7 @@ export default function PanoramaViewerModal({
                   ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
                   : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-emerald-600 hover:from-purple-500 hover:to-emerald-500 text-white border-white/20 shadow-indigo-600/30'
               }`}
-              title={`Gerar render 360° com ${selectedEngine === 'gemini' ? 'Google Gemini 2.0' : 'OpenAI gpt-image-1.5'}`}
+              title={`Gerar render 360° com ${selectedEngine === 'huggingface' ? 'Hugging Face (FLUX.1)' : selectedEngine === 'gemini' ? 'Google Gemini 2.0' : 'OpenAI'}`}
             >
               <Sparkles className={`size-3.5 ${isGeneratingAi ? 'animate-spin text-emerald-400' : 'text-amber-300'}`} />
               <span>{isGeneratingAi ? 'Renderizando IA...' : 'Render 360° IA'}</span>
@@ -663,7 +663,7 @@ export default function PanoramaViewerModal({
                 </div>
               </div>
               <p className="text-sm font-bold text-white tracking-wide">
-                Renderizando Panorama 360° com {selectedEngine === 'gemini' ? 'Google Gemini' : 'OpenAI (gpt-image-1.5)'}...
+                Renderizando Panorama 360° com {selectedEngine === 'huggingface' ? 'Hugging Face (FLUX.1)' : selectedEngine === 'gemini' ? 'Google Gemini' : 'OpenAI'}...
               </p>
               <p className="text-xs text-neutral-400 max-w-sm text-center">
                 Gerando projeção esférica 360° contínua, iluminação volumétrica e materiais fotorrealistas.

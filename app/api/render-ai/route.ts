@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI, { toFile } from 'openai';
+import { HfInference } from '@huggingface/inference';
+import sharp from 'sharp';
 
 interface RenderRequest {
   imageBase64: string;
   renderType?: 'normal' | '360';
-  engine?: 'openai' | 'gemini';
+  engine?: 'huggingface' | 'gemini' | 'openai';
   styleId?: string;
   lightingId?: string;
   customPrompt?: string;
@@ -326,6 +328,35 @@ export async function POST(req: NextRequest) {
       return null;
     };
 
+    // Helper to format output image to exact 2:1 for 360° panoramas or 16:9 for normal photo
+    const formatOutputImage = async (rawBuffer: Buffer): Promise<string> => {
+      try {
+        if (renderType === '360') {
+          // Equirectangular 2:1 aspect ratio (2048 x 1024 UHD)
+          const formatted = await sharp(rawBuffer)
+            .resize(2048, 1024, {
+              fit: 'fill',
+            })
+            .jpeg({ quality: 96 })
+            .toBuffer();
+          return `data:image/jpeg;base64,${formatted.toString('base64')}`;
+        } else {
+          // Normal photo 16:9 aspect ratio (1920 x 1080 Full HD)
+          const formatted = await sharp(rawBuffer)
+            .resize(1920, 1080, {
+              fit: 'cover',
+              position: 'center',
+            })
+            .jpeg({ quality: 96 })
+            .toBuffer();
+          return `data:image/jpeg;base64,${formatted.toString('base64')}`;
+        }
+      } catch (err) {
+        console.warn('[Render AI] Sharp formatting error, fallback to raw buffer:', err);
+        return `data:image/jpeg;base64,${rawBuffer.toString('base64')}`;
+      }
+    };
+
     // ─────────────────────────────────────────────────────────────────────────────
     // HELPER: Gemini Multimodal Execution
     // ─────────────────────────────────────────────────────────────────────────────
@@ -338,23 +369,91 @@ export async function POST(req: NextRequest) {
 
       if (!geminiKey) return null;
 
-      console.log(`[Render AI] Running Gemini Multimodal for renderType=${renderType}`);
-      const geminiModels = [
-        'gemini-3.6-flash',
-        'gemini-3.7-flash',
-        'gemini-3.8-flash',
-        'gemini-flash-latest',
-        'gemini-2.5-flash-image',
-        'gemini-3-pro-image',
-        'gemini-3.1-flash-image',
-      ];
+      console.log(`[Render AI] Running Google AI for renderType=${renderType}`);
 
-      for (const modelName of geminiModels) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiKey,
+      };
+
+      // 0. Auto-discover available models for this specific API key
+      let availableModels: string[] = [];
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`, {
+          headers,
+        });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          availableModels = (listData.models || []).map((m: any) => m.name.replace(/^models\//, ''));
+          console.log('[Render AI] Auto-discovered models on this key:', availableModels.join(', '));
+        }
+      } catch (e) {
+        console.warn('[Render AI] Could not list models:', e);
+      }
+
+      // 1. Check for Imagen models (from discovered list or defaults)
+      const discoveredImagen = availableModels.filter((m) => m.toLowerCase().includes('imagen'));
+      const candidateImagenModels = discoveredImagen.length > 0
+        ? discoveredImagen
+        : ['imagen-3.0-generate-002', 'imagen-3.0-generate-001'];
+
+      for (const imgModel of candidateImagenModels) {
         try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
+          console.log(`[Render AI] Calling Google Imagen (${imgModel}:predict)...`);
+          const imagenEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${imgModel}:predict?key=${geminiKey}`;
+          const imagenRes = await fetch(imagenEndpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              instances: [{ prompt: architecturalPrompt }],
+              parameters: {
+                sampleCount: 1,
+                aspectRatio: renderType === '360' ? '16:9' : '1:1',
+                outputMimeType: 'image/jpeg',
+                personGeneration: 'ALLOW_ADULT',
+              },
+            }),
+          });
+
+          if (imagenRes.ok) {
+            const imgData = await imagenRes.json();
+            const pred = imgData?.predictions?.[0];
+            const base64Img = pred?.bytesBase64Encoded || pred?.image?.imageBytes || (typeof pred === 'string' ? pred : null);
+            if (base64Img) {
+              return NextResponse.json({
+                renderedImageUrl: `data:image/jpeg;base64,${base64Img}`,
+                promptUsed: architecturalPrompt,
+                engine: `Google Imagen 3 (${imgModel})`,
+                renderType,
+              });
+            }
+          } else {
+            const errData = await imagenRes.json().catch(() => null);
+            const errMessage = errData?.error?.message || `HTTP ${imagenRes.status}`;
+            lastGeminiError = `Imagen (${imgModel}): ${errMessage}`;
+            console.warn(`[Render AI] Imagen model ${imgModel} response:`, lastGeminiError);
+          }
+        } catch (imgErr: any) {
+          lastGeminiError = imgErr?.message || String(imgErr);
+          console.warn(`[Render AI] Imagen model ${imgModel} exception:`, imgErr);
+        }
+      }
+
+      // 2. Try Gemini Multimodal Image Generation on available or fallback models
+      const discoveredFlash = availableModels.filter(
+        (m) => m.toLowerCase().includes('flash') || m.toLowerCase().includes('gemini')
+      );
+      const candidateGenModels = discoveredFlash.length > 0
+        ? discoveredFlash.slice(0, 4)
+        : ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-2.0-flash'];
+
+      for (const genModel of candidateGenModels) {
+        try {
+          console.log(`[Render AI] Trying Gemini multimodal model (${genModel})...`);
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${genModel}:generateContent?key=${geminiKey}`;
           const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               contents: [
                 {
@@ -371,7 +470,7 @@ export async function POST(req: NextRequest) {
                 },
               ],
               generationConfig: {
-                responseModalities: ['TEXT', 'IMAGE'],
+                responseModalities: ['IMAGE', 'TEXT'],
                 temperature: 0.2,
               },
             }),
@@ -388,52 +487,114 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                   renderedImageUrl: `data:${outMime};base64,${inlineData.data}`,
                   promptUsed: architecturalPrompt,
-                  engine: `Google Gemini (${modelName})`,
+                  engine: `Google Gemini (${genModel})`,
                   renderType,
                 });
               }
             }
           } else {
             const errData = await response.json().catch(() => null);
-            lastGeminiError = errData?.error?.message || `HTTP ${response.status}`;
-            console.warn(`[Render AI] Gemini model ${modelName} returned status ${response.status}:`, lastGeminiError);
+            console.warn(`[Render AI] Gemini model ${genModel} returned:`, errData?.error?.message);
           }
         } catch (gemErr: any) {
-          lastGeminiError = gemErr?.message || String(gemErr);
-          console.warn(`[Render AI] Gemini model ${modelName} error:`, gemErr);
+          console.warn(`[Render AI] Gemini model ${genModel} error:`, gemErr);
+        }
+      }
+
+      if (availableModels.length > 0 && candidateImagenModels.length === 0) {
+        lastGeminiError = `Sua chave de API tem acesso a modelos de texto/chat (${availableModels.slice(0, 4).join(', ')}), mas o modelo de imagem Imagen 3 não está habilitado ou requer faturamento no Google AI Studio.`;
+      }
+
+      return null;
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // HELPER: Hugging Face (FLUX.1-schnell / FLUX.1-dev / SD 3.5)
+    // ─────────────────────────────────────────────────────────────────────────────
+    let lastHfError: string | null = null;
+    const runHuggingFace = async (): Promise<NextResponse | null> => {
+      const hfKey =
+        (userApiKey && userApiKey.startsWith('hf_') ? userApiKey.trim() : null) ||
+        process.env.HUGGINGFACE_API_KEY ||
+        process.env.HF_TOKEN;
+
+      if (!hfKey) return null;
+
+      console.log(`[Render AI] Running Hugging Face for renderType=${renderType}`);
+      const hfModels = [
+        'black-forest-labs/FLUX.1-schnell',
+        'black-forest-labs/FLUX.1-dev',
+        'stabilityai/stable-diffusion-3.5-large',
+      ];
+
+      const hf = new HfInference(hfKey);
+
+      for (const modelName of hfModels) {
+        try {
+          console.log(`[Render AI] Calling Hugging Face model: ${modelName}...`);
+          const blob: any = await hf.textToImage({
+            model: modelName,
+            inputs: architecturalPrompt,
+            parameters: {
+              width: 1024,
+              height: renderType === '360' ? 512 : 576,
+            },
+          });
+
+          if (blob) {
+            const arrayBuffer = await blob.arrayBuffer();
+            const rawBuffer = Buffer.from(arrayBuffer);
+            const formattedImageUrl = await formatOutputImage(rawBuffer);
+
+            return NextResponse.json({
+              renderedImageUrl: formattedImageUrl,
+              promptUsed: architecturalPrompt,
+              engine: `Hugging Face (${modelName.split('/')[1] || modelName})`,
+              renderType,
+            });
+          }
+        } catch (err: any) {
+          lastHfError = err?.message || String(err);
+          console.warn(`[Render AI] Hugging Face ${modelName} error:`, lastHfError);
         }
       }
 
       return null;
     };
 
-    // Priority execution based on engine param
-    if (engine === 'gemini') {
+    // Priority execution based on engine param (Defaults to Hugging Face FLUX.1)
+    if (engine === 'huggingface' || !engine) {
+      const hfRes = await runHuggingFace();
+      if (hfRes) return hfRes;
       const geminiRes = await runGemini();
       if (geminiRes) return geminiRes;
-      if (lastGeminiError) {
-        return NextResponse.json(
-          {
-            error: `Erro na API do Google Gemini: ${lastGeminiError}`,
-            engine: 'gemini',
-          },
-          { status: 429 }
-        );
-      }
-      const openaiRes = await runOpenAi();
-      if (openaiRes) return openaiRes;
-    } else {
-      const openaiRes = await runOpenAi();
-      if (openaiRes) return openaiRes;
+    } else if (engine === 'gemini') {
       const geminiRes = await runGemini();
       if (geminiRes) return geminiRes;
+      const hfRes = await runHuggingFace();
+      if (hfRes) return hfRes;
+    } else if (engine === 'openai') {
+      const openaiRes = await runOpenAi();
+      if (openaiRes) return openaiRes;
+      const hfRes = await runHuggingFace();
+      if (hfRes) return hfRes;
+    }
+
+    if (lastHfError || lastGeminiError) {
+      return NextResponse.json(
+        {
+          error: lastHfError ? `Erro na API Hugging Face: ${lastHfError}` : `Erro na API do Google Gemini: ${lastGeminiError}`,
+          engine: engine || 'huggingface',
+        },
+        { status: 429 }
+      );
     }
 
     return NextResponse.json(
       {
-        error: 'Chave da API da OpenAI ou Google Gemini não configurada ou inválida.',
+        error: 'Chave da API não configurada ou inválida.',
         needsApiKey: true,
-        message: 'Configure sua chave OPENAI_API_KEY ou GEMINI_API_KEY para gerar renders fotorrealistas.',
+        message: 'Configure sua chave HUGGINGFACE_API_KEY ou GEMINI_API_KEY para gerar renders fotorrealistas.',
       },
       { status: 401 }
     );

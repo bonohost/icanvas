@@ -376,7 +376,7 @@ export const CATALOG: CatalogCategory[] = [
               store: 'Magazine Luiza',
               price: 6899.00,
               originalPrice: 7999.00,
-              url: 'https://www.magazinevoce.com.br/magazinevendas3d/geladeira-refrigerador-brastemp-frost-free-french-door-inox-559l-bro85mkana/p/240941300/ed/grfd/?seller_id=magazineluiza',
+              url: 'https://acesse.one/QITmsvg',
               installments: '10x de R$ 689,90 sem juros'
             }
           ]

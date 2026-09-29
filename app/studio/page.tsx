@@ -109,6 +109,7 @@ export default function StudioPage() {
   const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
   const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [cartInitialUid, setCartInitialUid] = useState<number | null>(null);
   const [showProductPins, setShowProductPins] = useState<boolean>(true);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const isInitialMount = useRef(true);
@@ -209,7 +210,7 @@ export default function StudioPage() {
             store: 'Magazine Luiza',
             price: 6899.0,
             originalPrice: 7999.0,
-            url: 'https://www.magazinevoce.com.br/magazinevendas3d/geladeira-refrigerador-brastemp-frost-free-french-door-inox-559l-bro85mkana/p/240941300/ed/grfd/?seller_id=magazineluiza',
+            url: 'https://acesse.one/QITmsvg',
             installments: '10x de R$ 689,90 sem juros',
           },
         ],
@@ -857,7 +858,10 @@ export default function StudioPage() {
 
             {/* Shoppable Scene Cart Button */}
             <button
-              onClick={() => setIsCartOpen(true)}
+              onClick={() => {
+                setCartInitialUid(selectedUid);
+                setIsCartOpen(true);
+              }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border ${cartCount > 0
                 ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
                 : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
@@ -1090,7 +1094,10 @@ export default function StudioPage() {
             gizmoMode={transformMode === 'locked' ? 'translate' : transformMode}
             onDragStart={pushHistory}
             showProductPins={showProductPins}
-            onOpenCart={() => setIsCartOpen(true)}
+            onOpenCart={(targetUid) => {
+              setCartInitialUid(targetUid ?? selectedUid);
+              setIsCartOpen(true);
+            }}
             onRegisterCapture={(fn) => {
               captureSnapshotRef.current = fn;
             }}
@@ -1334,11 +1341,16 @@ export default function StudioPage() {
       {/* Shoppable Scene Cart Modal */}
       <SceneCartModal
         isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
+        onClose={() => {
+          setIsCartOpen(false);
+          setCartInitialUid(null);
+        }}
         furniture={furniture}
+        initialUid={cartInitialUid}
         onSelectItem={(uid) => {
           setSelectedUid(uid);
           setIsCartOpen(false);
+          setCartInitialUid(null);
         }}
       />
     </div>
