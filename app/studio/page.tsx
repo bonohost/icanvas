@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import ThreeViewport from './components/ThreeViewport';
+import ThreeViewport, { CameraController } from './components/ThreeViewport';
 import CatalogSidebar from './components/CatalogSidebar';
 import PropertiesSidebar from './components/PropertiesSidebar';
 import ProjectManagerModal from './components/ProjectManagerModal';
@@ -115,6 +115,7 @@ export default function StudioPage() {
   const isInitialMount = useRef(true);
   const captureSnapshotRef = useRef<() => string>(() => '');
   const capturePanoramaRef = useRef<((options: { eyeHeight?: number; width?: number; height?: number }) => string) | null>(null);
+  const cameraControlRef = useRef<CameraController | null>(null);
 
   const [furniture, setFurniture] = useState<FurnitureInstance[]>([
     {
@@ -770,6 +771,28 @@ export default function StudioPage() {
         setIsZenMode((prev) => !prev);
       }
 
+      // Zoom In (aproximar câmera): + or = or NumpadAdd
+      if (
+        (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        cameraControlRef.current?.zoom(0.85);
+        return;
+      }
+
+      // Zoom Out (afastar câmera): - or _ or NumpadSubtract
+      if (
+        (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        cameraControlRef.current?.zoom(1.15);
+        return;
+      }
+
       // Deselect: Escape
       if (e.key === 'Escape') {
         handleDeselectAll();
@@ -1104,6 +1127,9 @@ export default function StudioPage() {
             onRegisterPanoramaCapture={(fn) => {
               capturePanoramaRef.current = fn;
             }}
+            onRegisterCameraControl={(ctrl) => {
+              cameraControlRef.current = ctrl;
+            }}
           />
 
           {/* Floating Toggle Controls inside 3D Viewport */}
@@ -1274,10 +1300,29 @@ export default function StudioPage() {
               {Math.round(cameraSettings.fov || 45)}°
             </span>
           </div>
+
+          {/* Quick Zoom In / Out Buttons (+ / -) */}
+          <div className="flex items-center gap-1 bg-white/[0.04] border border-white/10 p-0.5 rounded-md">
+            <button
+              onClick={() => cameraControlRef.current?.zoom(0.85)}
+              className="h-5 px-1.5 rounded flex items-center justify-center text-[11px] font-black bg-white/5 hover:bg-white/15 text-white/90 hover:text-white transition-all active:scale-95"
+              title="Aproximar Câmera (ou pressione +)"
+            >
+              +
+            </button>
+            <button
+              onClick={() => cameraControlRef.current?.zoom(1.15)}
+              className="h-5 px-1.5 rounded flex items-center justify-center text-[11px] font-black bg-white/5 hover:bg-white/15 text-white/90 hover:text-white transition-all active:scale-95"
+              title="Afastar Câmera (ou pressione -)"
+            >
+              -
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant">
           <div className="hidden md:flex items-center gap-3 text-white/50 text-[10px]">
+            <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">+ / -</kbd> Zoom</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Z</kbd> Desfazer</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Y</kbd> Refazer</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+S</kbd> Salvar</span>
