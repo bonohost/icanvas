@@ -9,6 +9,7 @@ import TemplatesModal from './components/TemplatesModal';
 import AiRenderModal from './components/AiRenderModal';
 import SceneCartModal from './components/SceneCartModal';
 import PanoramaViewerModal from './components/PanoramaViewerModal';
+import FloorPlannerModal from './components/FloorPlannerModal';
 import {
   FurnitureInstance,
   FurnitureSpec,
@@ -54,6 +55,7 @@ import {
   ShoppingCart,
   Tag,
   Compass,
+  PenTool,
 } from 'lucide-react';
 
 interface HistorySnapshot {
@@ -106,6 +108,7 @@ export default function StudioPage() {
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
+  const [isFloorPlannerOpen, setIsFloorPlannerOpen] = useState<boolean>(false);
   const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
   const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
@@ -850,6 +853,16 @@ export default function StudioPage() {
               <span>Ambientes Prontos</span>
             </button>
 
+            {/* 2D to 3D Floor Planner Button */}
+            <button
+              onClick={() => setIsFloorPlannerOpen(true)}
+              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all shadow-md active:scale-95 animate-in fade-in"
+              title="Desenhar planta baixa 2D personalizada e gerar ambiente 3D sob medida"
+            >
+              <PenTool className="size-3.5 text-blue-400" />
+              <span>Planta 2D / 3D</span>
+            </button>
+
             <button
               onClick={() => setIsAiRenderOpen(true)}
               className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/30 border border-purple-400/40 transition-all active:scale-95 animate-in fade-in"
@@ -1396,6 +1409,20 @@ export default function StudioPage() {
           setSelectedUid(uid);
           setIsCartOpen(false);
           setCartInitialUid(null);
+        }}
+      />
+
+      {/* 2D to 3D Floor Planner Modal */}
+      <FloorPlannerModal
+        isOpen={isFloorPlannerOpen}
+        onClose={() => setIsFloorPlannerOpen(false)}
+        currentRoom={room}
+        onApplyToProject={(updatedRoom, wallSummary) => {
+          pushHistory();
+          setRoom(updatedRoom);
+          setIsSaved(false);
+          setSaveToast(wallSummary || 'Planta 2D aplicada ao 3D com sucesso!');
+          setTimeout(() => setSaveToast(null), 4000);
         }}
       />
     </div>

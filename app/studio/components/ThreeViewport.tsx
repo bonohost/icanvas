@@ -1022,6 +1022,65 @@ export default function ThreeViewport({
   useEffect(() => {
     if (!sceneRef.current) return;
 
+    const hasCustomFloors = room.customFloors && room.customFloors.length > 0;
+    if (hasCustomFloors) {
+      floorGroupRef.current.clear();
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(room.floorColor),
+        roughness: room.floorRoughness ?? 0.55,
+        metalness: room.floorMetalness ?? 0.02,
+      });
+      floorMatRef.current = floorMat;
+
+      const initialTex = getOrLoadTexture(
+        room.floorTextureUrl,
+        room.floorTileX || 4,
+        room.floorTileY || 4,
+        (tex) => {
+          if (floorMatRef.current) {
+            floorMatRef.current.map = tex;
+            floorMatRef.current.needsUpdate = true;
+          }
+        }
+      );
+      if (initialTex) {
+        floorMat.map = initialTex;
+      }
+
+      room.customFloors!.forEach((fl) => {
+        if (!fl.points || fl.points.length < 3) return;
+        const shape = new THREE.Shape();
+        shape.moveTo(fl.points[0].x, -fl.points[0].y);
+        for (let i = 1; i < fl.points.length; i++) {
+          shape.lineTo(fl.points[i].x, -fl.points[i].y);
+        }
+        shape.closePath();
+
+        const floorGeo = new THREE.ShapeGeometry(shape);
+        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.position.y = 0.001;
+        floorMesh.receiveShadow = true;
+        floorMesh.userData = { isFloor: true, id: fl.id };
+        floorGroupRef.current.add(floorMesh);
+      });
+
+      const maxDim = Math.max(room.width, room.depth);
+      const outdoorGeo = new THREE.PlaneGeometry(maxDim + 50, maxDim + 50);
+      const outdoorMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#cbd5e1'),
+        roughness: 0.8,
+        metalness: 0.05,
+      });
+      const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
+      outdoor.position.y = -0.005;
+      outdoor.rotation.x = -Math.PI / 2;
+      outdoor.receiveShadow = true;
+      outdoorMeshRef.current = outdoor;
+      floorGroupRef.current.add(outdoor);
+      return;
+    }
+
     // Check if floor geometry exists with matching dimensions inside floorGroupRef
     const needsRebuild =
       !floorMeshRef.current ||
@@ -1103,6 +1162,7 @@ export default function ThreeViewport({
     room.floorTextureUrl,
     room.floorTileX,
     room.floorTileY,
+    room.customFloors,
     getOrLoadTexture,
   ]);
 
@@ -1129,6 +1189,66 @@ export default function ThreeViewport({
   // 4. Parametric Walls & Openings Smart Synchronization (Per Wall)
   useEffect(() => {
     if (!sceneRef.current) return;
+
+    const hasCustomWalls = room.customWalls && room.customWalls.length > 0;
+    if (hasCustomWalls) {
+      wallsGroupRef.current.clear();
+      const wallConfig = room.walls.back || { color: '#f1f5f9', roughness: 0.85, metalness: 0.02 };
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(wallConfig.color || '#f1f5f9'),
+        roughness: wallConfig.roughness ?? 0.85,
+        metalness: wallConfig.metalness ?? 0.02,
+        transparent: true,
+        opacity: 1.0,
+      });
+
+      const tex = getOrLoadTexture(
+        wallConfig.textureUrl,
+        wallConfig.tileX || 1,
+        wallConfig.tileY || 1,
+        (loadedTex) => {
+          mat.map = loadedTex;
+          mat.needsUpdate = true;
+        }
+      );
+      if (tex) {
+        mat.map = tex;
+      }
+
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1 });
+
+      room.customWalls!.forEach((wall, idx) => {
+        const dx = wall.end.x - wall.start.x;
+        const dz = wall.end.y - wall.start.y;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.01) return;
+
+        const angle = Math.atan2(dz, dx);
+        const centerX = (wall.start.x + wall.end.x) / 2;
+        const centerZ = (wall.start.y + wall.end.y) / 2;
+        const h = wall.height || room.height || 2.6;
+        const t = wall.thickness || WALL_THICKNESS;
+
+        const wallGeo = new THREE.BoxGeometry(len, h, t);
+        const wallMesh = new THREE.Mesh(wallGeo, mat);
+        wallMesh.position.set(centerX, h / 2, centerZ);
+        wallMesh.rotation.y = -angle;
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+
+        const edgesGeo = new THREE.EdgesGeometry(wallGeo);
+        const line = new THREE.LineSegments(edgesGeo, edgeMat);
+        wallMesh.add(line);
+
+        const wallGroup = new THREE.Group();
+        wallGroup.userData = { isWall: true, wallId: wall.id || `w_${idx}`, w: len, h };
+        wallGroup.add(wallMesh);
+        wallsGroupRef.current.add(wallGroup);
+      });
+
+      wallsGroupRef.current.updateMatrixWorld(true);
+      return;
+    }
 
     const hw = room.width / 2;
     const hd = room.depth / 2;

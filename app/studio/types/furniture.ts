@@ -144,6 +144,57 @@ export interface RoomSettings {
   environmentPreset?: EnvironmentPreset;
   exposure?: number;
   hdrSettings?: HdrSettings;
+  floorplan2d?: Floorplan2DData;
+  customWalls?: CustomWall[];
+  customFloors?: CustomFloor[];
+}
+
+export interface CustomWall {
+  id: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  thickness?: number;
+  height?: number;
+}
+
+export interface CustomFloor {
+  id: string;
+  points: Array<{ x: number; y: number }>;
+  area?: number;
+  name?: string;
+}
+
+export interface Floorplan2DCorner {
+  id: string;
+  x: number; // cm
+  y: number; // cm
+}
+
+export interface Floorplan2DOpening {
+  id: string;
+  wallId: string;
+  type: WallOpeningType;
+  name: string;
+  position: number; // 0..1 along the wall
+  width: number; // cm
+  height: number; // cm
+  sillHeight: number; // cm
+}
+
+export interface Floorplan2DWall {
+  id: string;
+  corner1Id: string;
+  corner2Id: string;
+  thickness: number; // cm (e.g. 15cm)
+  side?: WallSide;
+}
+
+export interface Floorplan2DData {
+  corners: Floorplan2DCorner[];
+  walls: Floorplan2DWall[];
+  openings: Floorplan2DOpening[];
+  ceilingHeight: number; // cm (e.g. 260cm)
+  roomName?: string;
 }
 
 export interface StudioProject {
@@ -154,6 +205,7 @@ export interface StudioProject {
   thumbnailUrl?: string;
   room: RoomSettings;
   furniture: FurnitureInstance[];
+  floorplan2d?: Floorplan2DData;
   cameraSettings?: {
     id: string;
     x: number;
