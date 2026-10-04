@@ -86,11 +86,12 @@ export function getRoomWallSegments(currentRoom: RoomSettings): RoomWallSegment[
 
   const hw = currentRoom.width / 2;
   const hd = currentRoom.depth / 2;
+  const HALF_WALL = WALL_THICKNESS / 2;
   return [
-    { id: 'back', start: { x: -hw, z: -hd }, end: { x: hw, z: -hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: 0 },
-    { id: 'front', start: { x: hw, z: hd }, end: { x: -hw, z: hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI },
-    { id: 'left', start: { x: -hw, z: hd }, end: { x: -hw, z: -hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: -Math.PI / 2 },
-    { id: 'right', start: { x: hw, z: -hd }, end: { x: hw, z: hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI / 2 },
+    { id: 'back', start: { x: -hw, z: -hd - HALF_WALL }, end: { x: hw, z: -hd - HALF_WALL }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: 0 },
+    { id: 'front', start: { x: hw, z: hd + HALF_WALL }, end: { x: -hw, z: hd + HALF_WALL }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI },
+    { id: 'left', start: { x: -hw - HALF_WALL, z: hd }, end: { x: -hw - HALF_WALL, z: -hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: -Math.PI / 2 },
+    { id: 'right', start: { x: hw + HALF_WALL, z: -hd }, end: { x: hw + HALF_WALL, z: hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI / 2 },
   ];
 }
 
@@ -105,12 +106,16 @@ export interface WallProximityResult {
 export function findClosestWallSegment(
   px: number,
   pz: number,
-  walls: RoomWallSegment[]
+  walls: RoomWallSegment[],
+  roomCenter?: { x: number; z: number }
 ): WallProximityResult | null {
   if (!walls || walls.length === 0) return null;
 
   let bestResult: WallProximityResult | null = null;
   let minDistance = Infinity;
+
+  const rcx = roomCenter?.x ?? 0;
+  const rcz = roomCenter?.z ?? 0;
 
   for (const seg of walls) {
     const sx = seg.end.x - seg.start.x;
@@ -130,13 +135,19 @@ export function findClosestWallSegment(
     const dz = pz - cz;
     const dist = Math.hypot(dx, dz);
 
-    // True geometric perpendicular normal to the wall segment (never skewed by corner clamping)
+    // True geometric perpendicular normal to the wall segment
     const perp1X = -sz / len;
     const perp1Z = sx / len;
-    const dot1 = dx * perp1X + dz * perp1Z;
 
-    let nx = dot1 >= 0 ? perp1X : -perp1X;
-    let nz = dot1 >= 0 ? perp1Z : -perp1Z;
+    // Ensure normal always points towards the room interior
+    let nx = perp1X;
+    let nz = perp1Z;
+
+    const dotCenter = (rcx - cx) * perp1X + (rcz - cz) * perp1Z;
+    if (dotCenter < 0) {
+      nx = -perp1X;
+      nz = -perp1Z;
+    }
 
     const distToSurface = Math.max(0, dist - seg.thickness / 2);
 
@@ -1981,7 +1992,10 @@ export default function ThreeViewport({
             const localHit = wallGroup.worldToLocal(hitWallObj.point.clone());
             const sideSign = localHit.z >= 0 ? 1 : -1;
 
-            let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHit.x));
+            const cornerPadding = wallT + 0.02;
+            const minLocalX = -wallW / 2 + itemW / 2 + cornerPadding;
+            const maxLocalX = wallW / 2 - itemW / 2 - cornerPadding;
+            let targetLocalX = minLocalX > maxLocalX ? 0 : Math.max(minLocalX, Math.min(maxLocalX, localHit.x));
 
             // Magnetic snap to neighbor wall units along this wall
             if (currentSnapOn) {
@@ -2000,10 +2014,10 @@ export default function ThreeViewport({
                   targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
                 }
               });
-              targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, targetLocalX));
+              targetLocalX = minLocalX > maxLocalX ? 0 : Math.max(minLocalX, Math.min(maxLocalX, targetLocalX));
             }
 
-            const localPos = new THREE.Vector3(targetLocalX, targetElevation, sideSign * (itemD / 2 + wallT / 2));
+            const localPos = new THREE.Vector3(targetLocalX, targetElevation, sideSign * (itemD / 2 + wallT / 2 + 0.003));
             const worldPos = wallGroup.localToWorld(localPos);
 
             targetWorldX = worldPos.x;
@@ -2027,17 +2041,22 @@ export default function ThreeViewport({
               const segLen = Math.hypot(sx, sz);
 
               if (segLen > 0.01) {
-                let u = Math.max(0, Math.min(1, ((rawX - seg.start.x) * sx + (rawZ - seg.start.z) * sz) / (segLen * segLen)));
-                const minU = Math.min(0.48, (itemW / 2) / segLen);
-                const maxU = Math.max(0.52, 1 - (itemW / 2) / segLen);
-                u = Math.max(minU, Math.min(maxU, u));
+                const wallT = seg.thickness || WALL_THICKNESS;
+                const cornerPadding = wallT + 0.02;
+                let u = ((rawX - seg.start.x) * sx + (rawZ - seg.start.z) * sz) / (segLen * segLen);
+                const minU = (itemW / 2 + cornerPadding) / segLen;
+                const maxU = 1 - (itemW / 2 + cornerPadding) / segLen;
+                if (minU < maxU) {
+                  u = Math.max(minU, Math.min(maxU, u));
+                } else {
+                  u = 0.5;
+                }
 
                 const cx = seg.start.x + u * sx;
                 const cz = seg.start.z + u * sz;
 
-                const wallT = seg.thickness || WALL_THICKNESS;
-                targetWorldX = cx + closest.normal.x * (itemD / 2 + wallT / 2);
-                targetWorldZ = cz + closest.normal.z * (itemD / 2 + wallT / 2);
+                targetWorldX = cx + closest.normal.x * (itemD / 2 + wallT / 2 + 0.003);
+                targetWorldZ = cz + closest.normal.z * (itemD / 2 + wallT / 2 + 0.003);
                 targetRot = closest.targetRotation;
               }
             }
@@ -2049,57 +2068,78 @@ export default function ThreeViewport({
         dragObject.rotation.y = targetRot;
       } else {
         const targetBaseY = dragObject.userData.spec?.by ?? 0;
+        let tx = dragObject.position.x;
+        let tz = dragObject.position.z;
+        let targetRot = dragObject.rotation.y;
+
+        // Floor furniture positioning: intersects floor plane or wall surface
         plane.set(new THREE.Vector3(0, 1, 0), -targetBaseY);
+        let hasHit = false;
+        let rawX = tx;
+        let rawZ = tz;
 
         if (raycaster.ray.intersectPlane(plane, intersection)) {
-          const rawX = intersection.x + offset.x;
-          const rawZ = intersection.z + offset.z;
+          // Check intersection is in front of camera
+          const toHit = intersection.clone().sub(cameraRef.current.position);
+          if (toHit.dot(raycaster.ray.direction) > 0) {
+            rawX = intersection.x + offset.x;
+            rawZ = intersection.z + offset.z;
+            hasHit = true;
+          }
+        }
 
+        if (!hasHit) {
+          const hitWallObj = getFirstWallIntersection(raycaster);
+          if (hitWallObj) {
+            rawX = hitWallObj.point.x;
+            rawZ = hitWallObj.point.z;
+            hasHit = true;
+          }
+        }
+
+        if (hasHit) {
           const wallSegments = getRoomWallSegments(currentRoom);
           const closestWall = findClosestWallSegment(rawX, rawZ, wallSegments);
 
-          let targetRot = dragObject.rotation.y;
-          const ROT_ZONE = 0.65; // Distance threshold to orient towards nearest wall
-
-          let tx = rawX;
-          let tz = rawZ;
+          const ROT_ZONE = 1.35; // Generous zone to automatically orient towards nearest wall
+          const SNAP_WALL_DISTANCE = itemD / 2 + 0.35; // Snap distance to wall surface
+          tx = rawX;
+          tz = rawZ;
 
           if (closestWall && closestWall.distanceToSurface <= ROT_ZONE) {
             targetRot = closestWall.targetRotation;
 
-            if (currentSnapOn && closestWall.distanceToSurface < SNAP_THRESHOLD) {
-              tx = closestWall.closestPoint.x + closestWall.normal.x * (itemD / 2 + closestWall.segment.thickness / 2);
-              tz = closestWall.closestPoint.z + closestWall.normal.z * (itemD / 2 + closestWall.segment.thickness / 2);
+            if (currentSnapOn && closestWall.distanceToSurface <= SNAP_WALL_DISTANCE) {
+              const seg = closestWall.segment;
+              const sx = seg.end.x - seg.start.x;
+              const sz = seg.end.z - seg.start.z;
+              const segLen = Math.hypot(sx, sz);
+              const wallT = seg.thickness || WALL_THICKNESS;
+              const cornerPadding = wallT + 0.02;
+
+              if (segLen > 0.01) {
+                let u = ((rawX - seg.start.x) * sx + (rawZ - seg.start.z) * sz) / (segLen * segLen);
+                const minU = (itemW / 2 + cornerPadding) / segLen;
+                const maxU = 1 - (itemW / 2 + cornerPadding) / segLen;
+                if (minU < maxU) {
+                  u = Math.max(minU, Math.min(maxU, u));
+                } else {
+                  u = 0.5;
+                }
+                const cx = seg.start.x + u * sx;
+                const cz = seg.start.z + u * sz;
+                tx = cx + closestWall.normal.x * (itemD / 2 + wallT / 2 + 0.003);
+                tz = cz + closestWall.normal.z * (itemD / 2 + wallT / 2 + 0.003);
+              } else {
+                tx = closestWall.closestPoint.x + closestWall.normal.x * (itemD / 2 + wallT / 2 + 0.003);
+                tz = closestWall.closestPoint.z + closestWall.normal.z * (itemD / 2 + wallT / 2 + 0.003);
+              }
             }
-          }
-
-          // Exact bounding dimensions under current rotation
-          let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
-
-          // Room clamping bounds (accounts for custom floorplan bounds with generous padding)
-          let minX = -currentRoom.width / 2 + effW / 2;
-          let maxX = currentRoom.width / 2 - effW / 2;
-          let minZ = -currentRoom.depth / 2 + effD / 2;
-          let maxZ = currentRoom.depth / 2 - effD / 2;
-
-          if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
-            const xs = currentRoom.customWalls.flatMap((w) => [w.start.x, w.end.x]);
-            const zs = currentRoom.customWalls.flatMap((w) => [w.start.y, w.end.y]);
-            minX = Math.min(...xs) - 4;
-            maxX = Math.max(...xs) + 4;
-            minZ = Math.min(...zs) - 4;
-            maxZ = Math.max(...zs) + 4;
-          } else if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
-            const xs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.x));
-            const zs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.y));
-            minX = Math.min(...xs) - 4;
-            maxX = Math.max(...xs) + 4;
-            minZ = Math.min(...zs) - 4;
-            maxZ = Math.max(...zs) + 4;
           }
 
           // Side-by-side snapping to neighboring floor objects
           if (currentSnapOn) {
+            let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
             otherObjects.forEach((other) => {
               const oW = (other.userData.width || 0.8) * other.scale.x;
               const oD = (other.userData.depth || 0.6) * other.scale.z;
@@ -2135,23 +2175,48 @@ export default function ThreeViewport({
               }
             });
           }
+        }
 
-          // Strict final boundary re-clamp after all snapping calculations
-          tx = Math.max(minX, Math.min(maxX, tx));
-          tz = Math.max(minZ, Math.min(maxZ, tz));
+        // Exact bounding dimensions under current rotation
+        let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
 
-          const targetPos = new THREE.Vector3(tx, targetBaseY, tz);
-          if (!checkCollision3D(targetPos, effW, effD)) {
-            dragObject.position.x = tx;
-            dragObject.position.z = tz;
-            dragObject.position.y = targetBaseY;
-            dragObject.rotation.y = targetRot;
-          } else {
-            dragObject.position.x = tx;
-            dragObject.position.z = tz;
-            dragObject.position.y = targetBaseY;
-            dragObject.rotation.y = targetRot;
-          }
+        // Room clamping bounds (accounts for custom floorplan bounds with generous padding)
+        let minX = -currentRoom.width / 2 + effW / 2;
+        let maxX = currentRoom.width / 2 - effW / 2;
+        let minZ = -currentRoom.depth / 2 + effD / 2;
+        let maxZ = currentRoom.depth / 2 - effD / 2;
+
+        if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
+          const xs = currentRoom.customWalls.flatMap((w) => [w.start.x, w.end.x]);
+          const zs = currentRoom.customWalls.flatMap((w) => [w.start.y, w.end.y]);
+          minX = Math.min(...xs) - 4;
+          maxX = Math.max(...xs) + 4;
+          minZ = Math.min(...zs) - 4;
+          maxZ = Math.max(...zs) + 4;
+        } else if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
+          const xs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.x));
+          const zs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.y));
+          minX = Math.min(...xs) - 4;
+          maxX = Math.max(...xs) + 4;
+          minZ = Math.min(...zs) - 4;
+          maxZ = Math.max(...zs) + 4;
+        }
+
+        // Strict final boundary re-clamp after all snapping calculations
+        tx = Math.max(minX, Math.min(maxX, tx));
+        tz = Math.max(minZ, Math.min(maxZ, tz));
+
+        const targetPos = new THREE.Vector3(tx, targetBaseY, tz);
+        if (!checkCollision3D(targetPos, effW, effD)) {
+          dragObject.position.x = tx;
+          dragObject.position.z = tz;
+          dragObject.position.y = targetBaseY;
+          dragObject.rotation.y = targetRot;
+        } else {
+          dragObject.position.x = tx;
+          dragObject.position.z = tz;
+          dragObject.position.y = targetBaseY;
+          dragObject.rotation.y = targetRot;
         }
       }
 
@@ -2232,8 +2297,13 @@ export default function ThreeViewport({
           while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
           const localHit = wall.worldToLocal(validHit.point.clone());
           const wallT = wall.userData?.thickness || WALL_THICKNESS;
+          const wallW = wall.userData?.w || currentRoom.width;
           const sideSign = localHit.z >= 0 ? 1 : -1;
-          const worldPos = wall.localToWorld(new THREE.Vector3(localHit.x, localHit.y, sideSign * (spec.d / 2 + wallT / 2)));
+          const cornerPadding = wallT / 2 + 0.01;
+          const minLocalX = -wallW / 2 + spec.w / 2 + cornerPadding;
+          const maxLocalX = wallW / 2 - spec.w / 2 - cornerPadding;
+          const targetLocalX = minLocalX > maxLocalX ? 0 : Math.max(minLocalX, Math.min(maxLocalX, localHit.x));
+          const worldPos = wall.localToWorld(new THREE.Vector3(targetLocalX, localHit.y, sideSign * (spec.d / 2 + wallT / 2 + 0.002)));
           onDropFurnitureRef.current?.(spec, {
             x: worldPos.x,
             z: worldPos.z,
@@ -2255,11 +2325,33 @@ export default function ThreeViewport({
           let x = rawX;
           let z = rawZ;
 
-          if (closestWall && closestWall.distanceToSurface < 0.85) {
+          if (closestWall && closestWall.distanceToSurface <= 1.35) {
             rot = closestWall.targetRotation;
-            if (currentSnapOn && closestWall.distanceToSurface < SNAP_THRESHOLD) {
-              x = closestWall.closestPoint.x + closestWall.normal.x * (spec.d / 2 + closestWall.segment.thickness / 2);
-              z = closestWall.closestPoint.z + closestWall.normal.z * (spec.d / 2 + closestWall.segment.thickness / 2);
+            if (currentSnapOn && closestWall.distanceToSurface <= spec.d / 2 + 0.35) {
+              const seg = closestWall.segment;
+              const sx = seg.end.x - seg.start.x;
+              const sz = seg.end.z - seg.start.z;
+              const segLen = Math.hypot(sx, sz);
+              const wallT = seg.thickness || WALL_THICKNESS;
+              const cornerPadding = wallT + 0.02;
+
+              if (segLen > 0.01) {
+                let u = ((rawX - seg.start.x) * sx + (rawZ - seg.start.z) * sz) / (segLen * segLen);
+                const minU = (spec.w / 2 + cornerPadding) / segLen;
+                const maxU = 1 - (spec.w / 2 + cornerPadding) / segLen;
+                if (minU < maxU) {
+                  u = Math.max(minU, Math.min(maxU, u));
+                } else {
+                  u = 0.5;
+                }
+                const cx = seg.start.x + u * sx;
+                const cz = seg.start.z + u * sz;
+                x = cx + closestWall.normal.x * (spec.d / 2 + wallT / 2 + 0.003);
+                z = cz + closestWall.normal.z * (spec.d / 2 + wallT / 2 + 0.003);
+              } else {
+                x = closestWall.closestPoint.x + closestWall.normal.x * (spec.d / 2 + wallT / 2 + 0.003);
+                z = closestWall.closestPoint.z + closestWall.normal.z * (spec.d / 2 + wallT / 2 + 0.003);
+              }
             }
           }
 
