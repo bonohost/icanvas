@@ -137,6 +137,7 @@ export function buildParametricWallGroup(
     mesh.position.set(localX, localY, 0);
     mesh.castShadow = false;
     mesh.receiveShadow = true;
+    mesh.userData = { isWall: true, type: 'wall' };
     wallGroup.add(mesh);
   });
 

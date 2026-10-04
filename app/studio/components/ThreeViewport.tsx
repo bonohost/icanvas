@@ -46,6 +46,8 @@ interface ViewportProps {
   showProductPins?: boolean;
   onOpenCart?: (targetUid?: number) => void;
   isObjectLocked?: boolean;
+  showRaycastLine?: boolean;
+  onToggleRaycastLine?: () => void;
 }
 
 const SNAP_THRESHOLD = 0.22;
@@ -55,6 +57,105 @@ const COLLISION_EPSILON = 0.001;
 
 const LAYER_DEFAULT = 0;
 const LAYER_TECHNICAL = 1;
+
+export interface RoomWallSegment {
+  id: string;
+  start: { x: number; z: number };
+  end: { x: number; z: number };
+  thickness: number;
+  height: number;
+  angle: number;
+}
+
+export function getRoomWallSegments(currentRoom: RoomSettings): RoomWallSegment[] {
+  if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
+    return currentRoom.customWalls.map((w, idx) => {
+      const dx = w.end.x - w.start.x;
+      const dz = w.end.y - w.start.y;
+      const angle = Math.atan2(dz, dx);
+      return {
+        id: w.id || `w_${idx}`,
+        start: { x: w.start.x, z: w.start.y },
+        end: { x: w.end.x, z: w.end.y },
+        thickness: w.thickness || WALL_THICKNESS,
+        height: w.height || currentRoom.height || 2.6,
+        angle: angle,
+      };
+    });
+  }
+
+  const hw = currentRoom.width / 2;
+  const hd = currentRoom.depth / 2;
+  return [
+    { id: 'back', start: { x: -hw, z: -hd }, end: { x: hw, z: -hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: 0 },
+    { id: 'front', start: { x: hw, z: hd }, end: { x: -hw, z: hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI },
+    { id: 'left', start: { x: -hw, z: hd }, end: { x: -hw, z: -hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: -Math.PI / 2 },
+    { id: 'right', start: { x: hw, z: -hd }, end: { x: hw, z: hd }, thickness: WALL_THICKNESS, height: currentRoom.height, angle: Math.PI / 2 },
+  ];
+}
+
+export interface WallProximityResult {
+  segment: RoomWallSegment;
+  closestPoint: { x: number; z: number };
+  normal: { x: number; z: number };
+  distanceToSurface: number;
+  targetRotation: number;
+}
+
+export function findClosestWallSegment(
+  px: number,
+  pz: number,
+  walls: RoomWallSegment[]
+): WallProximityResult | null {
+  if (!walls || walls.length === 0) return null;
+
+  let bestResult: WallProximityResult | null = null;
+  let minDistance = Infinity;
+
+  for (const seg of walls) {
+    const sx = seg.end.x - seg.start.x;
+    const sz = seg.end.z - seg.start.z;
+    const lenSq = sx * sx + sz * sz;
+    if (lenSq < 0.00001) continue;
+
+    const len = Math.sqrt(lenSq);
+    const vx = px - seg.start.x;
+    const vz = pz - seg.start.z;
+
+    const u = Math.max(0, Math.min(1, (vx * sx + vz * sz) / lenSq));
+    const cx = seg.start.x + u * sx;
+    const cz = seg.start.z + u * sz;
+
+    const dx = px - cx;
+    const dz = pz - cz;
+    const dist = Math.hypot(dx, dz);
+
+    // True geometric perpendicular normal to the wall segment (never skewed by corner clamping)
+    const perp1X = -sz / len;
+    const perp1Z = sx / len;
+    const dot1 = dx * perp1X + dz * perp1Z;
+
+    let nx = dot1 >= 0 ? perp1X : -perp1X;
+    let nz = dot1 >= 0 ? perp1Z : -perp1Z;
+
+    const distToSurface = Math.max(0, dist - seg.thickness / 2);
+
+    if (distToSurface < minDistance) {
+      minDistance = distToSurface;
+      const targetRotation = Math.atan2(nx, nz);
+
+      bestResult = {
+        segment: seg,
+        closestPoint: { x: cx, z: cz },
+        normal: { x: nx, z: nz },
+        distanceToSurface: distToSurface,
+        targetRotation,
+      };
+    }
+  }
+
+  return bestResult;
+}
 
 const createDaylightGradientTexture = (): THREE.Texture => {
   const canvas = document.createElement('canvas');
@@ -103,6 +204,8 @@ export default function ThreeViewport({
   showProductPins = true,
   onOpenCart,
   isObjectLocked = false,
+  showRaycastLine = false,
+  onToggleRaycastLine,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -118,7 +221,6 @@ export default function ThreeViewport({
   const outdoorMeshRef = useRef<THREE.Mesh | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const selectionHelperRef = useRef<THREE.BoxHelper | null>(null);
-  const rulersGroupRef = useRef<THREE.Group>(new THREE.Group());
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const textureLoaderRef = useRef<THREE.TextureLoader>(new THREE.TextureLoader().setCrossOrigin('anonymous'));
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
@@ -132,6 +234,27 @@ export default function ThreeViewport({
   const exrLoaderRef = useRef<EXRLoader | null>(null);
   const hdrTextureCacheRef = useRef<Map<string, { raw: THREE.DataTexture; pmrem: THREE.Texture }>>(new Map());
   const defaultEnvTextureRef = useRef<THREE.Texture | null>(null);
+
+  // Raycast visual helper refs
+  const showRaycastLineRef = useRef(showRaycastLine);
+  useEffect(() => {
+    showRaycastLineRef.current = showRaycastLine;
+    if (raycastHelperGroupRef.current) {
+      raycastHelperGroupRef.current.visible = showRaycastLine;
+    }
+  }, [showRaycastLine]);
+
+  const onToggleRaycastLineRef = useRef(onToggleRaycastLine);
+  useEffect(() => {
+    onToggleRaycastLineRef.current = onToggleRaycastLine;
+  }, [onToggleRaycastLine]);
+
+  const raycastHelperGroupRef = useRef<THREE.Group>(new THREE.Group());
+  const raycastLineGeomRef = useRef<THREE.BufferGeometry | null>(null);
+  const raycastBeamRef = useRef<THREE.Mesh | null>(null);
+  const raycastMarkerRef = useRef<THREE.Mesh | null>(null);
+  const raycastRingRef = useRef<THREE.Mesh | null>(null);
+  const pointerPosRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
 
   const isObjectLockedRef = useRef(isObjectLocked);
   useEffect(() => {
@@ -233,6 +356,122 @@ export default function ThreeViewport({
     return wallNormal.dot(camToWall) > 0.05;
   }, []);
 
+  // Strict First-Wall Raycaster: Finds only the first solid (non-transparent) vertical wall mesh hit in 3D
+  const getFirstWallIntersection = useCallback((raycaster: THREE.Raycaster) => {
+    if (!wallsGroupRef.current) return null;
+    const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
+    if (!wallIntersects || wallIntersects.length === 0) return null;
+
+    const isHitValidWall = (hit: THREE.Intersection, requireVerticalFace: boolean) => {
+      // Must be a 3D Mesh (strictly ignore LineSegments edge wireframes, lines and helpers)
+      if (!(hit.object as THREE.Mesh).isMesh) return false;
+      if (!hit.face) return false;
+
+      // Filter out door / window opening frames, glass, and hardware
+      let cur: any = hit.object;
+      while (cur && cur !== wallsGroupRef.current) {
+        if (cur.userData?.isOpening) return false;
+        cur = cur.parent;
+      }
+
+      // Find parent wallGroup
+      let p: any = hit.object;
+      while (p && !p.userData?.isWall && p.parent && p.parent !== wallsGroupRef.current) {
+        p = p.parent;
+      }
+      if (!p?.userData?.isWall) return false;
+
+      // 1. Direct material opacity check (transparent foreground walls have opacity 0.15)
+      const mesh = hit.object as THREE.Mesh;
+      if (mesh.material) {
+        const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        if (mat.transparent && mat.opacity < 0.7) {
+          return false;
+        }
+      }
+
+      // 2. Wall group transparency flag
+      if (isWallTransparent(p)) return false;
+
+      // 3. Vertical face check: Filter out horizontal top/bottom box caps (where normal.y is near 1)
+      if (requireVerticalFace) {
+        const normalWorld = hit.face.normal.clone().applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        if (Math.abs(normalWorld.y) > 0.4) {
+          return false; // Top or bottom cap of the wall box, not the vertical wall surface
+        }
+      }
+
+      return true;
+    };
+
+    // Priority 1: First hit on a vertical solid wall face (where furniture hangs / aligns)
+    const verticalHit = wallIntersects.find((hit) => isHitValidWall(hit, true));
+    if (verticalHit) return verticalHit;
+
+    // Priority 2: Any solid wall hit (e.g. if pointing directly at the top wall edge)
+    const anySolidHit = wallIntersects.find((hit) => isHitValidWall(hit, false));
+    return anySolidHit || null;
+  }, [isWallTransparent]);
+
+  const updateRaycastVisualLine = useCallback((pointerPos: THREE.Vector2) => {
+    if (!showRaycastLineRef.current || !cameraRef.current || !raycastHelperGroupRef.current) {
+      if (raycastHelperGroupRef.current) {
+        raycastHelperGroupRef.current.visible = false;
+      }
+      return;
+    }
+
+    raycastHelperGroupRef.current.visible = true;
+    const raycaster = raycasterRef.current;
+    raycaster.setFromCamera(pointerPos, cameraRef.current);
+
+    const firstHit = getFirstWallIntersection(raycaster);
+    const camPos = cameraRef.current.position;
+
+    const targetPoint = firstHit
+      ? firstHit.point.clone()
+      : raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(30));
+
+    // Update 1px line
+    const posAttr = raycastLineGeomRef.current?.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (posAttr) {
+      posAttr.setXYZ(0, camPos.x, camPos.y, camPos.z);
+      posAttr.setXYZ(1, targetPoint.x, targetPoint.y, targetPoint.z);
+      posAttr.needsUpdate = true;
+    }
+
+    // Update 3D luminous cylinder beam
+    if (raycastBeamRef.current) {
+      const beam = raycastBeamRef.current;
+      const distance = camPos.distanceTo(targetPoint);
+      beam.position.copy(camPos);
+      beam.lookAt(targetPoint);
+      beam.scale.set(1, 1, distance);
+      beam.visible = true;
+    }
+
+    if (firstHit) {
+      if (raycastMarkerRef.current) {
+        raycastMarkerRef.current.position.copy(firstHit.point);
+        raycastMarkerRef.current.visible = true;
+      }
+
+      if (raycastRingRef.current) {
+        raycastRingRef.current.position.copy(firstHit.point);
+        if (firstHit.face) {
+          const hitObj: THREE.Object3D = firstHit.object;
+          const normalWorld = firstHit.face.normal.clone().applyQuaternion(hitObj.getWorldQuaternion(new THREE.Quaternion())).normalize();
+          raycastRingRef.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normalWorld);
+          raycastRingRef.current.position.addScaledVector(normalWorld, 0.008);
+        }
+        raycastRingRef.current.visible = true;
+      }
+    } else {
+      if (raycastMarkerRef.current) raycastMarkerRef.current.visible = false;
+      if (raycastRingRef.current) raycastRingRef.current.visible = false;
+    }
+  }, [getFirstWallIntersection]);
+
   // Expose clean snapshot capture function for AI Renderer
   useEffect(() => {
     if (!onRegisterCapture) return;
@@ -245,16 +484,16 @@ export default function ThreeViewport({
 
       const gridPrev = gridHelperRef.current?.visible ?? false;
       const selectPrev = selectionHelperRef.current?.visible ?? false;
-      const rulersPrev = rulersGroupRef.current?.visible ?? false;
       const rectPrev = rectLightHelperRef.current?.visible ?? false;
       const gizmoPrev = transformControlsRef.current?.getHelper().visible ?? false;
+      const raycastPrev = raycastHelperGroupRef.current?.visible ?? false;
 
       // Hide non-photorealistic guides
       if (gridHelperRef.current) gridHelperRef.current.visible = false;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
-      if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = false;
       if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = false;
+      if (raycastHelperGroupRef.current) raycastHelperGroupRef.current.visible = false;
 
       // Render clean frame
       renderer.render(scene, camera);
@@ -263,9 +502,9 @@ export default function ThreeViewport({
       // Restore guides
       if (gridHelperRef.current) gridHelperRef.current.visible = gridPrev;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
-      if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = rectPrev;
       if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = gizmoPrev;
+      if (raycastHelperGroupRef.current) raycastHelperGroupRef.current.visible = raycastPrev;
 
       return dataUrl;
     };
@@ -288,16 +527,16 @@ export default function ThreeViewport({
 
       const gridPrev = gridHelperRef.current?.visible ?? false;
       const selectPrev = selectionHelperRef.current?.visible ?? false;
-      const rulersPrev = rulersGroupRef.current?.visible ?? false;
       const rectPrev = rectLightHelperRef.current?.visible ?? false;
       const gizmoPrev = transformControlsRef.current?.getHelper().visible ?? false;
+      const raycastPrev = raycastHelperGroupRef.current?.visible ?? false;
 
       // Hide non-photorealistic guides
       if (gridHelperRef.current) gridHelperRef.current.visible = false;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = false;
-      if (rulersGroupRef.current) rulersGroupRef.current.visible = false;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = false;
       if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = false;
+      if (raycastHelperGroupRef.current) raycastHelperGroupRef.current.visible = false;
 
       // Make sure all walls are solid and visible for 360 interior view
       const wallsToRestore: { mat: any; transparent: boolean; opacity: number; depthWrite: boolean }[] = [];
@@ -342,7 +581,6 @@ export default function ThreeViewport({
       // Restore guides
       if (gridHelperRef.current) gridHelperRef.current.visible = gridPrev;
       if (selectionHelperRef.current) selectionHelperRef.current.visible = selectPrev;
-      if (rulersGroupRef.current) rulersGroupRef.current.visible = rulersPrev;
       if (rectLightHelperRef.current) rectLightHelperRef.current.visible = rectPrev;
       if (transformControlsRef.current) transformControlsRef.current.getHelper().visible = gizmoPrev;
 
@@ -424,100 +662,7 @@ export default function ThreeViewport({
     onRegisterCameraControl(controller);
   }, [onRegisterCameraControl]);
 
-  const createTextSprite = (message: string) => {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d')!;
-    canvas.width = 256;
-    canvas.height = 64;
-    context.fillStyle = 'rgba(15, 23, 42, 0.95)';
-    context.fillRect(0, 0, 256, 64);
-    context.strokeStyle = '#2563eb';
-    context.lineWidth = 4;
-    context.strokeRect(0, 0, 256, 64);
-    context.font = 'bold 34px "Inter", sans-serif';
-    context.fillStyle = '#ffffff';
-    context.textAlign = 'center';
-    context.fillText(message, 128, 45);
 
-    const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(0.5, 0.12, 1);
-    sprite.layers.set(LAYER_TECHNICAL);
-    return sprite;
-  };
-
-  const updateRulers = useCallback((selectedObj: THREE.Object3D) => {
-    rulersGroupRef.current.clear();
-    selectedObj.updateMatrixWorld(true);
-
-    const objRot = selectedObj.rotation.y;
-    const w = (selectedObj.userData.width || 0.8) * selectedObj.scale.x;
-    const h = (selectedObj.userData.height || 0.8) * selectedObj.scale.y;
-    const d = (selectedObj.userData.depth || 0.6) * selectedObj.scale.z;
-    const pos = selectedObj.position;
-    const centerY = pos.y + h / 2;
-    const centerPos = new THREE.Vector3(pos.x, centerY, pos.z);
-
-    // 4 local cardinal directions in world space based on object orientation:
-    // Right (+X local)
-    const dirRight = new THREE.Vector3(Math.cos(objRot), 0, -Math.sin(objRot)).normalize();
-    // Left (-X local)
-    const dirLeft = dirRight.clone().negate();
-    // Front (+Z local)
-    const dirFront = new THREE.Vector3(Math.sin(objRot), 0, Math.cos(objRot)).normalize();
-    // Back (-Z local)
-    const dirBack = dirFront.clone().negate();
-    // Down (-Y)
-    const dirDown = new THREE.Vector3(0, -1, 0);
-
-    const checkDirs = [
-      { dir: dirRight, start: centerPos.clone().add(dirRight.clone().multiplyScalar(w / 2 + 0.005)) },
-      { dir: dirLeft, start: centerPos.clone().add(dirLeft.clone().multiplyScalar(w / 2 + 0.005)) },
-      { dir: dirFront, start: centerPos.clone().add(dirFront.clone().multiplyScalar(d / 2 + 0.005)) },
-      { dir: dirBack, start: centerPos.clone().add(dirBack.clone().multiplyScalar(d / 2 + 0.005)) },
-      { dir: dirDown, start: new THREE.Vector3(pos.x, pos.y - 0.005, pos.z) },
-    ];
-
-    const otherObjects = [
-      ...furnitureGroupRef.current.children,
-      ...wallsGroupRef.current.children,
-      ...floorGroupRef.current.children,
-    ].filter((c) => c && c !== selectedObj);
-
-    checkDirs.forEach(({ dir, start }) => {
-      raycasterRef.current.set(start, dir);
-      const intersects = raycasterRef.current.intersectObjects(otherObjects, true);
-
-      let endPos = new THREE.Vector3();
-      if (intersects.length > 0) {
-        endPos.copy(intersects[0].point);
-      } else {
-        if (dir.y < 0) endPos.set(start.x, 0, start.z);
-        else return;
-      }
-
-      const distance = start.distanceTo(endPos);
-      if (distance < 0.02 || distance > 10.0) return;
-
-      const geometry = new THREE.BufferGeometry().setFromPoints([start, endPos]);
-      const material = new THREE.LineBasicMaterial({
-        color: '#3b82f6',
-        depthTest: false,
-        transparent: true,
-        opacity: 0.8,
-      });
-      const line = new THREE.Line(geometry, material);
-      line.layers.set(LAYER_TECHNICAL);
-      rulersGroupRef.current.add(line);
-
-      const cm = (distance * 100).toFixed(0) + ' cm';
-      const sprite = createTextSprite(cm);
-      sprite.position.copy(start.clone().lerp(endPos, 0.5));
-      sprite.position.y += 0.05;
-      rulersGroupRef.current.add(sprite);
-    });
-  }, []);
 
   // Initialize Scene, Camera, Renderer, Lights, Controls
   useEffect(() => {
@@ -647,7 +792,71 @@ export default function ThreeViewport({
     scene.add(floorGroupRef.current);
     scene.add(furnitureGroupRef.current);
     scene.add(wallsGroupRef.current);
-    scene.add(rulersGroupRef.current);
+
+    // Raycast visual debug line helper group (Ctrl+Shift+L)
+    const raycastGroup = raycastHelperGroupRef.current;
+    raycastGroup.clear();
+    raycastGroup.visible = showRaycastLineRef.current;
+
+    const linePoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10)];
+    const lineGeom = new THREE.BufferGeometry().setFromPoints(linePoints);
+    raycastLineGeomRef.current = lineGeom;
+
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x00f0ff,
+      linewidth: 3,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: false,
+    });
+    const rayLine = new THREE.Line(lineGeom, lineMat);
+    rayLine.renderOrder = 9999;
+    raycastGroup.add(rayLine);
+
+    // 3D Luminous Cylinder Beam for visible 3D perspective
+    const beamGeom = new THREE.CylinderGeometry(0.008, 0.008, 1, 12);
+    beamGeom.translate(0, 0.5, 0);
+    beamGeom.rotateX(Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.65,
+      depthTest: false,
+    });
+    const beamMesh = new THREE.Mesh(beamGeom, beamMat);
+    beamMesh.renderOrder = 9999;
+    beamMesh.visible = false;
+    raycastBeamRef.current = beamMesh;
+    raycastGroup.add(beamMesh);
+
+    const markerGeom = new THREE.SphereGeometry(0.045, 16, 16);
+    const markerMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const marker = new THREE.Mesh(markerGeom, markerMat);
+    marker.renderOrder = 10000;
+    marker.visible = false;
+    raycastMarkerRef.current = marker;
+    raycastGroup.add(marker);
+
+    const ringGeom = new THREE.RingGeometry(0.05, 0.085, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const ring = new THREE.Mesh(ringGeom, ringMat);
+    ring.renderOrder = 10000;
+    ring.visible = false;
+    raycastRingRef.current = ring;
+    raycastGroup.add(ring);
+
+    scene.add(raycastGroup);
 
     // TransformControls Gizmo for free XYZ object translation/rotation
     const transformControls = new TransformControls(camera, renderer.domElement);
@@ -672,9 +881,6 @@ export default function ThreeViewport({
       if (selectionHelperRef.current) {
         selectionHelperRef.current.update();
       }
-      if (transformControls.object) {
-        updateRulers(transformControls.object);
-      }
     });
 
     transformControls.addEventListener('objectChange', () => {
@@ -695,6 +901,11 @@ export default function ThreeViewport({
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       if (controlsRef.current) controlsRef.current.update();
+
+      // Dynamic raycast visual line update anchored to camera in real-time
+      if (showRaycastLineRef.current) {
+        updateRaycastVisualLine(pointerPosRef.current);
+      }
 
       // Dynamic selection bounding box update
       if (selectionHelperRef.current) {
@@ -800,7 +1011,6 @@ export default function ThreeViewport({
       floorGroupRef.current.clear();
       wallsGroupRef.current.clear();
       furnitureGroupRef.current.clear();
-      rulersGroupRef.current.clear();
       floorMeshRef.current = null;
       floorMatRef.current = null;
       outdoorMeshRef.current = null;
@@ -1194,7 +1404,7 @@ export default function ThreeViewport({
     if (hasCustomWalls) {
       wallsGroupRef.current.clear();
       const wallConfig = room.walls.back || { color: '#f1f5f9', roughness: 0.85, metalness: 0.02 };
-      const mat = new THREE.MeshStandardMaterial({
+      const baseMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(wallConfig.color || '#f1f5f9'),
         roughness: wallConfig.roughness ?? 0.85,
         metalness: wallConfig.metalness ?? 0.02,
@@ -1207,12 +1417,12 @@ export default function ThreeViewport({
         wallConfig.tileX || 1,
         wallConfig.tileY || 1,
         (loadedTex) => {
-          mat.map = loadedTex;
-          mat.needsUpdate = true;
+          baseMat.map = loadedTex;
+          baseMat.needsUpdate = true;
         }
       );
       if (tex) {
-        mat.map = tex;
+        baseMat.map = tex;
       }
 
       const edgeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1 });
@@ -1230,18 +1440,28 @@ export default function ThreeViewport({
         const t = wall.thickness || WALL_THICKNESS;
 
         const wallGeo = new THREE.BoxGeometry(len, h, t);
-        const wallMesh = new THREE.Mesh(wallGeo, mat);
-        wallMesh.position.set(centerX, h / 2, centerZ);
-        wallMesh.rotation.y = -angle;
+        const wallMat = baseMat.clone();
+        const wallMesh = new THREE.Mesh(wallGeo, wallMat);
+        wallMesh.position.set(0, h / 2, 0);
         wallMesh.castShadow = true;
         wallMesh.receiveShadow = true;
+        wallMesh.userData = { isWall: true, type: 'wall' };
 
         const edgesGeo = new THREE.EdgesGeometry(wallGeo);
         const line = new THREE.LineSegments(edgesGeo, edgeMat);
         wallMesh.add(line);
 
         const wallGroup = new THREE.Group();
-        wallGroup.userData = { isWall: true, wallId: wall.id || `w_${idx}`, w: len, h };
+        wallGroup.position.set(centerX, 0, centerZ);
+        wallGroup.rotation.y = -angle;
+        wallGroup.userData = {
+          isWall: true,
+          wallId: wall.id || `w_${idx}`,
+          w: len,
+          h,
+          thickness: t,
+          wallAngle: -angle,
+        };
         wallGroup.add(wallMesh);
         wallsGroupRef.current.add(wallGroup);
       });
@@ -1268,6 +1488,16 @@ export default function ThreeViewport({
       ];
 
     let hasChanges = false;
+
+    // Clean up any obsolete walls (e.g. custom walls w_0, w_1 from previous project)
+    const validWallIds = new Set(['back', 'front', 'left', 'right']);
+    const obsoleteWalls = wallsGroupRef.current.children.filter(
+      (child) => !validWallIds.has(child.userData?.wallId)
+    );
+    if (obsoleteWalls.length > 0) {
+      obsoleteWalls.forEach((w) => wallsGroupRef.current.remove(w));
+      hasChanges = true;
+    }
 
     wallSpecs.forEach(({ id, w, h, x, z, ry }) => {
       const wallConfig = room.walls[id];
@@ -1448,7 +1678,7 @@ export default function ThreeViewport({
         }
       }
 
-      // 3. Update selection box helper & rulers
+      // 3. Update selection box helper
       if (selectedUid) {
         const selectedObj = furnitureGroupRef.current.children.find(
           (c) => c.userData?.uid === selectedUid
@@ -1460,7 +1690,6 @@ export default function ThreeViewport({
           const boxHelper = new THREE.BoxHelper(selectedObj, '#3b82f6');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
-          updateRulers(selectedObj);
         }
       } else if (selectedOpeningId) {
         let selectedOpeningObj: THREE.Object3D | null = null;
@@ -1477,13 +1706,11 @@ export default function ThreeViewport({
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
         }
-        rulersGroupRef.current.clear();
       } else {
         if (selectionHelperRef.current) {
           sceneRef.current?.remove(selectionHelperRef.current);
           selectionHelperRef.current = null;
         }
-        rulersGroupRef.current.clear();
       }
     };
 
@@ -1492,7 +1719,7 @@ export default function ThreeViewport({
     return () => {
       active = false;
     };
-  }, [furniture, selectedUid, selectedOpeningId, room.openings, updateRulers]);
+  }, [furniture, selectedUid, selectedOpeningId, room.openings]);
 
   // Sync TransformControls attachment and mode
   useEffect(() => {
@@ -1645,14 +1872,13 @@ export default function ThreeViewport({
           raycaster.ray.intersectPlane(plane, intersection);
           offset.copy(top.position).sub(intersection);
 
-          // Immediately update box helper and rulers on click
+          // Immediately update box helper on click
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
           furnitureGroupRef.current.updateMatrixWorld(true);
           top.updateWorldMatrix(true, true);
           const boxHelper = new THREE.BoxHelper(top, '#3b82f6');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
-          updateRulers(top);
         }
       } else {
         onSelectRef.current?.(null);
@@ -1661,11 +1887,19 @@ export default function ThreeViewport({
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (!isDragging || !cameraRef.current) return;
+      if (!cameraRef.current) return;
 
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerPosRef.current.copy(mouse);
+
+      // Always update real-time raycast visual line when active
+      if (showRaycastLineRef.current) {
+        updateRaycastVisualLine(mouse);
+      }
+
+      if (!isDragging) return;
 
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, cameraRef.current);
@@ -1709,127 +1943,110 @@ export default function ThreeViewport({
         if (!currentCollisionOn) return false;
         const testBox = new THREE.Box3().setFromCenterAndSize(
           targetPos.clone().add(new THREE.Vector3(0, itemH / 2, 0)),
-          new THREE.Vector3(currentW, itemH, currentD).subScalar(COLLISION_EPSILON)
+          new THREE.Vector3(Math.max(0.1, currentW - 0.04), Math.max(0.1, itemH - 0.04), Math.max(0.1, currentD - 0.04))
         );
         for (const other of otherObjects) {
+          const otherY = other.position.y || 0;
+          const otherH = (other.userData.height || 0.8) * other.scale.y;
+          const selfY = targetPos.y;
+          const vertOverlap = Math.max(selfY, otherY) < Math.min(selfY + itemH, otherY + otherH) - 0.02;
+          if (!vertOverlap) continue;
+
           const otherBox = new THREE.Box3().setFromObject(other);
+          otherBox.min.addScalar(0.02);
+          otherBox.max.subScalar(0.02);
           if (testBox.intersectsBox(otherBox)) return true;
         }
         return false;
       };
 
       if (isWallHangingItem) {
-        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
-        const validHit = wallIntersects.find(
-          (hit) => {
-            let p: any = hit.object;
-            while (p && !p.userData?.isWall && p.parent) p = p.parent;
-            if (!p?.userData?.isWall) return false;
-            if (isWallTransparent(p)) return false;
-            return true;
+        const targetElevation = dragObject.userData.spec?.by ?? dragObject.position.y ?? 1.5;
+        let targetWorldX = dragObject.position.x;
+        let targetWorldZ = dragObject.position.z;
+        let targetRot = dragObject.rotation.y;
+
+        // A. Direct Raycast onto 3D Wall meshes (Strictly first wall hit)
+        const hitWallObj = getFirstWallIntersection(raycaster);
+
+        if (hitWallObj) {
+          let wallGroup: any = hitWallObj.object;
+          while (wallGroup && !wallGroup.userData?.isWall && wallGroup.parent) {
+            wallGroup = wallGroup.parent;
           }
-        );
 
-        let wall: any = null;
-        let localHitPoint: THREE.Vector3 | null = null;
+          if (wallGroup) {
+            const wallW = wallGroup.userData.w || currentRoom.width;
+            const wallT = wallGroup.userData.thickness || WALL_THICKNESS;
+            const localHit = wallGroup.worldToLocal(hitWallObj.point.clone());
+            const sideSign = localHit.z >= 0 ? 1 : -1;
 
-        if (validHit) {
-          wall = validHit.object;
-          while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
-          localHitPoint = wall.worldToLocal(validHit.point.clone());
+            let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHit.x));
+
+            // Magnetic snap to neighbor wall units along this wall
+            if (currentSnapOn) {
+              otherObjects.forEach((other) => {
+                const otherLocal = wallGroup.worldToLocal(other.position.clone());
+                const isSimilarHeight = Math.abs(other.position.y - targetElevation) < 0.4;
+                if (!isSimilarHeight) return;
+
+                const oW = (other.userData.width || 0.8) * other.scale.x;
+                const snapLeftToRight = Math.abs(targetLocalX - (otherLocal.x + oW / 2 + itemW / 2));
+                const snapRightToLeft = Math.abs(targetLocalX - (otherLocal.x - oW / 2 - itemW / 2));
+
+                if (snapLeftToRight < SNAP_THRESHOLD) {
+                  targetLocalX = otherLocal.x + oW / 2 + itemW / 2;
+                } else if (snapRightToLeft < SNAP_THRESHOLD) {
+                  targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
+                }
+              });
+              targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, targetLocalX));
+            }
+
+            const localPos = new THREE.Vector3(targetLocalX, targetElevation, sideSign * (itemD / 2 + wallT / 2));
+            const worldPos = wallGroup.localToWorld(localPos);
+
+            targetWorldX = worldPos.x;
+            targetWorldZ = worldPos.z;
+            targetRot = wallGroup.rotation.y + (sideSign < 0 ? Math.PI : 0);
+          }
         } else {
-          // Fallback if cursor slightly drifts off wall: find closest wall
-          const targetElevation = dragObject.userData.spec?.by ?? 1.5;
+          // B. Fallback: Raycast to horizontal plane and project onto closest wall segment
           plane.set(new THREE.Vector3(0, 1, 0), -targetElevation);
           if (raycaster.ray.intersectPlane(plane, intersection)) {
             const rawX = intersection.x;
             const rawZ = intersection.z;
-            const dLeft = Math.abs(rawX - (-currentRoom.width / 2));
-            const dRight = Math.abs(rawX - (currentRoom.width / 2));
-            const dBack = Math.abs(rawZ - (-currentRoom.depth / 2));
-            const dFront = Math.abs(rawZ - (currentRoom.depth / 2));
-            const minDist = Math.min(dLeft, dRight, dBack, dFront);
-            let wallId = 'back';
-            if (minDist === dLeft) wallId = 'left';
-            else if (minDist === dRight) wallId = 'right';
-            else if (minDist === dFront) wallId = 'front';
 
-            wall = wallsGroupRef.current.children.find((w: any) => w.userData?.wallId === wallId);
-            if (wall) {
-              localHitPoint = wall.worldToLocal(intersection.clone());
-            }
-          }
-        }
+            const wallSegments = getRoomWallSegments(currentRoom);
+            const closest = findClosestWallSegment(rawX, rawZ, wallSegments);
 
-        if (wall && localHitPoint) {
-          const wallW = wall.userData.w || currentRoom.width;
-          let targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, localHitPoint.x));
-          const targetElevation = dragObject.userData.spec?.by ?? 1.5;
-          let targetLocalY = Math.max(itemH / 2, Math.min(currentRoom.height - itemH / 2, targetElevation));
+            if (closest) {
+              const seg = closest.segment;
+              const sx = seg.end.x - seg.start.x;
+              const sz = seg.end.z - seg.start.z;
+              const segLen = Math.hypot(sx, sz);
 
-          // Side-by-side magnetic snapping for wall cabinets on the same wall and corners
-          if (currentSnapOn) {
-            // A. Corner snapping (left / right edges of this wall)
-            const cornerLeft = -wallW / 2 + itemW / 2;
-            const cornerRight = wallW / 2 - itemW / 2;
-            if (Math.abs(targetLocalX - cornerLeft) < SNAP_THRESHOLD) {
-              targetLocalX = cornerLeft;
-            } else if (Math.abs(targetLocalX - cornerRight) < SNAP_THRESHOLD) {
-              targetLocalX = cornerRight;
-            }
+              if (segLen > 0.01) {
+                let u = Math.max(0, Math.min(1, ((rawX - seg.start.x) * sx + (rawZ - seg.start.z) * sz) / (segLen * segLen)));
+                const minU = Math.min(0.48, (itemW / 2) / segLen);
+                const maxU = Math.max(0.52, 1 - (itemW / 2) / segLen);
+                u = Math.max(minU, Math.min(maxU, u));
 
-            // B. Snapping against neighboring furniture items
-            otherObjects.forEach((other) => {
-              const otherLocal = wall.worldToLocal(other.position.clone());
-              const oW = (other.userData.width || 0.8) * other.scale.x;
-              const oD = (other.userData.depth || 0.6) * other.scale.z;
+                const cx = seg.start.x + u * sx;
+                const cz = seg.start.z + u * sz;
 
-              // Check if other object is parallel on the SAME wall
-              const isSameWall = Math.abs(Math.sin(other.rotation.y - wall.rotation.y)) < 0.15;
-
-              if (isSameWall) {
-                if (
-                  Math.abs(otherLocal.z - (itemD / 2 + HALF_WALL)) < 0.35 &&
-                  Math.abs(otherLocal.y - targetLocalY) < 0.6
-                ) {
-                  const snapLeftToRight = Math.abs(targetLocalX - (otherLocal.x + oW / 2 + itemW / 2));
-                  const snapRightToLeft = Math.abs(targetLocalX - (otherLocal.x - oW / 2 - itemW / 2));
-
-                  if (snapLeftToRight < SNAP_THRESHOLD) {
-                    targetLocalX = otherLocal.x + oW / 2 + itemW / 2;
-                    targetLocalY = other.position.y; // Level height perfectly with neighbor
-                  } else if (snapRightToLeft < SNAP_THRESHOLD) {
-                    targetLocalX = otherLocal.x - oW / 2 - itemW / 2;
-                    targetLocalY = other.position.y; // Level height perfectly with neighbor
-                  }
-                }
-              } else {
-                // Perpendicular Wall Neighbor (Corner meeting)
-                if (Math.abs(other.position.y - targetLocalY) < 0.6) {
-                  const snapCornerLeft = -wallW / 2 + oD + itemW / 2;
-                  const snapCornerRight = wallW / 2 - oD - itemW / 2;
-                  if (Math.abs(targetLocalX - snapCornerLeft) < SNAP_THRESHOLD) {
-                    targetLocalX = snapCornerLeft;
-                    targetLocalY = other.position.y;
-                  } else if (Math.abs(targetLocalX - snapCornerRight) < SNAP_THRESHOLD) {
-                    targetLocalX = snapCornerRight;
-                    targetLocalY = other.position.y;
-                  }
-                }
+                const wallT = seg.thickness || WALL_THICKNESS;
+                targetWorldX = cx + closest.normal.x * (itemD / 2 + wallT / 2);
+                targetWorldZ = cz + closest.normal.z * (itemD / 2 + wallT / 2);
+                targetRot = closest.targetRotation;
               }
-            });
-            // Re-clamp within wall limits
-            targetLocalX = Math.max(-wallW / 2 + itemW / 2, Math.min(wallW / 2 - itemW / 2, targetLocalX));
-          }
-
-          const localPos = new THREE.Vector3(targetLocalX, targetLocalY, itemD / 2 + HALF_WALL);
-          const worldPos = wall.localToWorld(localPos.clone());
-
-          if (!checkCollision3D(worldPos, itemW, itemD)) {
-            dragObject.position.copy(worldPos);
-            dragObject.rotation.y = wall.rotation.y;
+            }
           }
         }
+
+        const targetPos = new THREE.Vector3(targetWorldX, targetElevation, targetWorldZ);
+        dragObject.position.copy(targetPos);
+        dragObject.rotation.y = targetRot;
       } else {
         const targetBaseY = dragObject.userData.spec?.by ?? 0;
         plane.set(new THREE.Vector3(0, 1, 0), -targetBaseY);
@@ -1838,73 +2055,60 @@ export default function ThreeViewport({
           const rawX = intersection.x + offset.x;
           const rawZ = intersection.z + offset.z;
 
-          // Distance from raw center to the 4 room walls
-          const dLeft = rawX - (-currentRoom.width / 2);
-          const dRight = currentRoom.width / 2 - rawX;
-          const dBack = rawZ - (-currentRoom.depth / 2);
-          const dFront = currentRoom.depth / 2 - rawZ;
-
-          const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
+          const wallSegments = getRoomWallSegments(currentRoom);
+          const closestWall = findClosestWallSegment(rawX, rawZ, wallSegments);
 
           let targetRot = dragObject.rotation.y;
-          const ROT_ZONE = 0.7; // Distance threshold to orient towards nearest wall
+          const ROT_ZONE = 0.65; // Distance threshold to orient towards nearest wall
 
-          if (minWallDist < ROT_ZONE) {
-            if (minWallDist === dBack) {
-              targetRot = 0; // Back against back wall, front faces forward (+Z)
-            } else if (minWallDist === dLeft) {
-              targetRot = Math.PI / 2; // Back against left wall, front faces right (+X)
-            } else if (minWallDist === dRight) {
-              targetRot = -Math.PI / 2; // Back against right wall, front faces left (-X)
-            } else if (minWallDist === dFront) {
-              targetRot = Math.PI; // Back against front wall, front faces back (-Z)
+          let tx = rawX;
+          let tz = rawZ;
+
+          if (closestWall && closestWall.distanceToSurface <= ROT_ZONE) {
+            targetRot = closestWall.targetRotation;
+
+            if (currentSnapOn && closestWall.distanceToSurface < SNAP_THRESHOLD) {
+              tx = closestWall.closestPoint.x + closestWall.normal.x * (itemD / 2 + closestWall.segment.thickness / 2);
+              tz = closestWall.closestPoint.z + closestWall.normal.z * (itemD / 2 + closestWall.segment.thickness / 2);
             }
           }
 
           // Exact bounding dimensions under current rotation
           let { effW, effD } = getRotatedBounds(itemW, itemD, targetRot);
 
-          // Room clamping bounds
+          // Room clamping bounds (accounts for custom floorplan bounds with generous padding)
           let minX = -currentRoom.width / 2 + effW / 2;
           let maxX = currentRoom.width / 2 - effW / 2;
           let minZ = -currentRoom.depth / 2 + effD / 2;
           let maxZ = currentRoom.depth / 2 - effD / 2;
 
-          let tx = Math.max(minX, Math.min(maxX, rawX));
-          let tz = Math.max(minZ, Math.min(maxZ, rawZ));
+          if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
+            const xs = currentRoom.customWalls.flatMap((w) => [w.start.x, w.end.x]);
+            const zs = currentRoom.customWalls.flatMap((w) => [w.start.y, w.end.y]);
+            minX = Math.min(...xs) - 4;
+            maxX = Math.max(...xs) + 4;
+            minZ = Math.min(...zs) - 4;
+            maxZ = Math.max(...zs) + 4;
+          } else if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
+            const xs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.x));
+            const zs = currentRoom.customFloors.flatMap((f) => f.points.map((p) => p.y));
+            minX = Math.min(...xs) - 4;
+            maxX = Math.max(...xs) + 4;
+            minZ = Math.min(...zs) - 4;
+            maxZ = Math.max(...zs) + 4;
+          }
 
-          // Magnetic snapping to walls with dual-axis corner support
+          // Side-by-side snapping to neighboring floor objects
           if (currentSnapOn) {
-            const distBack = Math.abs(tz - minZ);
-            const distFront = Math.abs(tz - maxZ);
-            const distLeft = Math.abs(tx - minX);
-            const distRight = Math.abs(tx - maxX);
-
-            // Z-axis wall snapping (Back / Front)
-            if (distBack < SNAP_THRESHOLD) {
-              tz = minZ;
-            } else if (distFront < SNAP_THRESHOLD) {
-              tz = maxZ;
-            }
-
-            // X-axis wall snapping (Left / Right) - evaluated independently for corners!
-            if (distLeft < SNAP_THRESHOLD) {
-              tx = minX;
-            } else if (distRight < SNAP_THRESHOLD) {
-              tx = maxX;
-            }
-
-            // Side-by-side snapping to neighboring floor objects along all walls
             otherObjects.forEach((other) => {
               const oW = (other.userData.width || 0.8) * other.scale.x;
               const oD = (other.userData.depth || 0.6) * other.scale.z;
               const { effW: oEffW, effD: oEffD } = getRotatedBounds(oW, oD, other.rotation.y);
 
-              // Only snap to objects on similar elevation level
-              const sameElevation = Math.abs((dragObject?.position.y || 0) - (other.position.y || 0)) < 0.5;
+              const sameElevation = Math.abs((dragObject?.position.y || 0) - (other.position.y || 0)) < 0.4;
               if (!sameElevation) return;
 
-              // 1. Snapping along X (when moving along Back or Front wall)
+              // 1. Snapping along X
               if (Math.abs(tz - other.position.z) < SNAP_THRESHOLD + Math.abs(effD - oEffD) / 2) {
                 const snapLeftToRight = Math.abs(tx - effW / 2 - (other.position.x + oEffW / 2));
                 const snapRightToLeft = Math.abs(tx + effW / 2 - (other.position.x - oEffW / 2));
@@ -1917,7 +2121,7 @@ export default function ThreeViewport({
                 }
               }
 
-              // 2. Snapping along Z (when moving along Left or Right wall)
+              // 2. Snapping along Z
               if (Math.abs(tx - other.position.x) < SNAP_THRESHOLD + Math.abs(effW - oEffW) / 2) {
                 const snapBackToFront = Math.abs(tz - effD / 2 - (other.position.z + oEffD / 2));
                 const snapFrontToBack = Math.abs(tz + effD / 2 - (other.position.z - oEffD / 2));
@@ -1942,11 +2146,15 @@ export default function ThreeViewport({
             dragObject.position.z = tz;
             dragObject.position.y = targetBaseY;
             dragObject.rotation.y = targetRot;
+          } else {
+            dragObject.position.x = tx;
+            dragObject.position.z = tz;
+            dragObject.position.y = targetBaseY;
+            dragObject.rotation.y = targetRot;
           }
         }
       }
 
-      updateRulers(dragObject);
       if (selectionHelperRef.current) selectionHelperRef.current.update();
     };
 
@@ -1992,18 +2200,7 @@ export default function ThreeViewport({
 
       // Handle Door / Window Opening Drop
       if (parsed.isOpening) {
-        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
-        const validHit = wallIntersects.find((hit) => {
-          let p: any = hit.object;
-          while (p && !p.userData?.isWall && p.parent) p = p.parent;
-          if (!p?.userData?.isWall) return false;
-          if (isWallTransparent(p)) return false;
-          return true;
-        }) || wallIntersects.find((hit) => {
-          let p: any = hit.object;
-          while (p && !p.userData?.isWall && p.parent) p = p.parent;
-          return p?.userData?.isWall;
-        });
+        const validHit = getFirstWallIntersection(raycaster);
 
         let targetWallSide: WallSide = 'back';
         let targetPos = 0.5;
@@ -2028,25 +2225,21 @@ export default function ThreeViewport({
       const spec = parsed as FurnitureSpec;
 
       if (spec.pr === 'wall') {
-        const wallIntersects = raycaster.intersectObjects(wallsGroupRef.current.children, true);
-        const validHit = wallIntersects.find((hit) => {
-          let p: any = hit.object;
-          while (p && !p.userData?.isWall && p.parent) p = p.parent;
-          if (!p?.userData?.isWall) return false;
-          if (isWallTransparent(p)) return false;
-          return true;
-        }) || wallIntersects.find((hit) => {
-          let p: any = hit.object;
-          while (p && !p.userData?.isWall && p.parent) p = p.parent;
-          return p?.userData?.isWall;
-        });
+        const validHit = getFirstWallIntersection(raycaster);
 
         if (validHit) {
           let wall: any = validHit.object;
           while (wall && !wall.userData?.isWall && wall.parent) wall = wall.parent;
           const localHit = wall.worldToLocal(validHit.point.clone());
-          const worldPos = wall.localToWorld(new THREE.Vector3(localHit.x, localHit.y, spec.d / 2 + HALF_WALL));
-          onDropFurnitureRef.current?.(spec, { x: worldPos.x, z: worldPos.z, by: worldPos.y, rot: wall.rotation.y });
+          const wallT = wall.userData?.thickness || WALL_THICKNESS;
+          const sideSign = localHit.z >= 0 ? 1 : -1;
+          const worldPos = wall.localToWorld(new THREE.Vector3(localHit.x, localHit.y, sideSign * (spec.d / 2 + wallT / 2)));
+          onDropFurnitureRef.current?.(spec, {
+            x: worldPos.x,
+            z: worldPos.z,
+            by: worldPos.y,
+            rot: wall.rotation.y + (sideSign < 0 ? Math.PI : 0),
+          });
         } else {
           onDropFurnitureRef.current?.(spec, { x: 0, z: -currentRoom.depth / 2 + spec.d / 2, by: spec.by ?? 1.5, rot: 0 });
         }
@@ -2055,38 +2248,19 @@ export default function ThreeViewport({
           const rawX = intersection.x;
           const rawZ = intersection.z;
 
-          const dLeft = rawX - (-currentRoom.width / 2);
-          const dRight = currentRoom.width / 2 - rawX;
-          const dBack = rawZ - (-currentRoom.depth / 2);
-          const dFront = currentRoom.depth / 2 - rawZ;
-          const minWallDist = Math.min(dLeft, dRight, dBack, dFront);
+          const wallSegments = getRoomWallSegments(currentRoom);
+          const closestWall = findClosestWallSegment(rawX, rawZ, wallSegments);
 
           let rot = 0;
-          if (minWallDist === dBack) rot = 0;
-          else if (minWallDist === dLeft) rot = Math.PI / 2;
-          else if (minWallDist === dRight) rot = -Math.PI / 2;
-          else if (minWallDist === dFront) rot = Math.PI;
+          let x = rawX;
+          let z = rawZ;
 
-          const cos = Math.abs(Math.cos(rot));
-          const sin = Math.abs(Math.sin(rot));
-          const effW = spec.w * cos + spec.d * sin;
-          const effD = spec.w * sin + spec.d * cos;
-
-          const minX = -currentRoom.width / 2 + effW / 2;
-          const maxX = currentRoom.width / 2 - effW / 2;
-          const minZ = -currentRoom.depth / 2 + effD / 2;
-          const maxZ = currentRoom.depth / 2 - effD / 2;
-
-          let x = Math.max(minX, Math.min(maxX, rawX));
-          let z = Math.max(minZ, Math.min(maxZ, rawZ));
-
-          // Snap to wall if close on drop
-          if (currentSnapOn) {
-            if (Math.abs(z - minZ) < SNAP_THRESHOLD) z = minZ;
-            else if (Math.abs(z - maxZ) < SNAP_THRESHOLD) z = maxZ;
-
-            if (Math.abs(x - minX) < SNAP_THRESHOLD) x = minX;
-            else if (Math.abs(x - maxX) < SNAP_THRESHOLD) x = maxX;
+          if (closestWall && closestWall.distanceToSurface < 0.85) {
+            rot = closestWall.targetRotation;
+            if (currentSnapOn && closestWall.distanceToSurface < SNAP_THRESHOLD) {
+              x = closestWall.closestPoint.x + closestWall.normal.x * (spec.d / 2 + closestWall.segment.thickness / 2);
+              z = closestWall.closestPoint.z + closestWall.normal.z * (spec.d / 2 + closestWall.segment.thickness / 2);
+            }
           }
 
           onDropFurnitureRef.current?.(spec, { x, z, by: spec.by ?? 0, rot });
@@ -2096,11 +2270,40 @@ export default function ThreeViewport({
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Toggle Raycast Visual Line: Ctrl+Shift+L or Cmd+Shift+L
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        if (onToggleRaycastLineRef.current) {
+          onToggleRaycastLineRef.current();
+        } else {
+          showRaycastLineRef.current = !showRaycastLineRef.current;
+          if (raycastHelperGroupRef.current) {
+            raycastHelperGroupRef.current.visible = showRaycastLineRef.current;
+          }
+          if (showRaycastLineRef.current) {
+            updateRaycastVisualLine(pointerPosRef.current);
+          }
+        }
+      }
+    };
+
     container.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     container.addEventListener('dragover', handleDragOver);
     container.addEventListener('drop', handleDrop);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       container.removeEventListener('pointerdown', handlePointerDown);
@@ -2108,8 +2311,9 @@ export default function ThreeViewport({
       window.removeEventListener('pointerup', handlePointerUp);
       container.removeEventListener('dragover', handleDragOver);
       container.removeEventListener('drop', handleDrop);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [updateRulers]);
+  }, []);
 
   return (
     <div ref={containerRef} className="w-full h-full relative select-none overflow-hidden">

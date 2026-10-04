@@ -132,69 +132,77 @@ export default function FloorPlannerModal({
   const [showMeasurements, setShowMeasurements] = useState<boolean>(true);
   const [history, setHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
 
-  // --- Geometry State ---
-  const [corners, setCorners] = useState<PlannerCorner[]>(() => {
-    if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
+  // Helper to parse RoomSettings into planner corners & walls
+  const parseRoomToPlanner = useCallback((room: RoomSettings) => {
+    if (room.customWalls && room.customWalls.length > 0) {
       const cornerList: PlannerCorner[] = [];
-      currentRoom.customWalls.forEach((w, idx) => {
-        let found1 = cornerList.find((c) => Math.hypot(c.x - w.start.x, c.y - w.start.y) < 0.05);
-        if (!found1) {
-          found1 = { id: `c_start_${idx}`, x: w.start.x, y: w.start.y };
-          cornerList.push(found1);
+      const getOrAddCorner = (pt: { x: number; y: number }, prefix: string, idx: number): PlannerCorner => {
+        let found = cornerList.find((c) => Math.hypot(c.x - pt.x, c.y - pt.y) < 0.05);
+        if (!found) {
+          found = { id: `${prefix}_${idx}`, x: Number(pt.x.toFixed(3)), y: Number(pt.y.toFixed(3)) };
+          cornerList.push(found);
         }
-        let found2 = cornerList.find((c) => Math.hypot(c.x - w.end.x, c.y - w.end.y) < 0.05);
-        if (!found2) {
-          found2 = { id: `c_end_${idx}`, x: w.end.x, y: w.end.y };
-          cornerList.push(found2);
-        }
-      });
-      return cornerList;
-    }
-    const halfW = (currentRoom.width || 4) / 2;
-    const halfD = (currentRoom.depth || 4) / 2;
-    return [
-      { id: 'c1', x: -halfW, y: -halfD },
-      { id: 'c2', x: halfW, y: -halfD },
-      { id: 'c3', x: halfW, y: halfD },
-      { id: 'c4', x: -halfW, y: halfD },
-    ];
-  });
+        return found;
+      };
 
-  const [walls, setWalls] = useState<PlannerWall[]>(() => {
-    if (currentRoom.customWalls && currentRoom.customWalls.length > 0) {
-      const cornerList: PlannerCorner[] = [];
-      currentRoom.customWalls.forEach((w, idx) => {
-        let found1 = cornerList.find((c) => Math.hypot(c.x - w.start.x, c.y - w.start.y) < 0.05);
-        if (!found1) {
-          found1 = { id: `c_start_${idx}`, x: w.start.x, y: w.start.y };
-          cornerList.push(found1);
-        }
-        let found2 = cornerList.find((c) => Math.hypot(c.x - w.end.x, c.y - w.end.y) < 0.05);
-        if (!found2) {
-          found2 = { id: `c_end_${idx}`, x: w.end.x, y: w.end.y };
-          cornerList.push(found2);
-        }
-      });
-
-      return currentRoom.customWalls.map((w, idx) => {
-        const found1 = cornerList.find((c) => Math.hypot(c.x - w.start.x, c.y - w.start.y) < 0.05)!;
-        const found2 = cornerList.find((c) => Math.hypot(c.x - w.end.x, c.y - w.end.y) < 0.05)!;
-        return {
+      const wallList: PlannerWall[] = [];
+      room.customWalls.forEach((w, idx) => {
+        const c1 = getOrAddCorner(w.start, 'c_start', idx);
+        const c2 = getOrAddCorner(w.end, 'c_end', idx);
+        wallList.push({
           id: w.id || `w_${idx}`,
-          startId: found1.id,
-          endId: found2.id,
+          startId: c1.id,
+          endId: c2.id,
           thickness: w.thickness || 0.15,
-          height: w.height || currentRoom.height || 2.6,
-        };
+          height: w.height || room.height || 2.6,
+        });
       });
+
+      return {
+        corners: cornerList,
+        walls: wallList,
+        height: room.height || 2.6,
+      };
     }
-    return [
-      { id: 'w1', startId: 'c1', endId: 'c2', thickness: 0.15, height: 2.6 },
-      { id: 'w2', startId: 'c2', endId: 'c3', thickness: 0.15, height: 2.6 },
-      { id: 'w3', startId: 'c3', endId: 'c4', thickness: 0.15, height: 2.6 },
-      { id: 'w4', startId: 'c4', endId: 'c1', thickness: 0.15, height: 2.6 },
-    ];
-  });
+
+    const halfW = (room.width || 4) / 2;
+    const halfD = (room.depth || 4) / 2;
+    return {
+      corners: [
+        { id: 'c1', x: -halfW, y: -halfD },
+        { id: 'c2', x: halfW, y: -halfD },
+        { id: 'c3', x: halfW, y: halfD },
+        { id: 'c4', x: -halfW, y: halfD },
+      ],
+      walls: [
+        { id: 'w1', startId: 'c1', endId: 'c2', thickness: 0.15, height: room.height || 2.6 },
+        { id: 'w2', startId: 'c2', endId: 'c3', thickness: 0.15, height: room.height || 2.6 },
+        { id: 'w3', startId: 'c3', endId: 'c4', thickness: 0.15, height: room.height || 2.6 },
+        { id: 'w4', startId: 'c4', endId: 'c1', thickness: 0.15, height: room.height || 2.6 },
+      ],
+      height: room.height || 2.6,
+    };
+  }, []);
+
+  // --- Geometry State ---
+  const [corners, setCorners] = useState<PlannerCorner[]>(() => parseRoomToPlanner(currentRoom).corners);
+  const [walls, setWalls] = useState<PlannerWall[]>(() => parseRoomToPlanner(currentRoom).walls);
+
+  // Sync state whenever modal opens or currentRoom changes
+  useEffect(() => {
+    if (isOpen) {
+      const data = parseRoomToPlanner(currentRoom);
+      setCorners(data.corners);
+      setWalls(data.walls);
+      setWallHeight(data.height);
+      setHistory([]);
+      setSelectedCornerId(null);
+      setSelectedWallId(null);
+      setDrawingStartCornerId(null);
+      setCurrentMouseWorld(null);
+      setPan({ x: 0, y: 0 });
+    }
+  }, [isOpen, currentRoom, parseRoomToPlanner]);
 
   // Detected Rooms
   const [detectedRooms, setDetectedRooms] = useState<PlannerRoomLoop[]>([]);

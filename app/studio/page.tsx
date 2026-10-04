@@ -56,6 +56,7 @@ import {
   Tag,
   Compass,
   PenTool,
+  Crosshair,
 } from 'lucide-react';
 
 interface HistorySnapshot {
@@ -229,6 +230,7 @@ export default function StudioPage() {
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
+  const [showRaycastLine, setShowRaycastLine] = useState(false);
 
   // Shoppable Scene Cart Summary Calculation (Automatic sum of primary store [0])
   const { cartCount, cartTotal } = React.useMemo(() => {
@@ -483,6 +485,9 @@ export default function StudioPage() {
       exposure: 1.0,
       environmentPreset: 'dark_studio',
       reflectionOpacity: 0.05,
+      openings: [],
+      customWalls: [],
+      customFloors: [],
     };
     setProjectId(newId);
     setProjectName(name);
@@ -772,6 +777,13 @@ export default function StudioPage() {
       if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         setIsZenMode((prev) => !prev);
+      }
+
+      // Toggle Raycast Visual Line: Ctrl+Shift+L or Cmd+Shift+L
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setShowRaycastLine((prev) => !prev);
+        return;
       }
 
       // Zoom In (aproximar câmera): + or = or NumpadAdd
@@ -1125,6 +1137,8 @@ export default function StudioPage() {
             snapOn={snapOn}
             collisionOn={collisionOn}
             autoTransparency={autoTransparency}
+            showRaycastLine={showRaycastLine}
+            onToggleRaycastLine={() => setShowRaycastLine((prev) => !prev)}
             cameraSettings={cameraSettings}
             gizmoEnabled={transformMode !== 'locked'}
             gizmoMode={transformMode === 'locked' ? 'translate' : transformMode}
@@ -1191,6 +1205,20 @@ export default function StudioPage() {
             >
               <PanelLeft className="size-3.5" />
               <span className="text-[11px] hidden md:inline">Catálogo</span>
+            </button>
+
+            <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+            <button
+              onClick={() => setShowRaycastLine((prev) => !prev)}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${showRaycastLine
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-inner'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
+              title="Alternar Linha de Raycast de Alinhamento (Ctrl + Shift + L)"
+            >
+              <Crosshair className={`size-3.5 ${showRaycastLine ? 'text-cyan-400' : ''}`} />
+              <span className="text-[11px] hidden md:inline">Raycast</span>
             </button>
 
             <div className="w-px h-4 bg-white/10 mx-0.5" />
@@ -1342,6 +1370,9 @@ export default function StudioPage() {
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+D</kbd> Duplicar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Del</kbd> Excluir</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Esc</kbd> Desmarcar</span>
+            <span className={showRaycastLine ? 'text-cyan-400 font-bold' : ''}>
+              <kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Shift+L</kbd> Raycast {showRaycastLine ? '(ON)' : ''}
+            </span>
           </div>
           <span className="flex items-center gap-1.5 text-primary font-semibold uppercase tracking-widest">
             <Monitor className="size-3" /> WebGL 2.0 PBR
