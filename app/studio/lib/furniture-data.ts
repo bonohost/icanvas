@@ -376,7 +376,7 @@ export const CATALOG: CatalogCategory[] = [
               store: 'Magazine Luiza',
               price: 6899.00,
               originalPrice: 7999.00,
-              url: 'https://acesse.one/QITmsvg',
+              url: 'https://bit.ly/4hwtZhc',
               installments: '10x de R$ 689,90 sem juros'
             }
           ]

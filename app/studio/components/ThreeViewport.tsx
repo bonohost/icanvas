@@ -805,7 +805,11 @@ export default function ThreeViewport({
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.1;
+    controls.rotateSpeed = 1.3;
+    controls.panSpeed = 1.3;
+    controls.zoomSpeed = 1.25;
+    controls.screenSpacePanning = true;
     controls.target.set(0, room.height * 0.4, 0);
     controls.update();
     controlsRef.current = controls;

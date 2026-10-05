@@ -152,7 +152,7 @@ export default function FloorPlannerModal({
   const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'delete'>('wall');
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
   const [snapCorner, setSnapCorner] = useState<boolean>(true);
-  const [gridStep] = useState<number>(0.25); // 0.25m = 25cm
+  const [gridStep, setGridStep] = useState<number>(0.10); // 0.10m = 10cm
   const [wallHeight, setWallHeight] = useState<number>(currentRoom.height || 2.6);
   const [wallThickness] = useState<number>(0.15); // 15cm standard
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -498,8 +498,15 @@ export default function FloorPlannerModal({
 
   // Find Nearest Corner to screen point (for magnetic snapping)
   const getNearestCorner = useCallback(
-    (screenX: number, screenY: number, canvas: HTMLCanvasElement, maxDistancePx = 18) => {
+    (
+      screenX: number,
+      screenY: number,
+      canvas: HTMLCanvasElement,
+      maxDistancePx = 18,
+      excludeId?: string
+    ) => {
       for (const corner of corners) {
+        if (excludeId && corner.id === excludeId) continue;
         const sc = worldToScreen(corner.x, corner.y, canvas);
         const dist = Math.hypot(sc.x - screenX, sc.y - screenY);
         if (dist <= maxDistancePx) {
@@ -619,21 +626,23 @@ export default function FloorPlannerModal({
     const meterPx = zoom;
     const subGridPx = meterPx * gridStep;
 
-    // Sub-grid lines (sutil)
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    const startX = (centerX % subGridPx) - subGridPx;
-    for (let x = startX; x < width; x += subGridPx) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+    // Sub-grid lines (0.10m = 10cm sutil)
+    if (subGridPx >= 4) {
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const startX = (centerX % subGridPx) - subGridPx;
+      for (let x = startX; x < width; x += subGridPx) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      const startY = (centerY % subGridPx) - subGridPx;
+      for (let y = startY; y < height; y += subGridPx) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.stroke();
     }
-    const startY = (centerY % subGridPx) - subGridPx;
-    for (let y = startY; y < height; y += subGridPx) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-    }
-    ctx.stroke();
 
     // 1-Meter Major Grid
     ctx.strokeStyle = '#334155';
@@ -831,10 +840,25 @@ export default function FloorPlannerModal({
       const isSnapped = snappedCornerId === corner.id;
 
       if (isSnapped) {
+        const isMergeTarget = Boolean(draggingCornerId && snappedCornerId === corner.id);
         ctx.beginPath();
-        ctx.arc(sc.x, sc.y, 14, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.arc(sc.x, sc.y, isMergeTarget ? 16 : 14, 0, Math.PI * 2);
+        ctx.fillStyle = isMergeTarget ? 'rgba(34, 197, 94, 0.45)' : 'rgba(56, 189, 248, 0.35)';
         ctx.fill();
+
+        if (isMergeTarget) {
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Tooltip/Badge "Fundir Vértice"
+          ctx.save();
+          ctx.fillStyle = '#22c55e';
+          ctx.font = 'bold 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚡ Solte para Fundir', sc.x, sc.y - 18);
+          ctx.restore();
+        }
       }
 
       ctx.beginPath();
@@ -844,7 +868,7 @@ export default function FloorPlannerModal({
         : isSelected
         ? '#f59e0b'
         : isSnapped
-        ? '#06b6d4'
+        ? (draggingCornerId ? '#22c55e' : '#06b6d4')
         : '#ffffff';
       ctx.fill();
       ctx.strokeStyle = '#0f172a';
@@ -872,6 +896,7 @@ export default function FloorPlannerModal({
     bgConfig,
     isCalibratingScale,
     calibrationPtA,
+    draggingCornerId,
   ]);
 
   // Animation Loop for smooth 2D drawing
@@ -922,7 +947,11 @@ export default function FloorPlannerModal({
     // 4. Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.1;
+    controls.rotateSpeed = 1.3;
+    controls.panSpeed = 1.3;
+    controls.zoomSpeed = 1.25;
+    controls.screenSpacePanning = true;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
     controls.minDistance = 2;
     controls.maxDistance = 35;
@@ -1337,7 +1366,8 @@ export default function FloorPlannerModal({
     }
 
     const world = screenToWorld(sx, sy, canvas);
-    const nearestCorner = getNearestCorner(sx, sy, canvas);
+    // When dragging a corner, exclude the dragged corner so we snap to potential target corners
+    const nearestCorner = getNearestCorner(sx, sy, canvas, 22, draggingCornerId || undefined);
 
     if (snapCorner && nearestCorner) {
       setSnappedCornerId(nearestCorner.id);
@@ -1348,9 +1378,10 @@ export default function FloorPlannerModal({
     }
 
     if (draggingCornerId) {
+      const targetPos = snapCorner && nearestCorner ? { x: nearestCorner.x, y: nearestCorner.y } : world;
       setCorners((prev) =>
         prev.map((c) =>
-          c.id === draggingCornerId ? { ...c, x: world.x, y: world.y } : c
+          c.id === draggingCornerId ? { ...c, x: targetPos.x, y: targetPos.y } : c
         )
       );
     }
@@ -1361,6 +1392,45 @@ export default function FloorPlannerModal({
       setIsPanning(false);
     }
     if (draggingCornerId) {
+      const canvas = canvasRef.current;
+      if (canvas && snapCorner) {
+        const sourceCorner = corners.find((c) => c.id === draggingCornerId);
+        if (sourceCorner) {
+          const sc = worldToScreen(sourceCorner.x, sourceCorner.y, canvas);
+          const targetCorner = getNearestCorner(sc.x, sc.y, canvas, 24, draggingCornerId);
+
+          if (targetCorner && targetCorner.id !== draggingCornerId) {
+            const targetId = targetCorner.id;
+            const sourceId = draggingCornerId;
+
+            // 1. Re-link all walls connected to sourceId -> targetId
+            // 2. Remove degenerate walls (startId === endId)
+            // 3. Deduplicate walls between same pairs
+            setWalls((prevWalls) => {
+              const relinked = prevWalls
+                .map((w) => ({
+                  ...w,
+                  startId: w.startId === sourceId ? targetId : w.startId,
+                  endId: w.endId === sourceId ? targetId : w.endId,
+                }))
+                .filter((w) => w.startId !== w.endId);
+
+              const seen = new Set<string>();
+              return relinked.filter((w) => {
+                const key = [w.startId, w.endId].sort().join('---');
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+              });
+            });
+
+            // 4. Remove source corner from state; destination remains at targetCorner
+            setCorners((prevCorners) => prevCorners.filter((c) => c.id !== sourceId));
+            setSelectedCornerId(targetId);
+            setSnappedCornerId(null);
+          }
+        }
+      }
       setDraggingCornerId(null);
     }
   };
@@ -1654,7 +1724,7 @@ export default function FloorPlannerModal({
               title="Alinhamento magnético à grade"
             >
               <Grid className="size-3.5" />
-              <span>Grade ({gridStep}m)</span>
+              <span>Grade ({gridStep.toFixed(2)}m)</span>
             </button>
 
             <button
