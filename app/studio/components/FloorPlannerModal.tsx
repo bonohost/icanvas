@@ -10,6 +10,7 @@ import {
   Sparkles,
   Check,
   Eye,
+  EyeOff,
   Grid,
   Magnet,
   Move,
@@ -19,6 +20,18 @@ import {
   Square,
   ArrowRight,
   Box,
+  Image as ImageIcon,
+  Upload,
+  SlidersHorizontal,
+  Ruler,
+  RotateCw,
+  Lock,
+  Unlock,
+  Crop,
+  Link as LinkIcon,
+  AlertCircle,
+  Scale,
+  Percent,
 } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -45,6 +58,21 @@ export interface PlannerRoomLoop {
   area: number; // in m²
   name: string;
   center: { x: number; y: number };
+}
+
+export interface BackgroundFloorPlanConfig {
+  url: string;
+  visible: boolean;
+  opacity: number; // 0.1 to 1.0 (default 0.65)
+  x: number; // center position X in meters (default 0)
+  y: number; // center position Y in meters (default 0)
+  width: number; // real-world width in meters (default 10.0m)
+  rotation: number; // in degrees (0, 90, 180, 270)
+  cropLeft: number; // 0 to 50 %
+  cropRight: number; // 0 to 50 %
+  cropTop: number; // 0 to 50 %
+  cropBottom: number; // 0 to 50 %
+  lock: boolean;
 }
 
 interface FloorPlannerModalProps {
@@ -201,6 +229,15 @@ export default function FloorPlannerModal({
       setDrawingStartCornerId(null);
       setCurrentMouseWorld(null);
       setPan({ x: 0, y: 0 });
+
+      if (currentRoom.backgroundFloorPlan) {
+        setBgConfig(currentRoom.backgroundFloorPlan);
+        setBgUrlInput(
+          currentRoom.backgroundFloorPlan.url.startsWith('data:')
+            ? 'Imagem Local'
+            : currentRoom.backgroundFloorPlan.url
+        );
+      }
     }
   }, [isOpen, currentRoom, parseRoomToPlanner]);
 
@@ -222,6 +259,85 @@ export default function FloorPlannerModal({
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [draggingCornerId, setDraggingCornerId] = useState<string | null>(null);
+
+  // --- Background Floor Plan Image State ---
+  const [bgConfig, setBgConfig] = useState<BackgroundFloorPlanConfig>(
+    () =>
+      currentRoom.backgroundFloorPlan || {
+        url: '',
+        visible: true,
+        opacity: 0.65,
+        x: 0,
+        y: 0,
+        width: 9.5,
+        rotation: 0,
+        cropLeft: 0,
+        cropRight: 0,
+        cropTop: 0,
+        cropBottom: 0,
+        lock: false,
+      }
+  );
+  const [showBgImagePanel, setShowBgImagePanel] = useState<boolean>(false);
+  const [bgUrlInput, setBgUrlInput] = useState<string>(() =>
+    currentRoom.backgroundFloorPlan?.url
+      ? currentRoom.backgroundFloorPlan.url.startsWith('data:')
+        ? 'Imagem Local'
+        : currentRoom.backgroundFloorPlan.url
+      : ''
+  );
+  const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
+  const [bgLoadError, setBgLoadError] = useState<string | null>(null);
+  const bgImageElementRef = useRef<HTMLImageElement | null>(null);
+
+  // 2-point scale calibration & Global Floor Plan Scaling
+  const [isCalibratingScale, setIsCalibratingScale] = useState<boolean>(false);
+  const [calibrationPtA, setCalibrationPtA] = useState<{ x: number; y: number } | null>(null);
+  const [showCalibrateModal, setShowCalibrateModal] = useState<boolean>(false);
+  const [calibrationMeasuredDistance, setCalibrationMeasuredDistance] = useState<number>(0);
+  const [targetRealMetersInput, setTargetRealMetersInput] = useState<string>('3.50');
+  const [calibrateTargetMode, setCalibrateTargetMode] = useState<'all' | 'walls' | 'bg'>('all');
+
+  // Scale Entire 2D & 3D Floor Plan Modal
+  const [showScaleModal, setShowScaleModal] = useState<boolean>(false);
+  const [scaleTargetWidth, setScaleTargetWidth] = useState<string>('7.00');
+  const [scaleTargetDepth, setScaleTargetDepth] = useState<string>('6.00');
+  const [scaleFactorInput, setScaleFactorInput] = useState<string>('1.00');
+  const [scaleIncludeBg, setScaleIncludeBg] = useState<boolean>(true);
+  const [scaleCenterOrigin, setScaleCenterOrigin] = useState<boolean>(true);
+
+  // Load Background Image Element
+  useEffect(() => {
+    if (!bgConfig.url) {
+      bgImageElementRef.current = null;
+      setIsBgLoading(false);
+      setBgLoadError(null);
+      return;
+    }
+    setIsBgLoading(true);
+    setBgLoadError(null);
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = bgConfig.url;
+    img.onload = () => {
+      bgImageElementRef.current = img;
+      setIsBgLoading(false);
+    };
+    img.onerror = () => {
+      // Fallback without crossOrigin
+      const fallbackImg = new Image();
+      fallbackImg.src = bgConfig.url;
+      fallbackImg.onload = () => {
+        bgImageElementRef.current = fallbackImg;
+        setIsBgLoading(false);
+      };
+      fallbackImg.onerror = () => {
+        setIsBgLoading(false);
+        setBgLoadError('Erro ao carregar a imagem. Verifique o link ou carregue um arquivo local.');
+      };
+    };
+  }, [bgConfig.url]);
 
   // 3D Viewport Refs
   const container3DRef = useRef<HTMLDivElement | null>(null);
@@ -454,6 +570,51 @@ export default function FloorPlannerModal({
     const centerX = width / 2 + pan.x;
     const centerY = height / 2 + pan.y;
 
+    // 0. Draw Background Reference Image (Planta Baixa de Fundo)
+    if (bgConfig.visible && bgImageElementRef.current && bgImageElementRef.current.complete) {
+      const img = bgImageElementRef.current;
+      const naturalW = img.naturalWidth || 1000;
+      const naturalH = img.naturalHeight || 1000;
+
+      const cropL = (bgConfig.cropLeft / 100) * naturalW;
+      const cropT = (bgConfig.cropTop / 100) * naturalH;
+      const cropR = (bgConfig.cropRight / 100) * naturalW;
+      const cropB = (bgConfig.cropBottom / 100) * naturalH;
+
+      const sx = cropL;
+      const sy = cropT;
+      const sw = Math.max(1, naturalW - cropL - cropR);
+      const sh = Math.max(1, naturalH - cropT - cropB);
+
+      const croppedAspect = sw / sh;
+      const drawWidthMeters = bgConfig.width;
+      const drawHeightMeters = drawWidthMeters / croppedAspect;
+
+      const imgCenterSc = worldToScreen(bgConfig.x, bgConfig.y, canvas);
+      const imgWidthPx = drawWidthMeters * zoom;
+      const imgHeightPx = drawHeightMeters * zoom;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.05, Math.min(1.0, bgConfig.opacity));
+      ctx.translate(imgCenterSc.x, imgCenterSc.y);
+      if (bgConfig.rotation !== 0) {
+        ctx.rotate((bgConfig.rotation * Math.PI) / 180);
+      }
+
+      ctx.drawImage(
+        img,
+        sx,
+        sy,
+        sw,
+        sh,
+        -imgWidthPx / 2,
+        -imgHeightPx / 2,
+        imgWidthPx,
+        imgHeightPx
+      );
+      ctx.restore();
+    }
+
     // 1. Draw Grid
     const meterPx = zoom;
     const subGridPx = meterPx * gridStep;
@@ -638,7 +799,31 @@ export default function FloorPlannerModal({
       }
     }
 
-    // 5. Draw Corners (Vertices)
+    // 5. Draw Scale Calibration Live Line
+    if (isCalibratingScale && calibrationPtA && currentMouseWorld) {
+      const sc1 = worldToScreen(calibrationPtA.x, calibrationPtA.y, canvas);
+      const sc2 = worldToScreen(currentMouseWorld.x, currentMouseWorld.y, canvas);
+      const dist = Math.hypot(currentMouseWorld.x - calibrationPtA.x, currentMouseWorld.y - calibrationPtA.y);
+
+      ctx.save();
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(sc1.x, sc1.y);
+      ctx.lineTo(sc2.x, sc2.y);
+      ctx.stroke();
+      ctx.restore();
+
+      // Measurement badge
+      const midSc = { x: (sc1.x + sc2.x) / 2, y: (sc1.y + sc2.y) / 2 };
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.9)';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`📐 Medida Atual: ${dist.toFixed(2)}m (Clique no ponto final)`, midSc.x, midSc.y - 12);
+    }
+
+    // 6. Draw Corners (Vertices)
     corners.forEach((corner) => {
       const sc = worldToScreen(corner.x, corner.y, canvas);
       const isSelected = selectedCornerId === corner.id;
@@ -684,6 +869,9 @@ export default function FloorPlannerModal({
     showMeasurements,
     wallThickness,
     worldToScreen,
+    bgConfig,
+    isCalibratingScale,
+    calibrationPtA,
   ]);
 
   // Animation Loop for smooth 2D drawing
@@ -889,6 +1077,151 @@ export default function FloorPlannerModal({
     });
   }, [corners, walls, detectedRooms, wallHeight, wallThickness]);
 
+  // --- Background Floor Plan Helpers ---
+  const handleLoadBgUrl = (urlToLoad?: string) => {
+    const targetUrl = (urlToLoad || bgUrlInput).trim();
+    if (!targetUrl) return;
+    setBgConfig((prev) => ({
+      ...prev,
+      url: targetUrl,
+      visible: true,
+    }));
+    setBgUrlInput(targetUrl);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setBgConfig((prev) => ({
+          ...prev,
+          url: dataUrl,
+          visible: true,
+        }));
+        setBgUrlInput('Imagem Local');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetCrop = () => {
+    setBgConfig((prev) => ({
+      ...prev,
+      cropLeft: 0,
+      cropRight: 0,
+      cropTop: 0,
+      cropBottom: 0,
+    }));
+  };
+
+  // --- Geometry Bounds & Global Scale Helpers ---
+  const getGeometryBounds = useCallback(() => {
+    if (corners.length === 0) {
+      return {
+        width: 0,
+        depth: 0,
+        minX: 0,
+        maxX: 0,
+        minY: 0,
+        maxY: 0,
+        centerX: 0,
+        centerY: 0,
+      };
+    }
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    corners.forEach((c) => {
+      minX = Math.min(minX, c.x);
+      maxX = Math.max(maxX, c.x);
+      minY = Math.min(minY, c.y);
+      maxY = Math.max(maxY, c.y);
+    });
+    return {
+      width: Math.max(0, Number((maxX - minX).toFixed(2))),
+      depth: Math.max(0, Number((maxY - minY).toFixed(2))),
+      minX,
+      maxX,
+      minY,
+      maxY,
+      centerX: Number(((minX + maxX) / 2).toFixed(3)),
+      centerY: Number(((minY + maxY) / 2).toFixed(3)),
+    };
+  }, [corners]);
+
+  const handleScaleEntirePlan = (
+    ratio: number,
+    options: { scaleBg?: boolean; centerOrigin?: boolean } = {
+      scaleBg: scaleIncludeBg,
+      centerOrigin: scaleCenterOrigin,
+    }
+  ) => {
+    if (!isFinite(ratio) || ratio <= 0.001 || ratio >= 100 || corners.length === 0) return;
+    saveSnapshot();
+
+    const bounds = getGeometryBounds();
+    const cx = options.centerOrigin ? bounds.centerX : 0;
+    const cy = options.centerOrigin ? bounds.centerY : 0;
+
+    setCorners((prev) =>
+      prev.map((c) => ({
+        ...c,
+        x: Number(((c.x - cx) * ratio).toFixed(3)),
+        y: Number(((c.y - cy) * ratio).toFixed(3)),
+      }))
+    );
+
+    if (options.scaleBg && bgConfig.url) {
+      setBgConfig((prev) => ({
+        ...prev,
+        width: Number((prev.width * ratio).toFixed(2)),
+        x: Number(((prev.x - cx) * ratio).toFixed(3)),
+        y: Number(((prev.y - cy) * ratio).toFixed(3)),
+      }));
+    }
+
+    setShowScaleModal(false);
+  };
+
+  const handleApplyCalibration = () => {
+    const realMeters = parseFloat(targetRealMetersInput);
+    if (!isNaN(realMeters) && realMeters > 0 && calibrationMeasuredDistance > 0.01) {
+      const ratio = realMeters / calibrationMeasuredDistance;
+      saveSnapshot();
+
+      const bounds = getGeometryBounds();
+      const cx = bounds.centerX;
+      const cy = bounds.centerY;
+
+      if (calibrateTargetMode === 'all' || calibrateTargetMode === 'walls') {
+        setCorners((prev) =>
+          prev.map((c) => ({
+            ...c,
+            x: Number(((c.x - cx) * ratio).toFixed(3)),
+            y: Number(((c.y - cy) * ratio).toFixed(3)),
+          }))
+        );
+      }
+
+      if (calibrateTargetMode === 'all' || calibrateTargetMode === 'bg') {
+        if (bgConfig.url) {
+          const newWidth = Number((bgConfig.width * ratio).toFixed(2));
+          setBgConfig((prev) => ({
+            ...prev,
+            width: Math.min(100, Math.max(1, newWidth)),
+            x: Number(((prev.x - cx) * ratio).toFixed(3)),
+            y: Number(((prev.y - cy) * ratio).toFixed(3)),
+          }));
+        }
+      }
+    }
+    setShowCalibrateModal(false);
+  };
+
   // --- Mouse Handlers ---
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -907,6 +1240,21 @@ export default function FloorPlannerModal({
 
     const world = screenToWorld(sx, sy, canvas);
     const nearestCorner = getNearestCorner(sx, sy, canvas);
+
+    if (isCalibratingScale) {
+      if (!calibrationPtA) {
+        setCalibrationPtA({ x: world.x, y: world.y });
+      } else {
+        const dist = Math.hypot(world.x - calibrationPtA.x, world.y - calibrationPtA.y);
+        if (dist > 0.05) {
+          setCalibrationMeasuredDistance(dist);
+          setShowCalibrateModal(true);
+        }
+        setIsCalibratingScale(false);
+        setCalibrationPtA(null);
+      }
+      return;
+    }
 
     if (activeTool === 'wall') {
       saveSnapshot();
@@ -1114,6 +1462,7 @@ export default function FloorPlannerModal({
       height: wallHeight,
       customWalls,
       customFloors,
+      backgroundFloorPlan: bgConfig.url ? bgConfig : undefined,
     };
 
     onApplyToProject(
@@ -1321,6 +1670,43 @@ export default function FloorPlannerModal({
               <span>Imã de Vértice</span>
             </button>
 
+            {/* Background Floor Plan Image Button */}
+            <button
+              onClick={() => setShowBgImagePanel(!showBgImagePanel)}
+              className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
+                showBgImagePanel || bgConfig.url
+                  ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 shadow-sm'
+                  : 'bg-white/5 text-slate-400 hover:text-white border border-white/5'
+              }`}
+              title="Planta Baixa de Fundo (imagem de referência para decalque)"
+            >
+              <ImageIcon className="size-3.5" />
+              <span>Planta de Fundo</span>
+              {bgConfig.url && (
+                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </button>
+
+            {/* Escalar / Redimensionar Planta Inteira */}
+            <button
+              onClick={() => {
+                const bounds = getGeometryBounds();
+                setScaleTargetWidth(bounds.width > 0 ? bounds.width.toFixed(2) : '7.00');
+                setScaleTargetDepth(bounds.depth > 0 ? bounds.depth.toFixed(2) : '6.00');
+                setScaleFactorInput('1.00');
+                setShowScaleModal(true);
+              }}
+              className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
+                showScaleModal
+                  ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'bg-white/5 text-slate-300 hover:text-white border border-white/5 hover:bg-white/10'
+              }`}
+              title="Escalar / Redimensionar toda a planta 2D e 3D proporcionalmente"
+            >
+              <Scale className="size-3.5 text-amber-400" />
+              <span>Escalar Planta</span>
+            </button>
+
             <button
               onClick={() => setShowMeasurements(!showMeasurements)}
               className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
@@ -1406,11 +1792,15 @@ export default function FloorPlannerModal({
               </span>
             </div>
 
-            {/* Instruction Badge */}
+            {/* Instruction / Calibration Badge */}
             <div className="absolute top-3 left-3 z-10 pointer-events-none bg-slate-900/85 border border-white/10 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md">
               <p className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-primary animate-ping" />
-                {activeTool === 'wall'
+                <span className={`size-2 rounded-full ${isCalibratingScale ? 'bg-cyan-400 animate-ping' : 'bg-primary animate-ping'}`} />
+                {isCalibratingScale
+                  ? calibrationPtA
+                    ? '📍 Clique no segundo ponto da parede para definir a medida real'
+                    : '📍 Clique no primeiro ponto de uma parede com medida conhecida'
+                  : activeTool === 'wall'
                   ? drawingStartCornerId
                     ? 'Clique no ponto final ou em outro canto para fechar a parede (Esc para parar)'
                     : 'Clique no grid para iniciar uma nova parede'
@@ -1419,6 +1809,639 @@ export default function FloorPlannerModal({
                   : 'Clique em uma parede ou vértice para excluir'}
               </p>
             </div>
+
+            {/* Floating Background Floor Plan Image Inspector Panel */}
+            {showBgImagePanel && (
+              <div className="absolute top-3 right-3 z-30 w-80 max-h-[calc(100%-24px)] bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden text-xs">
+                {/* Panel Header */}
+                <div className="p-3 border-b border-white/10 flex items-center justify-between bg-slate-800/50">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="size-4 text-indigo-400" />
+                    <span className="font-bold text-white text-xs">Planta de Fundo</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {bgConfig.url && (
+                      <button
+                        onClick={() => setBgConfig((prev) => ({ ...prev, visible: !prev.visible }))}
+                        className={`p-1.5 rounded-lg border transition-all ${
+                          bgConfig.visible
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-white/5 text-slate-400 border-white/5'
+                        }`}
+                        title={bgConfig.visible ? 'Ocultar imagem' : 'Exibir imagem'}
+                      >
+                        {bgConfig.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowBgImagePanel(false)}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Panel Content (Scrollable) */}
+                <div className="p-3 overflow-y-auto space-y-3.5 text-slate-300">
+                  {/* Image Source */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <LinkIcon className="size-3" /> URL da Imagem da Planta
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={bgUrlInput}
+                        onChange={(e) => setBgUrlInput(e.target.value)}
+                        placeholder="https://exemplo.com/planta.jpg"
+                        className="flex-1 bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-indigo-500 font-mono"
+                      />
+                      <button
+                        onClick={() => handleLoadBgUrl()}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-all"
+                      >
+                        Carregar
+                      </button>
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        onClick={() =>
+                          handleLoadBgUrl(
+                            'https://www.mrv.com.br/content/dam/conhecer/imoveis/sao-paulo/ribeirao-preto/residencial-canto-das-andorinhas/PH_ANDORINHAS_03_BL2_FINAL_203_2025.09.09.jpg'
+                          )
+                        }
+                        className="flex-1 text-[10px] py-1 px-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 font-medium transition-all text-left truncate"
+                        title="Carregar Planta MRV Canto das Andorinhas"
+                      >
+                        💡 Exemplo MRV Andorinhas
+                      </button>
+
+                      <label className="text-[10px] py-1 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-medium cursor-pointer transition-all flex items-center gap-1">
+                        <Upload className="size-3" /> Arquivo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {isBgLoading && (
+                      <p className="text-[11px] text-indigo-400 animate-pulse flex items-center gap-1">
+                        Carregando imagem...
+                      </p>
+                    )}
+                    {bgLoadError && (
+                      <p className="text-[10px] text-rose-400 flex items-center gap-1">
+                        <AlertCircle className="size-3 flex-shrink-0" /> {bgLoadError}
+                      </p>
+                    )}
+                  </div>
+
+                  {bgConfig.url && (
+                    <>
+                      {/* Scale & Calibration */}
+                      <div className="space-y-1.5 pt-1 border-t border-white/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <SlidersHorizontal className="size-3" /> Escala (Largura Real)
+                          </label>
+                          <span className="text-indigo-400 font-mono font-bold text-xs">
+                            {bgConfig.width.toFixed(2)} m
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={2}
+                          max={35}
+                          step={0.1}
+                          value={bgConfig.width}
+                          onChange={(e) =>
+                            setBgConfig((prev) => ({ ...prev, width: parseFloat(e.target.value) }))
+                          }
+                          className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                        <button
+                          onClick={() => {
+                            setIsCalibratingScale(true);
+                            setCalibrationPtA(null);
+                          }}
+                          className={`w-full py-1.5 px-2 rounded-lg border font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all ${
+                            isCalibratingScale
+                              ? 'bg-cyan-500 text-slate-950 border-cyan-400 animate-pulse'
+                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/25'
+                          }`}
+                        >
+                          <Ruler className="size-3.5" />
+                          <span>
+                            {isCalibratingScale
+                              ? 'Modo Calibração Ativo (Clique na tela)'
+                              : 'Calibrar Escala com 2 Pontos (Régua)'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Opacity Slider */}
+                      <div className="space-y-1.5 pt-1 border-t border-white/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Opacidade / Transparência
+                          </label>
+                          <span className="text-slate-300 font-mono text-xs">
+                            {Math.round(bgConfig.opacity * 100)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={1.0}
+                          step={0.05}
+                          value={bgConfig.opacity}
+                          onChange={(e) =>
+                            setBgConfig((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))
+                          }
+                          className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Position & Rotation */}
+                      <div className="space-y-2 pt-1 border-t border-white/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Posição & Rotação
+                          </label>
+                          <button
+                            onClick={() =>
+                              setBgConfig((prev) => ({ ...prev, x: 0, y: 0, rotation: 0 }))
+                            }
+                            className="text-[10px] text-slate-400 hover:text-white underline"
+                          >
+                            Reset Posição
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[10px] text-slate-400">Pos X: {bgConfig.x.toFixed(2)}m</span>
+                            <input
+                              type="range"
+                              min={-15}
+                              max={15}
+                              step={0.25}
+                              value={bgConfig.x}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, x: parseFloat(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400">Pos Y: {bgConfig.y.toFixed(2)}m</span>
+                            <input
+                              type="range"
+                              min={-15}
+                              max={15}
+                              step={0.25}
+                              value={bgConfig.y}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, y: parseFloat(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Rotation Buttons */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 mr-1 flex items-center gap-1">
+                            <RotateCw className="size-3" /> Giro:
+                          </span>
+                          {[0, 90, 180, 270].map((deg) => (
+                            <button
+                              key={deg}
+                              onClick={() => setBgConfig((prev) => ({ ...prev, rotation: deg }))}
+                              className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${
+                                bgConfig.rotation === deg
+                                  ? 'bg-indigo-600 text-white border-indigo-500'
+                                  : 'bg-white/5 text-slate-300 hover:bg-white/10 border-white/5'
+                              }`}
+                            >
+                              {deg}°
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Crop / Recorte de Margens */}
+                      <div className="space-y-1.5 pt-1 border-t border-white/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <Crop className="size-3" /> Recorte de Margens (Crop)
+                          </label>
+                          {(bgConfig.cropLeft > 0 ||
+                            bgConfig.cropRight > 0 ||
+                            bgConfig.cropTop > 0 ||
+                            bgConfig.cropBottom > 0) && (
+                            <button
+                              onClick={handleResetCrop}
+                              className="text-[10px] text-rose-400 hover:underline"
+                            >
+                              Reset Crop
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                          <div>
+                            <span className="text-slate-400">Topo: {bgConfig.cropTop}%</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={45}
+                              value={bgConfig.cropTop}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, cropTop: parseInt(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Base: {bgConfig.cropBottom}%</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={45}
+                              value={bgConfig.cropBottom}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, cropBottom: parseInt(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Esquerda: {bgConfig.cropLeft}%</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={45}
+                              value={bgConfig.cropLeft}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, cropLeft: parseInt(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Direita: {bgConfig.cropRight}%</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={45}
+                              value={bgConfig.cropRight}
+                              onChange={(e) =>
+                                setBgConfig((prev) => ({ ...prev, cropRight: parseInt(e.target.value) }))
+                              }
+                              className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Remove Background Image Button */}
+                      <button
+                        onClick={() => {
+                          setBgConfig((prev) => ({ ...prev, url: '', visible: false }));
+                          setBgUrlInput('');
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 font-bold text-[11px] transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span>Remover Imagem de Fundo</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Scale Calibration Confirmation Modal */}
+            {showCalibrateModal && (
+              <div className="absolute inset-0 z-40 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-cyan-500/40 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4">
+                  <div className="flex items-center gap-2 text-cyan-400">
+                    <Ruler className="size-5" />
+                    <h3 className="font-bold text-white text-sm">Calibrar Escala com Régua</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Você mediu um segmento de{' '}
+                    <span className="font-bold text-cyan-300 font-mono">
+                      {calibrationMeasuredDistance.toFixed(2)}m
+                    </span>{' '}
+                    na tela. Qual é a medida real correspondente desta parede?
+                  </p>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Medida Real em Metros (m)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="0.2"
+                      value={targetRealMetersInput}
+                      onChange={(e) => setTargetRealMetersInput(e.target.value)}
+                      placeholder="Ex: 3.50"
+                      className="w-full bg-slate-950 border border-cyan-500/40 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold outline-none focus:ring-2 focus:ring-cyan-500"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                      O que você deseja redimensionar?
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setCalibrateTargetMode('all')}
+                        className={`py-1.5 px-2 rounded-lg border font-bold text-center transition-all ${
+                          calibrateTargetMode === 'all'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                            : 'bg-white/5 text-slate-400 border-white/5 hover:text-white'
+                        }`}
+                      >
+                        Tudo (3D + Fundo)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalibrateTargetMode('walls')}
+                        className={`py-1.5 px-2 rounded-lg border font-bold text-center transition-all ${
+                          calibrateTargetMode === 'walls'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                            : 'bg-white/5 text-slate-400 border-white/5 hover:text-white'
+                        }`}
+                      >
+                        Apenas Paredes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalibrateTargetMode('bg')}
+                        className={`py-1.5 px-2 rounded-lg border font-bold text-center transition-all ${
+                          calibrateTargetMode === 'bg'
+                            ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-sm'
+                            : 'bg-white/5 text-slate-400 border-white/5 hover:text-white'
+                        }`}
+                      >
+                        Apenas Fundo
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => setShowCalibrateModal(false)}
+                      className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleApplyCalibration}
+                      className="flex-1 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-cyan-500/25"
+                    >
+                      Ajustar Escala
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Global Scale & Resize Modal */}
+            {showScaleModal && (
+              <div className="absolute inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+                <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-4 text-xs">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-2 text-amber-400">
+                      <Scale className="size-5" />
+                      <h3 className="font-bold text-white text-sm">Escalar Planta Inteira (2D & 3D)</h3>
+                    </div>
+                    <button
+                      onClick={() => setShowScaleModal(false)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+
+                  {/* Current Dimensions Card */}
+                  {(() => {
+                    const bounds = getGeometryBounds();
+                    const curW = bounds.width || 0;
+                    const curD = bounds.depth || 0;
+                    const curArea = (curW * curD).toFixed(1);
+
+                    return (
+                      <>
+                        <div className="bg-slate-950 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                              Dimensões Atuais da Planta
+                            </span>
+                            <div className="font-mono text-white font-bold text-sm mt-0.5">
+                              {curW.toFixed(2)}m <span className="text-slate-500">×</span> {curD.toFixed(2)}m
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                              Área Ocupada
+                            </span>
+                            <div className="font-mono text-amber-300 font-bold text-sm mt-0.5">
+                              {curArea} m²
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resize by Target Width */}
+                        <div className="space-y-2 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                          <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                            Opção 1: Definir Nova Largura Total
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="100"
+                                value={scaleTargetWidth}
+                                onChange={(e) => setScaleTargetWidth(e.target.value)}
+                                placeholder="Ex: 7.00"
+                                className="w-full bg-slate-950 border border-white/15 rounded-lg px-3 py-1.5 text-xs text-white font-mono font-bold outline-none focus:border-amber-400"
+                              />
+                              <span className="absolute right-2.5 top-1.5 text-slate-500 font-mono text-xs">m</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const targetW = parseFloat(scaleTargetWidth);
+                                if (!isNaN(targetW) && targetW > 0 && curW > 0) {
+                                  const ratio = targetW / curW;
+                                  handleScaleEntirePlan(ratio);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-all"
+                            >
+                              Aplicar Largura
+                            </button>
+                          </div>
+                          {curW > 0 && parseFloat(scaleTargetWidth) > 0 && (
+                            <p className="text-[10px] text-slate-400">
+                              Profundidade proporcional resultante:{' '}
+                              <span className="font-bold text-slate-200 font-mono">
+                                {(curD * (parseFloat(scaleTargetWidth) / curW)).toFixed(2)}m
+                              </span>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Resize by Target Depth */}
+                        <div className="space-y-2 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                          <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                            Opção 2: Definir Nova Profundidade Total
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="1"
+                                max="100"
+                                value={scaleTargetDepth}
+                                onChange={(e) => setScaleTargetDepth(e.target.value)}
+                                placeholder="Ex: 6.00"
+                                className="w-full bg-slate-950 border border-white/15 rounded-lg px-3 py-1.5 text-xs text-white font-mono font-bold outline-none focus:border-amber-400"
+                              />
+                              <span className="absolute right-2.5 top-1.5 text-slate-500 font-mono text-xs">m</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const targetD = parseFloat(scaleTargetDepth);
+                                if (!isNaN(targetD) && targetD > 0 && curD > 0) {
+                                  const ratio = targetD / curD;
+                                  handleScaleEntirePlan(ratio);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-all"
+                            >
+                              Aplicar Profundidade
+                            </button>
+                          </div>
+                          {curD > 0 && parseFloat(scaleTargetDepth) > 0 && (
+                            <p className="text-[10px] text-slate-400">
+                              Largura proporcional resultante:{' '}
+                              <span className="font-bold text-slate-200 font-mono">
+                                {(curW * (parseFloat(scaleTargetDepth) / curD)).toFixed(2)}m
+                              </span>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Quick Percentage Presets */}
+                        <div className="space-y-2 bg-slate-800/40 border border-white/5 rounded-xl p-3">
+                          <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                            Opção 3: Multiplicador Rápido / Porcentagem
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { label: '33% (1/3)', factor: 0.333 },
+                              { label: '40%', factor: 0.4 },
+                              { label: '50% (1/2)', factor: 0.5 },
+                              { label: '75%', factor: 0.75 },
+                              { label: '125%', factor: 1.25 },
+                              { label: '150%', factor: 1.5 },
+                              { label: '200% (2x)', factor: 2.0 },
+                            ].map((preset) => (
+                              <button
+                                key={preset.label}
+                                onClick={() => handleScaleEntirePlan(preset.factor)}
+                                className="py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 font-bold text-[10px] border border-white/10 hover:border-amber-400/50 transition-all text-center"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                step="0.05"
+                                min="0.05"
+                                max="10"
+                                value={scaleFactorInput}
+                                onChange={(e) => setScaleFactorInput(e.target.value)}
+                                className="w-12 bg-slate-950 border border-white/15 rounded-lg px-1.5 py-1 text-[10px] text-white font-mono text-center outline-none"
+                              />
+                              <button
+                                onClick={() => {
+                                  const f = parseFloat(scaleFactorInput);
+                                  if (!isNaN(f) && f > 0) handleScaleEntirePlan(f);
+                                }}
+                                className="flex-1 py-1 px-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-[10px]"
+                              >
+                                Ok
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Options Checkboxes */}
+                        <div className="pt-1 space-y-1.5 text-slate-300">
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px] select-none">
+                            <input
+                              type="checkbox"
+                              checked={scaleIncludeBg}
+                              onChange={(e) => setScaleIncludeBg(e.target.checked)}
+                              className="rounded border-white/20 bg-slate-950 accent-amber-500"
+                            />
+                            <span>Redimensionar imagem de fundo de referência também</span>
+                          </label>
+
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px] select-none">
+                            <input
+                              type="checkbox"
+                              checked={scaleCenterOrigin}
+                              onChange={(e) => setScaleCenterOrigin(e.target.checked)}
+                              className="rounded border-white/20 bg-slate-950 accent-amber-500"
+                            />
+                            <span>Centralizar planta na origem (0, 0)</span>
+                          </label>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                    <button
+                      onClick={() => {
+                        setShowScaleModal(false);
+                        setIsCalibratingScale(true);
+                        setCalibrationPtA(null);
+                      }}
+                      className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
+                    >
+                      <Ruler className="size-3.5" /> Medir Parede com Régua
+                    </button>
+                    <button
+                      onClick={() => setShowScaleModal(false)}
+                      className="py-1.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 3D Live Viewport (Right Side) */}

@@ -231,6 +231,8 @@ export default function StudioPage() {
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
   const [showRaycastLine, setShowRaycastLine] = useState(false);
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+  const [showWallTags, setShowWallTags] = useState<boolean>(true);
 
   // Shoppable Scene Cart Summary Calculation (Automatic sum of primary store [0])
   const { cartCount, cartTotal } = React.useMemo(() => {
@@ -618,11 +620,15 @@ export default function StudioPage() {
   );
 
   const handleAddOpening = useCallback(
-    (preset: OpeningPreset, wallSide: WallSide = 'back', position = 0.5) => {
+    (preset: OpeningPreset, wallSide?: WallSide, position = 0.5) => {
       pushHistory();
+      let targetWall: WallSide = wallSide || 'back';
+      if (!wallSide && room.customWalls && room.customWalls.length > 0) {
+        targetWall = room.customWalls[0].id || 'w_0';
+      }
       const newOpening: WallOpening = {
         id: `op_${Date.now()}`,
-        wallSide,
+        wallSide: targetWall,
         type: preset.type,
         name: preset.name,
         position,
@@ -638,10 +644,10 @@ export default function StudioPage() {
       }));
       setSelectedOpeningId(newOpening.id);
       setSelectedUid(null);
-      setSaveToast(`Vão "${newOpening.name}" Adicionado!`);
-      setTimeout(() => setSaveToast(null), 2500);
+      setSaveToast(`Vão "${newOpening.name}" inserido! Altere a parede no painel lateral.`);
+      setTimeout(() => setSaveToast(null), 3000);
     },
-    [pushHistory]
+    [pushHistory, room.customWalls]
   );
 
   const handleUpdateOpening = useCallback((id: string, updates: Partial<WallOpening>) => {
@@ -652,10 +658,12 @@ export default function StudioPage() {
     }));
   }, [pushHistory]);
 
-  const handleUpdateOpeningPosition = useCallback((id: string, newPos: number) => {
+  const handleUpdateOpeningPosition = useCallback((id: string, newPos: number, newWallSide?: WallSide) => {
     setRoom((prev) => ({
       ...prev,
-      openings: (prev.openings || []).map((o) => (o.id === id ? { ...o, position: newPos } : o)),
+      openings: (prev.openings || []).map((o) =>
+        o.id === id ? { ...o, position: newPos, wallSide: newWallSide || o.wallSide } : o
+      ),
     }));
   }, []);
 
@@ -702,6 +710,12 @@ export default function StudioPage() {
     setSelectedUid(null);
     setSelectedOpeningId(null);
   }, []);
+
+  const handleSelectWall = useCallback((wallId: string) => {
+    if (selectedOpeningId) {
+      handleUpdateOpening(selectedOpeningId, { wallSide: wallId as WallSide, position: 0.5 });
+    }
+  }, [selectedOpeningId, handleUpdateOpening]);
 
   // Global Keyboard Shortcuts (Ctrl+Z = Undo, Ctrl+Y = Redo, Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
   useEffect(() => {
@@ -1157,6 +1171,10 @@ export default function StudioPage() {
             onRegisterCameraControl={(ctrl) => {
               cameraControlRef.current = ctrl;
             }}
+            hoveredWallId={hoveredWallId}
+            onHoverWall={setHoveredWallId}
+            showWallTags={showWallTags}
+            onSelectWall={handleSelectWall}
           />
 
           {/* Floating Toggle Controls inside 3D Viewport */}
@@ -1283,6 +1301,10 @@ export default function StudioPage() {
             onToggleAutoTransparency={setAutoTransparency}
             transformMode={transformMode}
             onTransformModeChange={setTransformMode}
+            hoveredWallId={hoveredWallId}
+            onHoverWall={setHoveredWallId}
+            showWallTags={showWallTags}
+            onToggleWallTags={() => setShowWallTags((prev) => !prev)}
           />
         </div>
       </div>

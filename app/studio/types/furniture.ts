@@ -52,7 +52,7 @@ export interface CatalogCategory {
   items: FurnitureSpec[];
 }
 
-export type WallSide = 'back' | 'front' | 'left' | 'right';
+export type WallSide = 'back' | 'front' | 'left' | 'right' | string;
 
 export type WallOpeningType =
   | 'door-hinged'
@@ -121,6 +121,21 @@ export interface HdrSettings {
   disableManualLights?: boolean; // 100% pure HDR IBL without artificial directional lights
 }
 
+export interface BackgroundFloorPlanConfig {
+  url: string;
+  visible: boolean;
+  opacity: number; // 0.1 to 1.0 (default 0.65)
+  x: number; // center position X in meters (default 0)
+  y: number; // center position Y in meters (default 0)
+  width: number; // real-world width in meters (default 10.0m)
+  rotation: number; // in degrees (0, 90, 180, 270)
+  cropLeft: number; // 0 to 50 %
+  cropRight: number; // 0 to 50 %
+  cropTop: number; // 0 to 50 %
+  cropBottom: number; // 0 to 50 %
+  lock: boolean;
+}
+
 export interface RoomSettings {
   width: number;
   depth: number;
@@ -147,6 +162,7 @@ export interface RoomSettings {
   floorplan2d?: Floorplan2DData;
   customWalls?: CustomWall[];
   customFloors?: CustomFloor[];
+  backgroundFloorPlan?: BackgroundFloorPlanConfig;
 }
 
 export interface CustomWall {
