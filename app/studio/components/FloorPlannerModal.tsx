@@ -36,6 +36,7 @@ import {
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomSettings } from '../types/furniture';
+import { calculateAdjustedWallJunctions } from '../lib/wall-builders';
 
 // --- Data Structures ---
 export interface PlannerCorner {
@@ -73,6 +74,124 @@ export interface BackgroundFloorPlanConfig {
   cropTop: number; // 0 to 50 %
   cropBottom: number; // 0 to 50 %
   lock: boolean;
+}
+
+export interface SavedBgPreset {
+  id: string;
+  name: string;
+  config: BackgroundFloorPlanConfig;
+}
+
+export const DEFAULT_BG_PRESETS: SavedBgPreset[] = [
+  {
+    id: 'mrv-andorinhas',
+    name: 'Exemplo MRV Andorinhas',
+    config: {
+      url: 'https://www.mrv.com.br/content/dam/conhecer/imoveis/sao-paulo/ribeirao-preto/residencial-canto-das-andorinhas/PH_ANDORINHAS_03_BL2_FINAL_203_2025.09.09.jpg',
+      visible: true,
+      opacity: 0.9,
+      width: 7.6,
+      x: 0.0,
+      y: 0.25,
+      rotation: 0,
+      cropLeft: 18,
+      cropRight: 45,
+      cropTop: 0,
+      cropBottom: 0,
+      lock: false,
+    },
+  },
+];
+
+// Helper for double-click inline value editing
+interface InlineEditableNumberProps {
+  value: number;
+  suffix?: string;
+  prefix?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  decimals?: number;
+  multiplier?: number; // e.g., 100 for opacity percentage (0.9 -> 90)
+  className?: string;
+  onChange: (newVal: number) => void;
+}
+
+function InlineEditableNumber({
+  value,
+  suffix = '',
+  prefix = '',
+  min,
+  max,
+  step = 0.01,
+  decimals = 2,
+  multiplier = 1,
+  className = '',
+  onChange,
+}: InlineEditableNumberProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const displayVal = (value * multiplier).toFixed(decimals);
+  const [inputVal, setInputVal] = useState(displayVal);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      setInputVal((value * multiplier).toFixed(decimals));
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 15);
+    }
+  }, [isEditing, value, multiplier, decimals]);
+
+  const commitChange = () => {
+    setIsEditing(false);
+    let num = parseFloat(inputVal.replace(',', '.'));
+    if (isNaN(num)) return;
+    num = num / multiplier;
+    if (min !== undefined) num = Math.max(min, num);
+    if (max !== undefined) num = Math.min(max, num);
+    onChange(Number(num.toFixed(4)));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      commitChange();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <span className="inline-flex items-center">
+        {prefix && <span className="text-slate-500 font-mono text-[10px] mr-0.5">{prefix}</span>}
+        <input
+          ref={inputRef}
+          type="number"
+          step={step}
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onBlur={commitChange}
+          onKeyDown={handleKeyDown}
+          className="w-14 bg-slate-950 text-indigo-300 font-mono font-bold text-xs border border-indigo-500/80 rounded px-1 py-0.5 outline-none text-center shadow-inner"
+        />
+        {suffix && <span className="text-slate-500 font-mono text-[10px] ml-0.5">{suffix}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      onDoubleClick={() => setIsEditing(true)}
+      title="Duplo clique para digitar o valor exato"
+      className={`cursor-pointer hover:underline hover:text-indigo-300 transition-colors select-none font-mono ${className}`}
+    >
+      {prefix}
+      {displayVal}
+      {suffix}
+    </span>
+  );
 }
 
 interface FloorPlannerModalProps {
@@ -151,12 +270,14 @@ export default function FloorPlannerModal({
   // --- UI & Tool State ---
   const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'delete'>('wall');
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
+  const [showGrid, setShowGrid] = useState<boolean>(true);
   const [snapCorner, setSnapCorner] = useState<boolean>(true);
   const [gridStep, setGridStep] = useState<number>(0.10); // 0.10m = 10cm
   const [wallHeight, setWallHeight] = useState<number>(currentRoom.height || 2.6);
   const [wallThickness] = useState<number>(0.15); // 15cm standard
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [is3DExpanded, setIs3DExpanded] = useState<boolean>(false);
+  const [is2DExpanded, setIs2DExpanded] = useState<boolean>(false);
   const [showMeasurements, setShowMeasurements] = useState<boolean>(true);
   const [history, setHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
 
@@ -229,6 +350,8 @@ export default function FloorPlannerModal({
       setDrawingStartCornerId(null);
       setCurrentMouseWorld(null);
       setPan({ x: 0, y: 0 });
+      setIs3DExpanded(false);
+      setIs2DExpanded(false);
 
       if (currentRoom.backgroundFloorPlan) {
         setBgConfig(currentRoom.backgroundFloorPlan);
@@ -289,6 +412,58 @@ export default function FloorPlannerModal({
   const [isBgLoading, setIsBgLoading] = useState<boolean>(false);
   const [bgLoadError, setBgLoadError] = useState<string | null>(null);
   const bgImageElementRef = useRef<HTMLImageElement | null>(null);
+
+  // Saved Background Reference Presets with localStorage persistence
+  const [savedBgPresets, setSavedBgPresets] = useState<SavedBgPreset[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_BG_PRESETS;
+    try {
+      const stored = localStorage.getItem('icanvas_saved_bg_presets');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_BG_PRESETS;
+  });
+
+  const handleApplyBgPreset = (preset: SavedBgPreset) => {
+    setBgConfig(preset.config);
+    setBgUrlInput(
+      preset.config.url.startsWith('data:') ? 'Imagem Local' : preset.config.url
+    );
+  };
+
+  const handleSaveCurrentBgAsPreset = () => {
+    if (!bgConfig.url) return;
+    const defaultName = bgUrlInput.startsWith('data:') ? 'Minha Planta Local' : 'Minha Planta Salva';
+    const name = window.prompt('Nome para salvar este preset de planta de fundo:', defaultName);
+    if (!name || !name.trim()) return;
+
+    const newPreset: SavedBgPreset = {
+      id: `bg_preset_${Date.now()}`,
+      name: name.trim(),
+      config: { ...bgConfig },
+    };
+
+    setSavedBgPresets((prev) => {
+      const updated = [...prev, newPreset];
+      try {
+        localStorage.setItem('icanvas_saved_bg_presets', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleDeleteBgPreset = (presetId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSavedBgPresets((prev) => {
+      const updated = prev.filter((p) => p.id !== presetId);
+      try {
+        localStorage.setItem('icanvas_saved_bg_presets', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
 
   // 2-point scale calibration & Global Floor Plan Scaling
   const [isCalibratingScale, setIsCalibratingScale] = useState<boolean>(false);
@@ -622,58 +797,60 @@ export default function FloorPlannerModal({
       ctx.restore();
     }
 
-    // 1. Draw Grid
-    const meterPx = zoom;
-    const subGridPx = meterPx * gridStep;
+    // 1. Draw Grid (Optional Visibility Toggle)
+    if (showGrid) {
+      const meterPx = zoom;
+      const subGridPx = meterPx * gridStep;
 
-    // Sub-grid lines (0.10m = 10cm sutil)
-    if (subGridPx >= 4) {
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1;
+      // Sub-grid lines (0.10m = 10cm sutil)
+      if (subGridPx >= 4) {
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const startX = (centerX % subGridPx) - subGridPx;
+        for (let x = startX; x < width; x += subGridPx) {
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+        }
+        const startY = (centerY % subGridPx) - subGridPx;
+        for (let y = startY; y < height; y += subGridPx) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+        }
+        ctx.stroke();
+      }
+
+      // 1-Meter Major Grid
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      const startX = (centerX % subGridPx) - subGridPx;
-      for (let x = startX; x < width; x += subGridPx) {
+      const majorStartX = (centerX % meterPx) - meterPx;
+      for (let x = majorStartX; x < width; x += meterPx) {
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
       }
-      const startY = (centerY % subGridPx) - subGridPx;
-      for (let y = startY; y < height; y += subGridPx) {
+      const majorStartY = (centerY % meterPx) - meterPx;
+      for (let y = majorStartY; y < height; y += meterPx) {
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
       }
       ctx.stroke();
-    }
 
-    // 1-Meter Major Grid
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    const majorStartX = (centerX % meterPx) - meterPx;
-    for (let x = majorStartX; x < width; x += meterPx) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-    }
-    const majorStartY = (centerY % meterPx) - meterPx;
-    for (let y = majorStartY; y < height; y += meterPx) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-    }
-    ctx.stroke();
+      // Origin Axes (X / Y)
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.moveTo(centerX, 0);
+      ctx.lineTo(centerX, height);
+      ctx.stroke();
 
-    // Origin Axes (X / Y)
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, centerY);
-    ctx.lineTo(width, centerY);
-    ctx.moveTo(centerX, 0);
-    ctx.lineTo(centerX, height);
-    ctx.stroke();
-
-    // Center Origin Badge
-    ctx.fillStyle = '#64748b';
-    ctx.font = '10px monospace';
-    ctx.fillText('(0,0)', centerX + 4, centerY - 4);
+      // Center Origin Badge
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px monospace';
+      ctx.fillText('(0,0)', centerX + 4, centerY - 4);
+    }
 
     // 2. Draw Detected Room Polygons (Fills & Area badges)
     detectedRooms.forEach((room) => {
@@ -897,6 +1074,7 @@ export default function FloorPlannerModal({
     isCalibratingScale,
     calibrationPtA,
     draggingCornerId,
+    showGrid,
   ]);
 
   // Animation Loop for smooth 2D drawing
@@ -1048,22 +1226,31 @@ export default function FloorPlannerModal({
     });
     const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1 });
 
-    // 1. Build 3D Walls
-    walls.forEach((wall) => {
-      const c1 = cornerMap.get(wall.startId);
-      const c2 = cornerMap.get(wall.endId);
-      if (!c1 || !c2) return;
+    // 1. Build 3D Walls with clean junction alignment
+    const rawWallsInput = walls
+      .map((wall) => {
+        const c1 = cornerMap.get(wall.startId);
+        const c2 = cornerMap.get(wall.endId);
+        if (!c1 || !c2) return null;
+        return {
+          id: wall.id,
+          start: { x: c1.x, y: c1.y },
+          end: { x: c2.x, y: c2.y },
+          thickness: wall.thickness || wallThickness,
+          height: wall.height || wallHeight,
+        };
+      })
+      .filter((w): w is NonNullable<typeof w> => w !== null);
 
-      const dx = c2.x - c1.x;
-      const dy = c2.y - c1.y;
-      const length = Math.hypot(dx, dy);
-      if (length < 0.01) return;
+    const adjustedPlannerWalls = calculateAdjustedWallJunctions(rawWallsInput, wallThickness, wallHeight);
 
-      const angle = Math.atan2(dy, dx);
-      const centerX = (c1.x + c2.x) / 2;
-      const centerZ = (c1.y + c2.y) / 2;
-      const h = wall.height || wallHeight;
-      const t = wall.thickness || wallThickness;
+    adjustedPlannerWalls.forEach((adjWall) => {
+      const length = adjWall.length;
+      const h = adjWall.height;
+      const t = adjWall.thickness;
+      const centerX = adjWall.centerX;
+      const centerZ = adjWall.centerZ;
+      const angle = adjWall.angle;
 
       const wallGeo = new THREE.BoxGeometry(length, h, t);
       const wallMesh = new THREE.Mesh(wallGeo, wallMaterial);
@@ -1715,16 +1902,16 @@ export default function FloorPlannerModal({
           {/* Snapping & Measurements Controls */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSnapGrid(!snapGrid)}
+              onClick={() => setShowGrid(!showGrid)}
               className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
-                snapGrid
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                showGrid
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
                   : 'bg-white/5 text-slate-400 hover:text-white border border-white/5'
               }`}
-              title="Alinhamento magnético à grade"
+              title={showGrid ? 'Ocultar grade visual' : 'Exibir grade visual (0.10m)'}
             >
               <Grid className="size-3.5" />
-              <span>Grade ({gridStep.toFixed(2)}m)</span>
+              <span>{showGrid ? `Grade (${gridStep.toFixed(2)}m)` : 'Grade Oculta'}</span>
             </button>
 
             <button
@@ -1814,8 +2001,8 @@ export default function FloorPlannerModal({
           {/* 2D Floor Plan Canvas Area */}
           <div
             ref={container2DRef}
-            className={`relative h-full flex-1 bg-[#0f172a] border-r border-white/10 overflow-hidden cursor-crosshair ${
-              is3DExpanded ? 'hidden' : 'block'
+            className={`relative h-full bg-[#0f172a] border-r border-white/10 overflow-hidden cursor-crosshair transition-all duration-300 ${
+              is3DExpanded ? 'hidden' : is2DExpanded ? 'w-full flex-1' : 'flex-1 min-w-[320px]'
             }`}
           >
             <canvas
@@ -1833,6 +2020,18 @@ export default function FloorPlannerModal({
 
             {/* 2D Overlay Floating Controls */}
             <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-slate-900/80 border border-white/10 p-1 rounded-xl backdrop-blur-md shadow-lg">
+              <button
+                onClick={() => setShowGrid(!showGrid)}
+                className={`p-1.5 rounded-lg border transition-all ${
+                  showGrid
+                    ? 'bg-blue-500/25 text-blue-300 border-blue-500/40'
+                    : 'bg-white/5 text-slate-400 hover:text-white border-white/5'
+                }`}
+                title={showGrid ? 'Ocultar Grade Visual' : 'Exibir Grade Visual'}
+              >
+                <Grid className="size-4" />
+              </button>
+              <div className="w-px h-3.5 bg-white/10" />
               <button
                 onClick={() => setZoom((z) => Math.min(150, z * 1.2))}
                 className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white"
@@ -1880,9 +2079,27 @@ export default function FloorPlannerModal({
               </p>
             </div>
 
+            {/* 2D Top-Right Floating Controls (Expand / Split Toggle) */}
+            <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 pointer-events-auto">
+              <div className="flex items-center gap-1 bg-slate-900/85 border border-white/10 p-1 rounded-xl backdrop-blur-md shadow-md">
+                <button
+                  onClick={() => {
+                    setIs2DExpanded((prev) => {
+                      if (!prev) setIs3DExpanded(false);
+                      return !prev;
+                    });
+                  }}
+                  className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                  title={is2DExpanded ? 'Dividir tela com 3D' : 'Expandir Planta 2D (Tela Cheia)'}
+                >
+                  {is2DExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                </button>
+              </div>
+            </div>
+
             {/* Floating Background Floor Plan Image Inspector Panel */}
             {showBgImagePanel && (
-              <div className="absolute top-3 right-3 z-30 w-80 max-h-[calc(100%-24px)] bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden text-xs">
+              <div className="absolute top-12 right-3 z-30 w-80 max-h-[calc(100%-60px)] bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden text-xs">
                 {/* Panel Header */}
                 <div className="p-3 border-b border-white/10 flex items-center justify-between bg-slate-800/50">
                   <div className="flex items-center gap-2">
@@ -1935,29 +2152,56 @@ export default function FloorPlannerModal({
                       </button>
                     </div>
 
-                    {/* Quick Preset Buttons */}
-                    <div className="flex items-center gap-1.5 pt-0.5">
-                      <button
-                        onClick={() =>
-                          handleLoadBgUrl(
-                            'https://www.mrv.com.br/content/dam/conhecer/imoveis/sao-paulo/ribeirao-preto/residencial-canto-das-andorinhas/PH_ANDORINHAS_03_BL2_FINAL_203_2025.09.09.jpg'
-                          )
-                        }
-                        className="flex-1 text-[10px] py-1 px-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 font-medium transition-all text-left truncate"
-                        title="Carregar Planta MRV Canto das Andorinhas"
-                      >
-                        💡 Exemplo MRV Andorinhas
-                      </button>
+                    {/* Saved Presets & Upload Controls */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span>Presets de Referência</span>
+                        {bgConfig.url && (
+                          <button
+                            onClick={handleSaveCurrentBgAsPreset}
+                            className="text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 normal-case text-[10px] hover:underline"
+                            title="Salvar escala, offset, rotação e crop atuais como um novo preset"
+                          >
+                            <Sparkles className="size-3 text-amber-400" /> Salvar Preset Atual
+                          </button>
+                        )}
+                      </div>
 
-                      <label className="text-[10px] py-1 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-medium cursor-pointer transition-all flex items-center gap-1">
-                        <Upload className="size-3" /> Arquivo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                      </label>
+                      <div className="flex flex-wrap gap-1">
+                        {savedBgPresets.map((preset) => (
+                          <div
+                            key={preset.id}
+                            className="group flex items-center rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 text-[10px] transition-all overflow-hidden"
+                          >
+                            <button
+                              onClick={() => handleApplyBgPreset(preset)}
+                              className="py-1 px-2 font-medium text-left truncate max-w-[155px]"
+                              title={`Carregar ${preset.name} (${preset.config.width.toFixed(2)}m • Offset: ${preset.config.x.toFixed(2)}m, ${preset.config.y.toFixed(2)}m)`}
+                            >
+                              💡 {preset.name}
+                            </button>
+                            {preset.id !== 'mrv-andorinhas' && (
+                              <button
+                                onClick={(e) => handleDeleteBgPreset(preset.id, e)}
+                                className="p-1 text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity pr-1.5"
+                                title="Excluir preset salvo"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+
+                        <label className="text-[10px] py-1 px-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-medium cursor-pointer transition-all flex items-center gap-1 ml-auto">
+                          <Upload className="size-3" /> Arquivo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     </div>
 
                     {isBgLoading && (
@@ -1974,21 +2218,30 @@ export default function FloorPlannerModal({
 
                   {bgConfig.url && (
                     <>
-                      {/* Scale & Calibration */}
+                      {/* Scale & Calibration with Double-Click Inline Editing */}
                       <div className="space-y-1.5 pt-1 border-t border-white/10">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                             <SlidersHorizontal className="size-3" /> Escala (Largura Real)
                           </label>
-                          <span className="text-indigo-400 font-mono font-bold text-xs">
-                            {bgConfig.width.toFixed(2)} m
-                          </span>
+                          <div className="text-indigo-400 font-bold text-xs flex items-center gap-1">
+                            <InlineEditableNumber
+                              value={bgConfig.width}
+                              suffix=" m"
+                              min={0.5}
+                              max={100}
+                              step={0.05}
+                              decimals={2}
+                              className="text-indigo-400 font-bold"
+                              onChange={(width) => setBgConfig((prev) => ({ ...prev, width }))}
+                            />
+                          </div>
                         </div>
                         <input
                           type="range"
                           min={2}
                           max={35}
-                          step={0.1}
+                          step={0.05}
                           value={bgConfig.width}
                           onChange={(e) =>
                             setBgConfig((prev) => ({ ...prev, width: parseFloat(e.target.value) }))
@@ -2015,21 +2268,31 @@ export default function FloorPlannerModal({
                         </button>
                       </div>
 
-                      {/* Opacity Slider */}
+                      {/* Opacity Slider with Double-Click Inline Editing */}
                       <div className="space-y-1.5 pt-1 border-t border-white/10">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                             Opacidade / Transparência
                           </label>
-                          <span className="text-slate-300 font-mono text-xs">
-                            {Math.round(bgConfig.opacity * 100)}%
-                          </span>
+                          <div className="text-slate-300 text-xs">
+                            <InlineEditableNumber
+                              value={bgConfig.opacity}
+                              suffix="%"
+                              min={0.05}
+                              max={1.0}
+                              multiplier={100}
+                              step={1}
+                              decimals={0}
+                              className="text-slate-300 font-bold"
+                              onChange={(opacity) => setBgConfig((prev) => ({ ...prev, opacity }))}
+                            />
+                          </div>
                         </div>
                         <input
                           type="range"
-                          min={0.1}
+                          min={0.05}
                           max={1.0}
-                          step={0.05}
+                          step={0.02}
                           value={bgConfig.opacity}
                           onChange={(e) =>
                             setBgConfig((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))
@@ -2038,7 +2301,7 @@ export default function FloorPlannerModal({
                         />
                       </div>
 
-                      {/* Position & Rotation */}
+                      {/* Position & Rotation with Double-Click Inline Editing */}
                       <div className="space-y-2 pt-1 border-t border-white/10">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2055,12 +2318,24 @@ export default function FloorPlannerModal({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <span className="text-[10px] text-slate-400">Pos X: {bgConfig.x.toFixed(2)}m</span>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>Pos X:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.x}
+                                suffix="m"
+                                min={-50}
+                                max={50}
+                                step={0.05}
+                                decimals={2}
+                                className="text-indigo-300 font-bold"
+                                onChange={(x) => setBgConfig((prev) => ({ ...prev, x }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={-15}
                               max={15}
-                              step={0.25}
+                              step={0.05}
                               value={bgConfig.x}
                               onChange={(e) =>
                                 setBgConfig((prev) => ({ ...prev, x: parseFloat(e.target.value) }))
@@ -2069,12 +2344,24 @@ export default function FloorPlannerModal({
                             />
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400">Pos Y: {bgConfig.y.toFixed(2)}m</span>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                              <span>Pos Y:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.y}
+                                suffix="m"
+                                min={-50}
+                                max={50}
+                                step={0.05}
+                                decimals={2}
+                                className="text-indigo-300 font-bold"
+                                onChange={(y) => setBgConfig((prev) => ({ ...prev, y }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={-15}
                               max={15}
-                              step={0.25}
+                              step={0.05}
                               value={bgConfig.y}
                               onChange={(e) =>
                                 setBgConfig((prev) => ({ ...prev, y: parseFloat(e.target.value) }))
@@ -2095,7 +2382,7 @@ export default function FloorPlannerModal({
                               onClick={() => setBgConfig((prev) => ({ ...prev, rotation: deg }))}
                               className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${
                                 bgConfig.rotation === deg
-                                  ? 'bg-indigo-600 text-white border-indigo-500'
+                                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
                                   : 'bg-white/5 text-slate-300 hover:bg-white/10 border-white/5'
                               }`}
                             >
@@ -2105,7 +2392,7 @@ export default function FloorPlannerModal({
                         </div>
                       </div>
 
-                      {/* Crop / Recorte de Margens */}
+                      {/* Crop / Recorte de Margens with Double-Click Inline Editing */}
                       <div className="space-y-1.5 pt-1 border-t border-white/10">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
@@ -2126,7 +2413,19 @@ export default function FloorPlannerModal({
 
                         <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
                           <div>
-                            <span className="text-slate-400">Topo: {bgConfig.cropTop}%</span>
+                            <div className="flex items-center justify-between text-slate-400 mb-0.5">
+                              <span>Topo:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.cropTop}
+                                suffix="%"
+                                min={0}
+                                max={48}
+                                step={1}
+                                decimals={0}
+                                className="text-indigo-300 font-bold"
+                                onChange={(cropTop) => setBgConfig((prev) => ({ ...prev, cropTop }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={0}
@@ -2139,7 +2438,19 @@ export default function FloorPlannerModal({
                             />
                           </div>
                           <div>
-                            <span className="text-slate-400">Base: {bgConfig.cropBottom}%</span>
+                            <div className="flex items-center justify-between text-slate-400 mb-0.5">
+                              <span>Base:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.cropBottom}
+                                suffix="%"
+                                min={0}
+                                max={48}
+                                step={1}
+                                decimals={0}
+                                className="text-indigo-300 font-bold"
+                                onChange={(cropBottom) => setBgConfig((prev) => ({ ...prev, cropBottom }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={0}
@@ -2152,7 +2463,19 @@ export default function FloorPlannerModal({
                             />
                           </div>
                           <div>
-                            <span className="text-slate-400">Esquerda: {bgConfig.cropLeft}%</span>
+                            <div className="flex items-center justify-between text-slate-400 mb-0.5">
+                              <span>Esquerda:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.cropLeft}
+                                suffix="%"
+                                min={0}
+                                max={48}
+                                step={1}
+                                decimals={0}
+                                className="text-indigo-300 font-bold"
+                                onChange={(cropLeft) => setBgConfig((prev) => ({ ...prev, cropLeft }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={0}
@@ -2165,7 +2488,19 @@ export default function FloorPlannerModal({
                             />
                           </div>
                           <div>
-                            <span className="text-slate-400">Direita: {bgConfig.cropRight}%</span>
+                            <div className="flex items-center justify-between text-slate-400 mb-0.5">
+                              <span>Direita:</span>
+                              <InlineEditableNumber
+                                value={bgConfig.cropRight}
+                                suffix="%"
+                                min={0}
+                                max={48}
+                                step={1}
+                                decimals={0}
+                                className="text-indigo-300 font-bold"
+                                onChange={(cropRight) => setBgConfig((prev) => ({ ...prev, cropRight }))}
+                              />
+                            </div>
                             <input
                               type="range"
                               min={0}
@@ -2517,7 +2852,7 @@ export default function FloorPlannerModal({
           {/* 3D Live Viewport (Right Side) */}
           <div
             className={`relative h-full bg-[#0b1120] transition-all duration-300 flex flex-col ${
-              is3DExpanded ? 'w-full' : 'w-1/2 min-w-[320px]'
+              is2DExpanded ? 'hidden' : is3DExpanded ? 'w-full' : 'w-1/2 min-w-[320px]'
             }`}
           >
             {/* 3D Header Overlay */}
@@ -2552,7 +2887,12 @@ export default function FloorPlannerModal({
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-0.5" />
                 <button
-                  onClick={() => setIs3DExpanded(!is3DExpanded)}
+                  onClick={() => {
+                    setIs3DExpanded((prev) => {
+                      if (!prev) setIs2DExpanded(false);
+                      return !prev;
+                    });
+                  }}
                   className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
                   title={is3DExpanded ? 'Dividir tela com 2D' : 'Expandir 3D'}
                 >

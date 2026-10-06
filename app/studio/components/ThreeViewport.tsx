@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
-import { buildParametricWallGroup, buildOpening3D } from '../lib/wall-builders';
+import { buildParametricWallGroup, buildOpening3D, calculateAdjustedWallJunctions } from '../lib/wall-builders';
 import { captureEquirectangularPanorama } from '../lib/equirectangularExporter';
 import { ShoppingCart } from 'lucide-react';
 
@@ -1584,18 +1584,16 @@ export default function ThreeViewport({
 
       const edgeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1 });
 
-      room.customWalls!.forEach((wall, idx) => {
-        const dx = wall.end.x - wall.start.x;
-        const dz = wall.end.y - wall.start.y;
-        const len = Math.hypot(dx, dz);
-        if (len < 0.01) return;
+      const adjustedWalls = calculateAdjustedWallJunctions(room.customWalls || [], WALL_THICKNESS, room.height);
 
-        const angle = Math.atan2(dz, dx);
-        const centerX = (wall.start.x + wall.end.x) / 2;
-        const centerZ = (wall.start.y + wall.end.y) / 2;
-        const h = wall.height || room.height || 2.6;
-        const t = wall.thickness || WALL_THICKNESS;
-        const wallId = wall.id || `w_${idx}`;
+      adjustedWalls.forEach((adjWall, idx) => {
+        const wallId = adjWall.id;
+        const len = adjWall.length;
+        const h = adjWall.height;
+        const t = adjWall.thickness;
+        const centerX = adjWall.centerX;
+        const centerZ = adjWall.centerZ;
+        const angle = adjWall.angle;
 
         // Find openings on this custom wall
         const wallOpenings = (room.openings || []).filter((o) => {
