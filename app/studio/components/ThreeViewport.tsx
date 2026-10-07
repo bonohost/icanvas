@@ -8,7 +8,7 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
-import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide } from '../types/furniture';
+import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpening, WallSide, CameraSettingsData } from '../types/furniture';
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D, calculateAdjustedWallJunctions } from '../lib/wall-builders';
 import { captureEquirectangularPanorama } from '../lib/equirectangularExporter';
@@ -36,7 +36,8 @@ interface ViewportProps {
   snapOn: boolean;
   collisionOn: boolean;
   autoTransparency?: boolean;
-  cameraSettings: { x: number; y: number; z: number; fov: number };
+  cameraSettings: CameraSettingsData;
+  onCameraChange?: (settings: CameraSettingsData) => void;
   onRegisterCapture?: (captureFn: () => string) => void;
   onRegisterPanoramaCapture?: (captureFn: (options: { eyeHeight?: number; width?: number; height?: number }) => string) => void;
   onRegisterCameraControl?: (controller: CameraController) => void;
@@ -210,6 +211,7 @@ export default function ThreeViewport({
   collisionOn,
   autoTransparency = true,
   cameraSettings,
+  onCameraChange,
   onRegisterCapture,
   onRegisterPanoramaCapture,
   onRegisterCameraControl,
@@ -678,9 +680,33 @@ export default function ThreeViewport({
     onRegisterPanoramaCapture(capturePanorama);
   }, [onRegisterPanoramaCapture]);
 
+  // Keep onCameraChange callback ref synced
+  const onCameraChangeRef = useRef(onCameraChange);
+  useEffect(() => {
+    onCameraChangeRef.current = onCameraChange;
+  }, [onCameraChange]);
+
   // Expose Real-Time Interactive Camera Controller (Zoom in/out, Orbit, Pan Y, Presets without jumping)
   useEffect(() => {
     if (!onRegisterCameraControl) return;
+
+    const notifyCam = (presetId?: string) => {
+      const cam = cameraRef.current;
+      const ctrl = controlsRef.current;
+      if (!cam || !ctrl || !onCameraChangeRef.current) return;
+      const s: CameraSettingsData = {
+        id: presetId || 'custom',
+        x: Number(cam.position.x.toFixed(3)),
+        y: Number(cam.position.y.toFixed(3)),
+        z: Number(cam.position.z.toFixed(3)),
+        targetX: Number(ctrl.target.x.toFixed(3)),
+        targetY: Number(ctrl.target.y.toFixed(3)),
+        targetZ: Number(ctrl.target.z.toFixed(3)),
+        fov: Math.round(cam.fov),
+      };
+      prevCamPosRef.current = { ...s };
+      onCameraChangeRef.current(s);
+    };
 
     const controller: CameraController = {
       zoom: (factor: number) => {
@@ -699,6 +725,7 @@ export default function ThreeViewport({
         offset.multiplyScalar(factor);
         camera.position.copy(controls.target).add(offset);
         controls.update();
+        notifyCam();
       },
 
       orbit: (dTheta: number) => {
@@ -711,6 +738,7 @@ export default function ThreeViewport({
         camera.position.copy(controls.target).add(offset);
         camera.lookAt(controls.target);
         controls.update();
+        notifyCam();
       },
 
       panY: (dY: number) => {
@@ -721,6 +749,7 @@ export default function ThreeViewport({
         camera.position.y = Math.max(0.2, camera.position.y + dY);
         controls.target.y = Math.max(0.1, controls.target.y + dY);
         controls.update();
+        notifyCam();
       },
 
       setPreset: (type: 'iso' | 'top' | 'front') => {
@@ -735,6 +764,7 @@ export default function ThreeViewport({
         if (type === 'top') {
           const maxDim = Math.max(currentRoom.width, currentRoom.depth);
           camera.position.set(0, maxDim * 1.6, 0.01);
+          controls.target.set(0, 0, 0);
         } else if (type === 'front') {
           camera.position.set(0, 1.6, currentRoom.depth * 1.3);
         } else {
@@ -744,6 +774,7 @@ export default function ThreeViewport({
         }
         camera.lookAt(controls.target);
         controls.update();
+        notifyCam(type);
       },
     };
 
@@ -803,6 +834,10 @@ export default function ThreeViewport({
     scene.environment = envTexture;
     scene.background = new THREE.Color('#dbeafe'); // Soft bright daylight horizon for windows and doors
 
+    const targetX = cameraSettings.targetX ?? 0;
+    const targetY = cameraSettings.targetY ?? (room.height * 0.4);
+    const targetZ = cameraSettings.targetZ ?? 0;
+
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
@@ -810,9 +845,29 @@ export default function ThreeViewport({
     controls.panSpeed = 1.3;
     controls.zoomSpeed = 1.25;
     controls.screenSpacePanning = true;
-    controls.target.set(0, room.height * 0.4, 0);
+    controls.target.set(targetX, targetY, targetZ);
     controls.update();
     controlsRef.current = controls;
+
+    // Track user orbit/pan/dolly changes to persist perspective camera position and target
+    controls.addEventListener('end', () => {
+      if (onCameraChangeRef.current && cameraRef.current && controlsRef.current) {
+        const cam = cameraRef.current;
+        const ctrl = controlsRef.current;
+        const newSettings: CameraSettingsData = {
+          id: 'custom',
+          x: Number(cam.position.x.toFixed(3)),
+          y: Number(cam.position.y.toFixed(3)),
+          z: Number(cam.position.z.toFixed(3)),
+          targetX: Number(ctrl.target.x.toFixed(3)),
+          targetY: Number(ctrl.target.y.toFixed(3)),
+          targetZ: Number(ctrl.target.z.toFixed(3)),
+          fov: Math.round(cam.fov),
+        };
+        prevCamPosRef.current = { ...newSettings };
+        onCameraChangeRef.current(newSettings);
+      }
+    });
 
     // Ambient and Hemisphere Lighting with natural floor bounce
     const ambientLight = new THREE.AmbientLight('#ffffff', 0.6);
@@ -1176,7 +1231,7 @@ export default function ThreeViewport({
 
   // 1. Lighting, Exposure & Environment / HDR Preset Synchronization
   useEffect(() => {
-    const preset = room.environmentPreset || 'dark_studio';
+    const preset = room.environmentPreset || 'hdr_144';
     const exposure = room.exposure ?? 1.0;
     const intensity = room.lightIntensity ?? 1.0;
     const hdr = room.hdrSettings || {};
@@ -1236,7 +1291,7 @@ export default function ThreeViewport({
                 const pmremTex = pmremGen.fromEquirectangular(rawTexture).texture;
                 hdrTextureCacheRef.current.set(hdrUrl, { raw: rawTexture, pmrem: pmremTex });
 
-                if ((roomRef.current.environmentPreset || 'dark_studio') === preset) {
+                if ((roomRef.current.environmentPreset || 'hdr_144') === preset) {
                   sceneRef.current.environment = pmremTex;
                   if ('environmentIntensity' in sceneRef.current) {
                     (sceneRef.current as any).environmentIntensity = hdrIntensity;
@@ -1764,25 +1819,54 @@ export default function ThreeViewport({
     }
   }, [room, getOrLoadTexture]);
 
-  const prevCamPosRef = useRef({ x: cameraSettings.x, y: cameraSettings.y, z: cameraSettings.z });
+  const prevCamPosRef = useRef<CameraSettingsData>({
+    id: cameraSettings.id,
+    x: cameraSettings.x,
+    y: cameraSettings.y,
+    z: cameraSettings.z,
+    targetX: cameraSettings.targetX,
+    targetY: cameraSettings.targetY,
+    targetZ: cameraSettings.targetZ,
+    fov: cameraSettings.fov,
+  });
 
   // Update Camera Viewpoints and Lens FOV (15° to 60°)
   useEffect(() => {
     if (!cameraRef.current || !controlsRef.current) return;
 
+    const targetX = cameraSettings.targetX ?? 0;
+    const targetY = cameraSettings.targetY ?? (room.height * 0.4);
+    const targetZ = cameraSettings.targetZ ?? 0;
+
+    const prevTargetX = prevCamPosRef.current.targetX ?? 0;
+    const prevTargetY = prevCamPosRef.current.targetY ?? (room.height * 0.4);
+    const prevTargetZ = prevCamPosRef.current.targetZ ?? 0;
+
     const posChanged =
-      prevCamPosRef.current.x !== cameraSettings.x ||
-      prevCamPosRef.current.y !== cameraSettings.y ||
-      prevCamPosRef.current.z !== cameraSettings.z;
+      Math.abs(prevCamPosRef.current.x - cameraSettings.x) > 0.001 ||
+      Math.abs(prevCamPosRef.current.y - cameraSettings.y) > 0.001 ||
+      Math.abs(prevCamPosRef.current.z - cameraSettings.z) > 0.001 ||
+      Math.abs(prevTargetX - targetX) > 0.001 ||
+      Math.abs(prevTargetY - targetY) > 0.001 ||
+      Math.abs(prevTargetZ - targetZ) > 0.001;
 
     if (posChanged) {
       cameraRef.current.position.set(cameraSettings.x, cameraSettings.y, cameraSettings.z);
-      controlsRef.current.target.set(0, room.height * 0.4, 0);
+      controlsRef.current.target.set(targetX, targetY, targetZ);
       controlsRef.current.update();
-      prevCamPosRef.current = { x: cameraSettings.x, y: cameraSettings.y, z: cameraSettings.z };
+      prevCamPosRef.current = {
+        id: cameraSettings.id,
+        x: cameraSettings.x,
+        y: cameraSettings.y,
+        z: cameraSettings.z,
+        targetX,
+        targetY,
+        targetZ,
+        fov: cameraSettings.fov,
+      };
     }
 
-    if (cameraRef.current.fov !== cameraSettings.fov) {
+    if (cameraSettings.fov && Math.abs(cameraRef.current.fov - cameraSettings.fov) > 0.1) {
       cameraRef.current.fov = cameraSettings.fov;
       cameraRef.current.updateProjectionMatrix();
     }

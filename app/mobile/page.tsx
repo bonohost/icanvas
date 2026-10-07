@@ -64,7 +64,7 @@ export default function MobileHomePage() {
           Simuladores Interativos
         </span>
 
-        {/* Card 1: Caneca & Café 3D (Mug Sim) */}
+        {/* Card 1: Mug Sim */}
         <Link
           href="/mobile/mug-coffee"
           className="group block rounded-2xl p-4 bg-neutral-900/90 border border-white/10 hover:border-amber-500/40 shadow-xl active:scale-[0.98] transition-all overflow-hidden relative"
@@ -83,53 +83,24 @@ export default function MobileHomePage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
-                ☕ Caneca &amp; Café 3D
+                ☕ Mug Sim
               </h3>
               <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">
-                Personalização de canecas em tempo real com pintura de bolhas e frases no café.
+                Personalização de canecas em tempo real com pintura de bolhas e Latte Art interativo.
               </p>
             </div>
             <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
           </div>
         </Link>
 
-        {/* Card 2: Studio 3D (Planejador de Ambientes & Shop the Scene) */}
-        <Link
-          href="/mobile/studio"
-          className="group block rounded-2xl p-4 bg-neutral-900/90 border border-white/10 hover:border-blue-500/40 shadow-xl active:scale-[0.98] transition-all overflow-hidden relative"
-        >
-          <div className="h-36 w-full rounded-xl overflow-hidden relative border border-white/10 mb-3 bg-neutral-950">
-            <img
-              alt="Studio 3D"
-              className="object-cover w-full h-full opacity-90 group-hover:scale-105 transition-transform duration-500"
-              src="/images/studio-preview.png"
-            />
-            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500/90 text-black text-[9px] font-bold">
-              🛍️ Shop the Scene
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                🛋️ Studio 3D &amp; Ambientes
-              </h3>
-              <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">
-                Planejador 3D com catálogo modular e links diretos para o Magazine Luiza.
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
-          </div>
-        </Link>
-
-        {/* Card 3: 360 Viewer */}
+        {/* Card 2: View 360 */}
         <Link
           href="/360-viewer"
           className="group block rounded-2xl p-4 bg-neutral-900/90 border border-white/10 hover:border-indigo-500/40 shadow-xl active:scale-[0.98] transition-all overflow-hidden relative"
         >
           <div className="h-36 w-full rounded-xl overflow-hidden relative border border-white/10 mb-3 bg-neutral-950">
             <img
-              alt="360 Viewer"
+              alt="View 360"
               className="object-cover w-full h-full opacity-90 group-hover:scale-105 transition-transform duration-500"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgQrzk7TGxDAHkvAWZ8NIv909I4L-4v26KpJ2BJBLTHDTmXXen9zABHv8C5ByztXWCBd5TeJMunWu-ZMNB0ORjNhQjJde-zn4SRsx5zlbpdR_9J6G3mEmzDLFM9V2EYvVM5ENNZ9RZpSnq39TlgMt54PCo6qa9W41D9lDl3PzHQahwQVGD7geN7LOlIof3Zub9eR_3DNmtFZ5KURhpQntO0qG2YMxdym2HiIPhMUEy_bM44SkzbFZM"
             />
@@ -141,13 +112,42 @@ export default function MobileHomePage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
-                🌐 360 Viewer
+                🌐 View 360
               </h3>
               <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">
-                Imersão panorâmica suave otimizada para web e celulares.
+                Imersão panorâmica 360° suave otimizada para web e celulares.
               </p>
             </div>
             <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
+          </div>
+        </Link>
+
+        {/* Card 3: Planner 3D */}
+        <Link
+          href="/mobile/studio"
+          className="group block rounded-2xl p-4 bg-neutral-900/90 border border-white/10 hover:border-blue-500/40 shadow-xl active:scale-[0.98] transition-all overflow-hidden relative"
+        >
+          <div className="h-36 w-full rounded-xl overflow-hidden relative border border-white/10 mb-3 bg-neutral-950">
+            <img
+              alt="Planner 3D"
+              className="object-cover w-full h-full opacity-90 group-hover:scale-105 transition-transform duration-500"
+              src="/images/studio-preview.png"
+            />
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500/90 text-black text-[9px] font-bold">
+              🛍️ Shop the Scene
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
+                🛋️ Planner 3D
+              </h3>
+              <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">
+                Planejador 3D com catálogo modular e links diretos para o Magazine Luiza.
+              </p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
           </div>
         </Link>
       </section>

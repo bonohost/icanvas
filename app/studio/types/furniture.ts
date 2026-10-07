@@ -213,6 +213,17 @@ export interface Floorplan2DData {
   roomName?: string;
 }
 
+export interface CameraSettingsData {
+  id?: string;
+  x: number;
+  y: number;
+  z: number;
+  targetX?: number;
+  targetY?: number;
+  targetZ?: number;
+  fov?: number;
+}
+
 export interface StudioProject {
   id: string;
   name: string;
@@ -222,12 +233,7 @@ export interface StudioProject {
   room: RoomSettings;
   furniture: FurnitureInstance[];
   floorplan2d?: Floorplan2DData;
-  cameraSettings?: {
-    id: string;
-    x: number;
-    y: number;
-    z: number;
-    fov: number;
-  };
+  cameraSettings?: CameraSettingsData;
 }
+
 

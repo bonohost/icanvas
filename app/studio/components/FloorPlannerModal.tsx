@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X,
   Maximize2,
@@ -353,13 +353,29 @@ export default function FloorPlannerModal({
       setIs3DExpanded(false);
       setIs2DExpanded(false);
 
-      if (currentRoom.backgroundFloorPlan) {
+      if (currentRoom.backgroundFloorPlan && currentRoom.backgroundFloorPlan.url) {
         setBgConfig(currentRoom.backgroundFloorPlan);
         setBgUrlInput(
           currentRoom.backgroundFloorPlan.url.startsWith('data:')
             ? 'Imagem Local'
             : currentRoom.backgroundFloorPlan.url
         );
+      } else {
+        setBgConfig({
+          url: '',
+          visible: false,
+          opacity: 0.65,
+          x: 0,
+          y: 0,
+          width: 9.5,
+          rotation: 0,
+          cropLeft: 0,
+          cropRight: 0,
+          cropTop: 0,
+          cropBottom: 0,
+          lock: false,
+        });
+        setBgUrlInput('');
       }
     }
   }, [isOpen, currentRoom, parseRoomToPlanner]);
@@ -379,9 +395,42 @@ export default function FloorPlannerModal({
   const [snappedCornerId, setSnappedCornerId] = useState<string | null>(null);
   const [selectedCornerId, setSelectedCornerId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
+  const [coordInputX, setCoordInputX] = useState<string | null>(null);
+  const [coordInputY, setCoordInputY] = useState<string | null>(null);
+
+  const selectedCorner = useMemo(() => {
+    if (!selectedCornerId) return null;
+    return corners.find((c) => c.id === selectedCornerId) || null;
+  }, [corners, selectedCornerId]);
+
+  const selectedWall = useMemo(() => {
+    if (!selectedWallId) return null;
+    return walls.find((w) => w.id === selectedWallId) || null;
+  }, [walls, selectedWallId]);
+
+  const selectedWallLength = useMemo(() => {
+    if (!selectedWall) return 0;
+    const c1 = corners.find((c) => c.id === selectedWall.startId);
+    const c2 = corners.find((c) => c.id === selectedWall.endId);
+    if (!c1 || !c2) return 0;
+    return Math.hypot(c2.x - c1.x, c2.y - c1.y);
+  }, [corners, selectedWall]);
+
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [draggingCornerId, setDraggingCornerId] = useState<string | null>(null);
+  const [draggingWallId, setDraggingWallId] = useState<string | null>(null);
+  const [dragAxisLock, setDragAxisLock] = useState<'none' | 'x' | 'y'>('none');
+  const dragCornerStartRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  const dragWallStartRef = useRef<{
+    startWorld: { x: number; y: number };
+    c1Id: string;
+    c1Pos: { x: number; y: number };
+    c2Id: string;
+    c2Pos: { x: number; y: number };
+  } | null>(null);
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+  const [hoveredCornerId, setHoveredCornerId] = useState<string | null>(null);
 
   // --- Background Floor Plan Image State ---
   const [bgConfig, setBgConfig] = useState<BackgroundFloorPlanConfig>(
@@ -893,10 +942,25 @@ export default function FloorPlannerModal({
       const sc2 = worldToScreen(c2.x, c2.y, canvas);
 
       const isSelected = selectedWallId === wall.id;
+      const isHovered = hoveredWallId === wall.id && activeTool === 'select' && !draggingCornerId && !draggingWallId;
+      const isDragging = draggingWallId === wall.id;
       const wallThicknessPx = Math.max(4, wall.thickness * zoom);
 
+      // Glow / Aura for hovered, dragged or selected wall
+      if (isSelected || isHovered || isDragging) {
+        ctx.save();
+        ctx.strokeStyle = isDragging || isSelected ? 'rgba(245, 158, 11, 0.35)' : 'rgba(56, 189, 248, 0.3)';
+        ctx.lineWidth = wallThicknessPx + 12;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sc1.x, sc1.y);
+        ctx.lineTo(sc2.x, sc2.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // Wall Main Line
-      ctx.strokeStyle = isSelected ? '#f59e0b' : '#e2e8f0';
+      ctx.strokeStyle = isSelected || isDragging ? '#f59e0b' : isHovered ? '#38bdf8' : '#e2e8f0';
       ctx.lineWidth = wallThicknessPx;
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -905,7 +969,7 @@ export default function FloorPlannerModal({
       ctx.stroke();
 
       // Inner Core line
-      ctx.strokeStyle = isSelected ? '#fbbf24' : '#64748b';
+      ctx.strokeStyle = isSelected || isDragging ? '#fbbf24' : isHovered ? '#7dd3fc' : '#64748b';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(sc1.x, sc1.y);
@@ -913,7 +977,7 @@ export default function FloorPlannerModal({
       ctx.stroke();
 
       // Dimension Label (Cota em metros)
-      if (showMeasurements) {
+      if (showMeasurements || isSelected || isDragging || isHovered) {
         const dx = c2.x - c1.x;
         const dy = c2.y - c1.y;
         const len = Math.hypot(dx, dy);
@@ -933,16 +997,16 @@ export default function FloorPlannerModal({
         ctx.rotate(rot);
 
         // Badge background
-        const text = `${len.toFixed(2)}m`;
-        ctx.font = 'bold 10px monospace';
+        const text = isDragging ? `↔ ${len.toFixed(2)}m (Movendo)` : `${len.toFixed(2)}m`;
+        ctx.font = isDragging || isSelected ? 'bold 11px monospace' : 'bold 10px monospace';
         const textWidth = ctx.measureText(text).width;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.fillRect(-textWidth / 2 - 4, -7, textWidth + 8, 14);
-        ctx.strokeStyle = '#334155';
+        ctx.fillStyle = isDragging || isSelected ? 'rgba(245, 158, 11, 0.95)' : isHovered ? 'rgba(14, 165, 233, 0.9)' : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(-textWidth / 2 - 5, -8, textWidth + 10, 16);
+        ctx.strokeStyle = isDragging || isSelected ? '#fbbf24' : isHovered ? '#38bdf8' : '#334155';
         ctx.lineWidth = 1;
-        ctx.strokeRect(-textWidth / 2 - 4, -7, textWidth + 8, 14);
+        ctx.strokeRect(-textWidth / 2 - 5, -8, textWidth + 10, 16);
 
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = isDragging || isSelected ? '#0f172a' : '#f8fafc';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 0, 0);
@@ -1051,7 +1115,110 @@ export default function FloorPlannerModal({
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // If selected, display a neat floating pill badge with coordinates above the vertex
+      if (isSelected && !draggingCornerId) {
+        ctx.save();
+        const coordText = `X: ${corner.x.toFixed(2)}m  Y: ${corner.y.toFixed(2)}m`;
+        ctx.font = 'bold 10px monospace';
+        const textWidth = ctx.measureText(coordText).width;
+        const boxW = textWidth + 12;
+        const boxH = 18;
+        const boxX = sc.x - boxW / 2;
+        const boxY = sc.y - 28;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(boxX, boxY, boxW, boxH, 4);
+        } else {
+          ctx.rect(boxX, boxY, boxW, boxH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(coordText, sc.x, boxY + boxH / 2);
+        ctx.restore();
+      }
     });
+
+    // 7. Axis Lock Visual Guides (Shift = X, Ctrl = Y)
+    if ((draggingWallId || draggingCornerId) && dragAxisLock !== 'none') {
+      ctx.save();
+      ctx.strokeStyle = dragAxisLock === 'x' ? 'rgba(56, 189, 248, 0.85)' : 'rgba(245, 158, 11, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+
+      if (dragWallStartRef.current) {
+        const { c1Pos, c2Pos } = dragWallStartRef.current;
+        const sc1 = worldToScreen(c1Pos.x, c1Pos.y, canvas);
+        const sc2 = worldToScreen(c2Pos.x, c2Pos.y, canvas);
+        const midX = (sc1.x + sc2.x) / 2;
+        const midY = (sc1.y + sc2.y) / 2;
+
+        ctx.beginPath();
+        if (dragAxisLock === 'x') {
+          ctx.moveTo(0, midY);
+          ctx.lineTo(width, midY);
+        } else {
+          ctx.moveTo(midX, 0);
+          ctx.lineTo(midX, height);
+        }
+        ctx.stroke();
+
+        // Badge
+        ctx.setLineDash([]);
+        const lockText = dragAxisLock === 'x' ? '🔒 Eixo X Travado (Shift)' : '🔒 Eixo Y Travado (Ctrl)';
+        ctx.font = 'bold 10px monospace';
+        const txtW = ctx.measureText(lockText).width;
+        ctx.fillStyle = dragAxisLock === 'x' ? 'rgba(14, 116, 144, 0.95)' : 'rgba(180, 83, 9, 0.95)';
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(midX - txtW / 2 - 8, midY - (dragAxisLock === 'x' ? 24 : 32), txtW + 16, 18, 4);
+        } else {
+          ctx.rect(midX - txtW / 2 - 8, midY - (dragAxisLock === 'x' ? 24 : 32), txtW + 16, 18);
+        }
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lockText, midX, midY - (dragAxisLock === 'x' ? 15 : 23));
+      } else if (dragCornerStartRef.current) {
+        const sc = worldToScreen(dragCornerStartRef.current.x, dragCornerStartRef.current.y, canvas);
+        ctx.beginPath();
+        if (dragAxisLock === 'x') {
+          ctx.moveTo(0, sc.y);
+          ctx.lineTo(width, sc.y);
+        } else {
+          ctx.moveTo(sc.x, 0);
+          ctx.lineTo(sc.x, height);
+        }
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        const lockText = dragAxisLock === 'x' ? '🔒 Eixo X Travado (Shift)' : '🔒 Eixo Y Travado (Ctrl)';
+        ctx.font = 'bold 10px monospace';
+        const txtW = ctx.measureText(lockText).width;
+        ctx.fillStyle = dragAxisLock === 'x' ? 'rgba(14, 116, 144, 0.95)' : 'rgba(180, 83, 9, 0.95)';
+        ctx.beginPath();
+        if ((ctx as any).roundRect) {
+          (ctx as any).roundRect(sc.x - txtW / 2 - 8, sc.y - 24, txtW + 16, 18, 4);
+        } else {
+          ctx.rect(sc.x - txtW / 2 - 8, sc.y - 24, txtW + 16, 18);
+        }
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lockText, sc.x, sc.y - 15);
+      }
+      ctx.restore();
+    }
 
     ctx.restore();
   }, [
@@ -1074,6 +1241,9 @@ export default function FloorPlannerModal({
     isCalibratingScale,
     calibrationPtA,
     draggingCornerId,
+    draggingWallId,
+    dragAxisLock,
+    hoveredWallId,
     showGrid,
   ]);
 
@@ -1446,7 +1616,7 @@ export default function FloorPlannerModal({
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
 
-    if (e.button === 1 || e.altKey || (e.shiftKey && activeTool === 'select')) {
+    if (e.button === 1 || e.altKey) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       return;
@@ -1510,15 +1680,38 @@ export default function FloorPlannerModal({
         setSelectedCornerId(nearestCorner.id);
         setSelectedWallId(null);
         setDraggingCornerId(nearestCorner.id);
+        setDraggingWallId(null);
+        dragWallStartRef.current = null;
+        dragCornerStartRef.current = { id: nearestCorner.id, x: nearestCorner.x, y: nearestCorner.y };
         saveSnapshot();
       } else {
-        const nearestWall = getNearestWall(world.x, world.y);
+        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom));
         if (nearestWall) {
           setSelectedWallId(nearestWall.id);
           setSelectedCornerId(null);
+          setDraggingCornerId(null);
+          setDraggingWallId(nearestWall.id);
+          dragCornerStartRef.current = null;
+
+          const c1 = corners.find((c) => c.id === nearestWall.startId);
+          const c2 = corners.find((c) => c.id === nearestWall.endId);
+          if (c1 && c2) {
+            dragWallStartRef.current = {
+              startWorld: { x: world.x, y: world.y },
+              c1Id: c1.id,
+              c1Pos: { x: c1.x, y: c1.y },
+              c2Id: c2.id,
+              c2Pos: { x: c2.x, y: c2.y },
+            };
+          }
+          saveSnapshot();
         } else {
           setSelectedCornerId(null);
           setSelectedWallId(null);
+          setDraggingCornerId(null);
+          setDraggingWallId(null);
+          dragCornerStartRef.current = null;
+          dragWallStartRef.current = null;
         }
       }
     } else if (activeTool === 'delete') {
@@ -1529,7 +1722,7 @@ export default function FloorPlannerModal({
           prev.filter((w) => w.startId !== nearestCorner.id && w.endId !== nearestCorner.id)
         );
       } else {
-        const nearestWall = getNearestWall(world.x, world.y);
+        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom));
         if (nearestWall) {
           setWalls((prev) => prev.filter((w) => w.id !== nearestWall.id));
         }
@@ -1553,7 +1746,51 @@ export default function FloorPlannerModal({
     }
 
     const world = screenToWorld(sx, sy, canvas);
-    // When dragging a corner, exclude the dragged corner so we snap to potential target corners
+
+    // Detect Axis Lock (Shift = Lock X / dy=0, Ctrl = Lock Y / dx=0)
+    const lockX = Boolean(e.shiftKey && !e.ctrlKey);
+    const lockY = Boolean(e.ctrlKey && !e.shiftKey);
+    const curLock = lockX ? 'x' : lockY ? 'y' : 'none';
+    if (curLock !== dragAxisLock) {
+      setDragAxisLock(curLock);
+    }
+
+    // 1. Dragging Whole Wall
+    if (draggingWallId && dragWallStartRef.current) {
+      const { startWorld, c1Id, c1Pos, c2Id, c2Pos } = dragWallStartRef.current;
+      let dx = world.x - startWorld.x;
+      let dy = world.y - startWorld.y;
+
+      // Lock to X axis (dy = 0) or Y axis (dx = 0)
+      if (lockX) {
+        dy = 0;
+      }
+      if (lockY) {
+        dx = 0;
+      }
+
+      if (snapCorner || showGrid) {
+        const step = gridStep || 0.1;
+        dx = Math.round(dx / step) * step;
+        dy = Math.round(dy / step) * step;
+      }
+
+      setCorners((prev) =>
+        prev.map((c) => {
+          if (c.id === c1Id) {
+            return { ...c, x: Number((c1Pos.x + dx).toFixed(3)), y: Number((c1Pos.y + dy).toFixed(3)) };
+          }
+          if (c.id === c2Id) {
+            return { ...c, x: Number((c2Pos.x + dx).toFixed(3)), y: Number((c2Pos.y + dy).toFixed(3)) };
+          }
+          return c;
+        })
+      );
+      setCurrentMouseWorld(world);
+      return;
+    }
+
+    // 2. Dragging Single Corner
     const nearestCorner = getNearestCorner(sx, sy, canvas, 22, draggingCornerId || undefined);
 
     if (snapCorner && nearestCorner) {
@@ -1565,12 +1802,35 @@ export default function FloorPlannerModal({
     }
 
     if (draggingCornerId) {
-      const targetPos = snapCorner && nearestCorner ? { x: nearestCorner.x, y: nearestCorner.y } : world;
+      let targetPos = snapCorner && nearestCorner ? { x: nearestCorner.x, y: nearestCorner.y } : world;
+      if (dragCornerStartRef.current) {
+        if (lockX) {
+          targetPos = { x: targetPos.x, y: dragCornerStartRef.current.y };
+        } else if (lockY) {
+          targetPos = { x: dragCornerStartRef.current.x, y: targetPos.y };
+        }
+      }
       setCorners((prev) =>
         prev.map((c) =>
           c.id === draggingCornerId ? { ...c, x: targetPos.x, y: targetPos.y } : c
         )
       );
+      return;
+    }
+
+    // 3. Hover detection for interactive cursor styling
+    if (activeTool === 'select' && !isPanning) {
+      if (nearestCorner) {
+        setHoveredCornerId(nearestCorner.id);
+        setHoveredWallId(null);
+      } else {
+        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom));
+        setHoveredWallId(nearestWall ? nearestWall.id : null);
+        setHoveredCornerId(null);
+      }
+    } else {
+      setHoveredCornerId(null);
+      setHoveredWallId(null);
     }
   };
 
@@ -1578,7 +1838,13 @@ export default function FloorPlannerModal({
     if (isPanning) {
       setIsPanning(false);
     }
+    setDragAxisLock('none');
+    if (draggingWallId) {
+      setDraggingWallId(null);
+      dragWallStartRef.current = null;
+    }
     if (draggingCornerId) {
+      dragCornerStartRef.current = null;
       const canvas = canvasRef.current;
       if (canvas && snapCorner) {
         const sourceCorner = corners.find((c) => c.id === draggingCornerId);
@@ -1637,6 +1903,42 @@ export default function FloorPlannerModal({
     saveSnapshot();
     setCorners([]);
     setWalls([]);
+    setDrawingStartCornerId(null);
+    setSelectedCornerId(null);
+    setSelectedWallId(null);
+  };
+
+  const handleResetToRoomRectangle = () => {
+    saveSnapshot();
+    const halfW = (currentRoom.width || 5.0) / 2;
+    const halfD = (currentRoom.depth || 4.0) / 2;
+    setCorners([
+      { id: 'c1', x: -halfW, y: -halfD },
+      { id: 'c2', x: halfW, y: -halfD },
+      { id: 'c3', x: halfW, y: halfD },
+      { id: 'c4', x: -halfW, y: halfD },
+    ]);
+    setWalls([
+      { id: 'w1', startId: 'c1', endId: 'c2', thickness: 0.15, height: currentRoom.height || 2.6 },
+      { id: 'w2', startId: 'c2', endId: 'c3', thickness: 0.15, height: currentRoom.height || 2.6 },
+      { id: 'w3', startId: 'c3', endId: 'c4', thickness: 0.15, height: currentRoom.height || 2.6 },
+      { id: 'w4', startId: 'c4', endId: 'c1', thickness: 0.15, height: currentRoom.height || 2.6 },
+    ]);
+    setBgConfig({
+      url: '',
+      visible: false,
+      opacity: 0.65,
+      x: 0,
+      y: 0,
+      width: 9.5,
+      rotation: 0,
+      cropLeft: 0,
+      cropRight: 0,
+      cropTop: 0,
+      cropBottom: 0,
+      lock: false,
+    });
+    setBgUrlInput('');
     setDrawingStartCornerId(null);
     setSelectedCornerId(null);
     setSelectedWallId(null);
@@ -1802,9 +2104,18 @@ export default function FloorPlannerModal({
             </button>
 
             <button
+              onClick={handleResetToRoomRectangle}
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center gap-1.5"
+              title="Resetar para planta retangular inicial do ambiente"
+            >
+              <RotateCcw className="size-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Resetar Planta</span>
+            </button>
+
+            <button
               onClick={handleClearAll}
               className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition-all"
-              title="Limpar todas as paredes"
+              title="Limpar todas as paredes (tela em branco)"
             >
               <Trash2 className="size-4" />
             </button>
@@ -1869,9 +2180,10 @@ export default function FloorPlannerModal({
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                   : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5'
               }`}
+              title="Mover e reposicionar cantos (vértices) ou paredes inteiras"
             >
               <Move className="size-3.5" />
-              <span>Mover / Editar Canto</span>
+              <span>Mover Canto / Parede</span>
             </button>
 
             <button
@@ -2001,7 +2313,7 @@ export default function FloorPlannerModal({
           {/* 2D Floor Plan Canvas Area */}
           <div
             ref={container2DRef}
-            className={`relative h-full bg-[#0f172a] border-r border-white/10 overflow-hidden cursor-crosshair transition-all duration-300 ${
+            className={`relative h-full bg-[#0f172a] border-r border-white/10 overflow-hidden transition-all duration-300 ${
               is3DExpanded ? 'hidden' : is2DExpanded ? 'w-full flex-1' : 'flex-1 min-w-[320px]'
             }`}
           >
@@ -2014,6 +2326,23 @@ export default function FloorPlannerModal({
               onContextMenu={(e) => {
                 e.preventDefault();
                 handleStopDrawingChain();
+              }}
+              style={{
+                cursor: isPanning
+                  ? 'grabbing'
+                  : activeTool === 'wall'
+                  ? 'crosshair'
+                  : activeTool === 'delete'
+                  ? 'pointer'
+                  : activeTool === 'select'
+                  ? draggingCornerId || draggingWallId
+                    ? 'grabbing'
+                    : hoveredCornerId
+                    ? 'move'
+                    : hoveredWallId
+                    ? 'grab'
+                    : 'default'
+                  : 'default',
               }}
               className="w-full h-full block touch-none select-none"
             />
@@ -2061,22 +2390,155 @@ export default function FloorPlannerModal({
               </span>
             </div>
 
-            {/* Instruction / Calibration Badge */}
-            <div className="absolute top-3 left-3 z-10 pointer-events-none bg-slate-900/85 border border-white/10 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md">
-              <p className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
-                <span className={`size-2 rounded-full ${isCalibratingScale ? 'bg-cyan-400 animate-ping' : 'bg-primary animate-ping'}`} />
-                {isCalibratingScale
-                  ? calibrationPtA
-                    ? '📍 Clique no segundo ponto da parede para definir a medida real'
-                    : '📍 Clique no primeiro ponto de uma parede com medida conhecida'
-                  : activeTool === 'wall'
-                  ? drawingStartCornerId
-                    ? 'Clique no ponto final ou em outro canto para fechar a parede (Esc para parar)'
-                    : 'Clique no grid para iniciar uma nova parede'
-                  : activeTool === 'select'
-                  ? 'Clique e arraste um vértice (círculo) para mover paredes conectadas'
-                  : 'Clique em uma parede ou vértice para excluir'}
-              </p>
+            {/* Top-Left Floating Controls: Instruction Badge & Selected Vertex / Wall Coordinate Inspector */}
+            <div className="absolute top-3 left-3 z-20 flex flex-col gap-2 items-start pointer-events-none">
+              {/* Instruction / Calibration Badge */}
+              <div className="bg-slate-900/85 border border-white/10 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-md w-fit pointer-events-none">
+                <p className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
+                  <span className={`size-2 rounded-full ${isCalibratingScale ? 'bg-cyan-400 animate-ping' : 'bg-primary animate-ping'}`} />
+                  {isCalibratingScale
+                    ? calibrationPtA
+                      ? '📍 Clique no segundo ponto da parede para definir a medida real'
+                      : '📍 Clique no primeiro ponto de uma parede com medida conhecida'
+                    : activeTool === 'wall'
+                    ? drawingStartCornerId
+                      ? 'Clique no ponto final ou em outro canto para fechar a parede (Esc para parar)'
+                      : 'Clique no grid para iniciar uma nova parede'
+                    : activeTool === 'select'
+                    ? selectedCornerId
+                      ? 'Vértice selecionado: ajuste as posições X e Y ou arraste (Shift = Travar X | Ctrl = Travar Y)'
+                      : selectedWallId
+                      ? 'Parede selecionada: arraste no 2D para mover (Shift = Travar X | Ctrl = Travar Y)'
+                      : 'Clique e arraste qualquer canto ou parede (Shift = Travar X | Ctrl = Travar Y)'
+                    : 'Clique em uma parede ou vértice para excluir'}
+                </p>
+              </div>
+
+              {/* Selected Wall Floating Inspector */}
+              {selectedWall && !selectedCorner && (
+                <div className="pointer-events-auto flex items-center gap-3 bg-slate-900/95 border border-amber-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400">
+                    <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Parede:</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-white">
+                    Comprimento: <strong className="text-amber-300">{selectedWallLength.toFixed(2)}m</strong>
+                  </div>
+                  <span className="text-[10px] text-amber-200/80 font-medium hidden sm:inline">
+                    (Shift = Trava Eixo X • Ctrl = Trava Eixo Y)
+                  </span>
+                  <button
+                    onClick={() => setSelectedWallId(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors ml-1"
+                    title="Desmarcar parede"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Selected Vertex (Corner) Coordinate X / Y Live Edit Box */}
+              {selectedCorner && (
+                <div className="pointer-events-auto flex items-center gap-2 bg-slate-900/95 border border-amber-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400">
+                    <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Ponto:</span>
+                  </div>
+
+                  {/* Input X */}
+                  <div className="flex items-center gap-1 bg-black/50 border border-white/15 px-2 py-1 rounded-lg hover:border-amber-500/50 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/40 transition-all">
+                    <label htmlFor="vertex-pos-x" className="text-[11px] font-bold text-amber-400 cursor-pointer">
+                      X:
+                    </label>
+                    <input
+                      id="vertex-pos-x"
+                      type="number"
+                      step={gridStep || 0.05}
+                      value={coordInputX !== null ? coordInputX : selectedCorner.x.toFixed(2)}
+                      onFocus={() => {
+                        saveSnapshot();
+                        setCoordInputX(String(selectedCorner.x));
+                      }}
+                      onChange={(e) => {
+                        const valStr = e.target.value;
+                        setCoordInputX(valStr);
+                        const num = parseFloat(valStr);
+                        if (!isNaN(num)) {
+                          setCorners((prev) =>
+                            prev.map((c) =>
+                              c.id === selectedCorner.id ? { ...c, x: Number(num.toFixed(3)) } : c
+                            )
+                          );
+                        }
+                      }}
+                      onBlur={() => {
+                        setCoordInputX(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-16 bg-transparent text-white font-mono text-[11px] font-bold outline-none text-right"
+                      title="Posição X do vértice em metros"
+                    />
+                    <span className="text-[10px] text-slate-400 font-mono">m</span>
+                  </div>
+
+                  {/* Input Y */}
+                  <div className="flex items-center gap-1 bg-black/50 border border-white/15 px-2 py-1 rounded-lg hover:border-amber-500/50 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/40 transition-all">
+                    <label htmlFor="vertex-pos-y" className="text-[11px] font-bold text-emerald-400 cursor-pointer">
+                      Y:
+                    </label>
+                    <input
+                      id="vertex-pos-y"
+                      type="number"
+                      step={gridStep || 0.05}
+                      value={coordInputY !== null ? coordInputY : selectedCorner.y.toFixed(2)}
+                      onFocus={() => {
+                        saveSnapshot();
+                        setCoordInputY(String(selectedCorner.y));
+                      }}
+                      onChange={(e) => {
+                        const valStr = e.target.value;
+                        setCoordInputY(valStr);
+                        const num = parseFloat(valStr);
+                        if (!isNaN(num)) {
+                          setCorners((prev) =>
+                            prev.map((c) =>
+                              c.id === selectedCorner.id ? { ...c, y: Number(num.toFixed(3)) } : c
+                            )
+                          );
+                        }
+                      }}
+                      onBlur={() => {
+                        setCoordInputY(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="w-16 bg-transparent text-white font-mono text-[11px] font-bold outline-none text-right"
+                      title="Posição Y do vértice em metros"
+                    />
+                    <span className="text-[10px] text-slate-400 font-mono">m</span>
+                  </div>
+
+                  {/* Quick Deselect / Close Button */}
+                  <button
+                    onClick={() => {
+                      setSelectedCornerId(null);
+                      setCoordInputX(null);
+                      setCoordInputY(null);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors ml-0.5"
+                    title="Desmarcar vértice"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 2D Top-Right Floating Controls (Expand / Split Toggle) */}

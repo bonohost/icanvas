@@ -31,7 +31,7 @@ interface ProjectManagerModalProps {
   onClose: () => void;
   currentProject: StudioProject;
   onLoadProject: (project: StudioProject) => void;
-  onNewProject: (name: string, width: number, depth: number) => void;
+  onNewProject: (name: string, width?: number, depth?: number, startWithDefault?: boolean) => void;
 }
 
 export default function ProjectManagerModal({
@@ -45,6 +45,7 @@ export default function ProjectManagerModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'list' | 'new' | 'import'>('list');
   const [newProjectName, setNewProjectName] = useState('Novo Projeto Studio');
+  const [templateType, setTemplateType] = useState<'clean' | 'default'>('clean');
   const [newWidth, setNewWidth] = useState(5.0);
   const [newDepth, setNewDepth] = useState(4.0);
   const [importError, setImportError] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export default function ProjectManagerModal({
 
   const handleCreateNew = (e: React.FormEvent) => {
     e.preventDefault();
-    onNewProject(newProjectName || 'Ambiente Sem Nome', newWidth, newDepth);
+    onNewProject(newProjectName || 'Ambiente Sem Nome', newWidth, newDepth, templateType === 'default');
     onClose();
   };
 
@@ -327,32 +328,69 @@ export default function ProjectManagerModal({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-white/80">Largura Inicial (m)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="2"
-                    max="20"
-                    value={newWidth}
-                    onChange={(e) => setNewWidth(parseFloat(e.target.value) || 2)}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-white/80">Profundidade Inicial (m)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="2"
-                    max="20"
-                    value={newDepth}
-                    onChange={(e) => setNewDepth(parseFloat(e.target.value) || 2)}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-primary"
-                  />
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-white/80">Tipo de Início</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateType('clean')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                      templateType === 'clean'
+                        ? 'bg-primary/20 border-primary text-white ring-1 ring-primary/40'
+                        : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white">
+                      <span>Ambiente Limpo</span>
+                    </div>
+                    <div className="text-[10px] text-white/50 mt-0.5">Criar do zero com medidas personalizadas</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTemplateType('default')}
+                    className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                      templateType === 'default'
+                        ? 'bg-primary/20 border-primary text-white ring-1 ring-primary/40'
+                        : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-bold flex items-center gap-1.5 text-white">
+                      <span>Modelo Padrão</span>
+                    </div>
+                    <div className="text-[10px] text-white/50 mt-0.5">Iniciar com planta, paredes e móveis modelo</div>
+                  </button>
                 </div>
               </div>
+
+              {templateType === 'clean' && (
+                <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-200">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-white/80">Largura Inicial (m)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="2"
+                      max="30"
+                      value={newWidth}
+                      onChange={(e) => setNewWidth(parseFloat(e.target.value) || 2)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-white/80">Profundidade Inicial (m)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="2"
+                      max="30"
+                      value={newDepth}
+                      onChange={(e) => setNewDepth(parseFloat(e.target.value) || 2)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"

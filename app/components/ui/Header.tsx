@@ -6,11 +6,9 @@ import { usePathname } from 'next/navigation';
 import ContactModal from './ContactModal';
 
 const navItems = [
-  //{ href: '/mug-simulator', label: 'Mug Sim' },
   { href: '/mug-coffee', label: 'Mug Sim' },
-  // { href: '/sofa-customizer', label: 'Configurator' },
-  { href: '/360-viewer', label: '360 Viewer' },
-  { href: '/studio', label: 'Studio' },
+  { href: '/360-viewer', label: 'View 360' },
+  { href: '/studio', label: 'Planner 3D' },
 ];
 
 export default function Header() {

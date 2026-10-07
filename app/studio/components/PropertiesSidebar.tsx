@@ -907,7 +907,7 @@ export default function PropertiesSidebar({
                 { id: 'dark_studio', label: 'Estúdio Dark', desc: 'Fundo Dark Slate', icon: '🏢' },
                 { id: 'clean_studio', label: 'Estúdio Claro', desc: 'Clean Studio', icon: '☀️' },
               ].map((p) => {
-                const isActive = (room.environmentPreset || 'dark_studio') === p.id;
+                const isActive = (room.environmentPreset || 'hdr_144') === p.id;
                 return (
                   <button
                     key={p.id}
