@@ -17,6 +17,262 @@ export const OPENING_FRAME_COLORS = [
   { id: 'champagne', name: 'Alumínio Champagne', color: '#c5b39a', roughness: 0.35, metalness: 0.75 },
 ];
 
+export interface RawWallInput {
+  id?: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  thickness?: number;
+  height?: number;
+}
+
+export interface AdjustedWallOutput {
+  id: string;
+  originalStart: { x: number; y: number };
+  originalEnd: { x: number; y: number };
+  adjustedStart: { x: number; y: number };
+  adjustedEnd: { x: number; y: number };
+  length: number;
+  centerX: number;
+  centerZ: number;
+  angle: number;
+  thickness: number;
+  height: number;
+}
+
+/**
+ * Calculates seamless wall junction intersections.
+ * At L-corners, one wall passes to the outer edge while the other abuts flush against its inner face.
+ * At T-junctions and Cross-junctions, dividing walls abut flush against the main through-wall.
+ */
+export function calculateAdjustedWallJunctions(
+  rawWalls?: RawWallInput[],
+  defaultThickness = 0.15,
+  defaultHeight = 2.6
+): AdjustedWallOutput[] {
+  if (!rawWalls || rawWalls.length === 0) return [];
+
+  const wallsWithDir = rawWalls.map((w, idx) => {
+    const dx = w.end.x - w.start.x;
+    const dy = w.end.y - w.start.y;
+    const rawLen = Math.hypot(dx, dy);
+    const ux = rawLen > 0.0001 ? dx / rawLen : 1;
+    const uy = rawLen > 0.0001 ? dy / rawLen : 0;
+    const thickness = w.thickness || defaultThickness;
+    const height = w.height || defaultHeight;
+    const id = w.id || `w_${idx}`;
+    return {
+      id,
+      start: { x: w.start.x, y: w.start.y },
+      end: { x: w.end.x, y: w.end.y },
+      rawLen,
+      ux,
+      uy,
+      thickness,
+      height,
+      startTrim: 0,
+      endTrim: 0,
+    };
+  });
+
+  // Group endpoints into vertices by spatial proximity (tolerance 0.05m)
+  interface VertexAttachment {
+    wallIndex: number;
+    isStart: boolean;
+    dirX: number; // unit vector pointing away from vertex along the wall
+    dirY: number;
+    thickness: number;
+    rawLen: number;
+  }
+
+  const vertices: { x: number; y: number; attachments: VertexAttachment[] }[] = [];
+
+  const findOrCreateVertex = (pt: { x: number; y: number }) => {
+    let found = vertices.find((v) => Math.hypot(v.x - pt.x, v.y - pt.y) < 0.05);
+    if (!found) {
+      found = { x: pt.x, y: pt.y, attachments: [] };
+      vertices.push(found);
+    }
+    return found;
+  };
+
+  wallsWithDir.forEach((w, wallIndex) => {
+    if (w.rawLen < 0.01) return;
+
+    // Start attachment (direction points towards end: +ux, +uy)
+    const vStart = findOrCreateVertex(w.start);
+    vStart.attachments.push({
+      wallIndex,
+      isStart: true,
+      dirX: w.ux,
+      dirY: w.uy,
+      thickness: w.thickness,
+      rawLen: w.rawLen,
+    });
+
+    // End attachment (direction points towards start: -ux, -uy)
+    const vEnd = findOrCreateVertex(w.end);
+    vEnd.attachments.push({
+      wallIndex,
+      isStart: false,
+      dirX: -w.ux,
+      dirY: -w.uy,
+      thickness: w.thickness,
+      rawLen: w.rawLen,
+    });
+  });
+
+  // Resolve junctions at each vertex
+  vertices.forEach((v) => {
+    const atts = v.attachments;
+    if (atts.length < 2) {
+      // Free end: no trimming needed
+      return;
+    }
+
+    if (atts.length === 2) {
+      const a = atts[0];
+      const b = atts[1];
+      const dot = a.dirX * b.dirX + a.dirY * b.dirY;
+
+      // If collinear in straight line (dot ≈ -1), no corner trim needed
+      if (dot < -0.92) {
+        return;
+      }
+
+      // L-Junction: choose passante wall vs abutting wall
+      // Prefer longer wall or horizontal wall for consistent room corners
+      const isAHorizontal = Math.abs(a.dirX) >= Math.abs(a.dirY);
+      const isBHorizontal = Math.abs(b.dirX) >= Math.abs(b.dirY);
+
+      let passante = a;
+      let encostada = b;
+
+      if (Math.abs(a.rawLen - b.rawLen) > 0.3) {
+        if (b.rawLen > a.rawLen) {
+          passante = b;
+          encostada = a;
+        }
+      } else if (isBHorizontal && !isAHorizontal) {
+        passante = b;
+        encostada = a;
+      }
+
+      // Passante wall extends by half of encostada thickness to cover outer corner
+      // Encostada wall is shortened by half of passante thickness to sit flush
+      const passanteTrim = -encostada.thickness / 2;
+      const encostadaTrim = passante.thickness / 2;
+
+      if (passante.isStart) {
+        wallsWithDir[passante.wallIndex].startTrim = passanteTrim;
+      } else {
+        wallsWithDir[passante.wallIndex].endTrim = passanteTrim;
+      }
+
+      if (encostada.isStart) {
+        wallsWithDir[encostada.wallIndex].startTrim = encostadaTrim;
+      } else {
+        wallsWithDir[encostada.wallIndex].endTrim = encostadaTrim;
+      }
+      return;
+    }
+
+    // 3 or more walls meeting (T-Junction or Cross):
+    // Find the pair that are most collinear (dot closest to -1)
+    let bestDot = 0;
+    let mainA: VertexAttachment | null = null;
+    let mainB: VertexAttachment | null = null;
+
+    for (let i = 0; i < atts.length; i++) {
+      for (let j = i + 1; j < atts.length; j++) {
+        const dot = atts[i].dirX * atts[j].dirX + atts[i].dirY * atts[j].dirY;
+        if (dot < bestDot) {
+          bestDot = dot;
+          mainA = atts[i];
+          mainB = atts[j];
+        }
+      }
+    }
+
+    if (bestDot < -0.65 && mainA && mainB) {
+      // Main through-wall (passante): no trim at this continuous intersection
+      const mainThickness = (mainA.thickness + mainB.thickness) / 2;
+
+      // Other branches (divisórias) abut against the main wall face
+      atts.forEach((att) => {
+        if (att === mainA || att === mainB) return;
+        const trim = mainThickness / 2;
+        if (att.isStart) {
+          wallsWithDir[att.wallIndex].startTrim = trim;
+        } else {
+          wallsWithDir[att.wallIndex].endTrim = trim;
+        }
+      });
+    } else {
+      // If no straight through-wall found, longest wall passes, others abut
+      let longest = atts[0];
+      for (let i = 1; i < atts.length; i++) {
+        if (atts[i].rawLen > longest.rawLen) longest = atts[i];
+      }
+
+      atts.forEach((att) => {
+        if (att === longest) {
+          const maxOtherThick = Math.max(...atts.filter((o) => o !== longest).map((o) => o.thickness));
+          const trim = -maxOtherThick / 2;
+          if (att.isStart) {
+            wallsWithDir[att.wallIndex].startTrim = trim;
+          } else {
+            wallsWithDir[att.wallIndex].endTrim = trim;
+          }
+        } else {
+          const trim = longest.thickness / 2;
+          if (att.isStart) {
+            wallsWithDir[att.wallIndex].startTrim = trim;
+          } else {
+            wallsWithDir[att.wallIndex].endTrim = trim;
+          }
+        }
+      });
+    }
+  });
+
+  // Calculate resulting adjusted 3D coordinates
+  return wallsWithDir
+    .map((w) => {
+      // Adjusted start: start + startTrim * dir
+      const adjStartX = w.start.x + w.startTrim * w.ux;
+      const adjStartY = w.start.y + w.startTrim * w.uy;
+
+      // Adjusted end: end - endTrim * dir
+      const adjEndX = w.end.x - w.endTrim * w.ux;
+      const adjEndY = w.end.y - w.endTrim * w.uy;
+
+      const adjDx = adjEndX - adjStartX;
+      const adjDz = adjEndY - adjStartY;
+      const adjLen = Math.hypot(adjDx, adjDz);
+
+      if (adjLen < 0.01) return null;
+
+      const angle = Math.atan2(adjDz, adjDx);
+      const centerX = (adjStartX + adjEndX) / 2;
+      const centerZ = (adjStartY + adjEndY) / 2;
+
+      return {
+        id: w.id,
+        originalStart: w.start,
+        originalEnd: w.end,
+        adjustedStart: { x: adjStartX, y: adjStartY },
+        adjustedEnd: { x: adjEndX, y: adjEndY },
+        length: adjLen,
+        centerX,
+        centerZ,
+        angle,
+        thickness: w.thickness,
+        height: w.height,
+      };
+    })
+    .filter((w): w is AdjustedWallOutput => w !== null);
+}
+
 /**
  * Procedural Wall Slicing: Slices a wall into solid rectangular segments around
  * all doors and windows without CSG boolean artifacts, running at 60+ FPS.
@@ -137,6 +393,7 @@ export function buildParametricWallGroup(
     mesh.position.set(localX, localY, 0);
     mesh.castShadow = false;
     mesh.receiveShadow = true;
+    mesh.userData = { isWall: true, type: 'wall' };
     wallGroup.add(mesh);
   });
 

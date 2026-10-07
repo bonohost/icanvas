@@ -125,17 +125,40 @@ export default function CatalogSidebar({ onAdd, onAddOpening, onClose }: Catalog
   const handleDragStart = (e: React.DragEvent, item: FurnitureSpec) => {
     e.dataTransfer.setData('application/json', JSON.stringify(item));
     e.dataTransfer.effectAllowed = 'copy';
+
+    // Remove browser default HTML card preview image so only the 3D ghost box appears
+    const transparentImg = new Image();
+    transparentImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    if (e.dataTransfer.setDragImage) {
+      e.dataTransfer.setDragImage(transparentImg, 0, 0);
+    }
+    if (typeof window !== 'undefined') {
+      (window as any).__draggedCatalogItem = { ...item, isOpening: false };
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (typeof window !== 'undefined') {
+      (window as any).__draggedCatalogItem = null;
+    }
   };
 
   const handleDragStartOpening = (e: React.DragEvent, preset: OpeningPreset) => {
-    e.dataTransfer.setData(
-      'application/json',
-      JSON.stringify({
-        ...preset,
-        isOpening: true,
-      })
-    );
+    const data = {
+      ...preset,
+      isOpening: true,
+    };
+    e.dataTransfer.setData('application/json', JSON.stringify(data));
     e.dataTransfer.effectAllowed = 'copy';
+
+    const transparentImg = new Image();
+    transparentImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    if (e.dataTransfer.setDragImage) {
+      e.dataTransfer.setDragImage(transparentImg, 0, 0);
+    }
+    if (typeof window !== 'undefined') {
+      (window as any).__draggedCatalogItem = data;
+    }
   };
 
   return (
@@ -264,6 +287,12 @@ export default function CatalogSidebar({ onAdd, onAddOpening, onClose }: Catalog
                   key={preset.id}
                   draggable
                   onDragStart={(e) => handleDragStartOpening(e, preset)}
+                  onDragEnd={handleDragEnd}
+                  onClick={(e) => {
+                    if (!(e.target as HTMLElement).closest('button')) {
+                      onAddOpening?.(preset);
+                    }
+                  }}
                   className="group flex flex-col p-3 rounded-xl bg-surface-container-low/50 hover:bg-primary/10 border border-white/5 hover:border-primary/40 transition-all cursor-grab active:cursor-grabbing shadow-sm"
                 >
                   <div className="flex items-center justify-between">
@@ -283,9 +312,13 @@ export default function CatalogSidebar({ onAdd, onAddOpening, onClose }: Catalog
                     </div>
 
                     <button
-                      onClick={() => onAddOpening?.(preset)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddOpening?.(preset);
+                      }}
                       className="size-7 flex-shrink-0 rounded-lg flex items-center justify-center bg-white/5 group-hover:bg-primary text-on-surface group-hover:text-white transition-all shadow-sm active:scale-95"
-                      title="Inserir vão na parede ativa"
+                      title="Inserir vão na parede (ou arraste e solte sobre a parede)"
                     >
                       <Plus className="size-3.5" />
                     </button>
@@ -341,6 +374,7 @@ export default function CatalogSidebar({ onAdd, onAddOpening, onClose }: Catalog
                         key={item.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, item)}
+                        onDragEnd={handleDragEnd}
                         className="group flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest/60 hover:bg-primary/10 border border-white/5 hover:border-primary/40 transition-all cursor-grab active:cursor-grabbing shadow-sm"
                       >
                         <div className="flex items-center gap-2 overflow-hidden pr-2">

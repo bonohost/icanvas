@@ -41,11 +41,11 @@ export default function Scene(): ReactElement | null {
 
   const cameraPosition: [number, number, number] = pathname === '/mug-simulator' ? [0, 0.15, 2.3] : [0, 0, 5];
   const cameraFov = pathname === '/mug-simulator' ? 45 : 50;
+  const isInteractive = pathname === '/mug-simulator' || pathname === '/sofa-customizer';
 
   return (
     // Para todas as outras cenas, usamos o Canvas do React Three Fiber.
-    // A div externa desabilita os eventos de ponteiro para não bloquear o conteúdo da página.
-    <div className="fixed top-0 left-0 w-full h-full z-0 pointer-events-auto">
+    <div className={`fixed top-0 left-0 w-full h-full z-0 ${isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}`}>
       <Canvas camera={{ position: cameraPosition, fov: cameraFov }}>
         <Suspense fallback={null}>
           {CurrentSceneComponent}

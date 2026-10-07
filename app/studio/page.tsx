@@ -9,6 +9,7 @@ import TemplatesModal from './components/TemplatesModal';
 import AiRenderModal from './components/AiRenderModal';
 import SceneCartModal from './components/SceneCartModal';
 import PanoramaViewerModal from './components/PanoramaViewerModal';
+import FloorPlannerModal from './components/FloorPlannerModal';
 import {
   FurnitureInstance,
   FurnitureSpec,
@@ -16,9 +17,16 @@ import {
   StudioProject,
   WallOpening,
   WallSide,
+  CameraSettingsData,
 } from './types/furniture';
 import { OpeningPreset, CATALOG } from './lib/furniture-data';
 import { RoomTemplatePreset } from './lib/room-templates';
+import {
+  DEFAULT_SCENE_ROOM,
+  DEFAULT_SCENE_FURNITURE,
+  DEFAULT_SCENE_CAMERA,
+  createDefaultStudioProject,
+} from './lib/default-scene-preset';
 import {
   saveProject,
   getSavedProjects,
@@ -54,6 +62,8 @@ import {
   ShoppingCart,
   Tag,
   Compass,
+  PenTool,
+  Crosshair,
 } from 'lucide-react';
 
 interface HistorySnapshot {
@@ -106,6 +116,7 @@ export default function StudioPage() {
   const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
   const [isAiRenderOpen, setIsAiRenderOpen] = useState<boolean>(false);
+  const [isFloorPlannerOpen, setIsFloorPlannerOpen] = useState<boolean>(false);
   const [isPanoramaOpen, setIsPanoramaOpen] = useState<boolean>(false);
   const [customPanoramaUrl, setCustomPanoramaUrl] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
@@ -117,107 +128,9 @@ export default function StudioPage() {
   const capturePanoramaRef = useRef<((options: { eyeHeight?: number; width?: number; height?: number }) => string) | null>(null);
   const cameraControlRef = useRef<CameraController | null>(null);
 
-  const [furniture, setFurniture] = useState<FurnitureInstance[]>([
-    {
-      id: 'cab-base-2',
-      name: 'Balcão Base 2 Portas',
-      w: 0.8,
-      d: 0.6,
-      h: 0.85,
-      by: 0,
-      pr: 'base',
-      modelUrl: '/models/kitchenCabinet.glb',
-      dm: { t: 'wood', c: '#ffffff' },
-      uid: 1,
-      x: -1.2,
-      z: -0.8,
-      rot: 0,
-      scl: 1,
-      product: {
-        id: '238826200',
-        title: 'Balcão de Cozinha Telasul Aço 3 Portas 3 Gavetas Cristal',
-        imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
-        brand: 'Telasul',
-        category: 'Cozinha & Gabinetes',
-        showPin: true,
-        stores: [
-          {
-            store: 'Magazine Luiza',
-            price: 849.0,
-            originalPrice: 999.0,
-            url: 'https://www.magazinevoce.com.br/magazinevendas3d/balcao-de-cozinha-telasul-aco-3-portas-3-gavetas-cristal/p/238826200/mo/buff/?seller_id=magazineluiza',
-            installments: '10x de R$ 84,90 sem juros',
-          },
-        ],
-      },
-    },
-    {
-      id: 'cab-wall-1',
-      name: 'Armário Aéreo 2 Portas',
-      w: 0.8,
-      d: 0.35,
-      h: 0.65,
-      by: 1.5,
-      pr: 'wall',
-      modelUrl: '/models/kitchenCabinetUpperDouble.glb',
-      dm: { t: 'wood', c: '#ffffff' },
-      uid: 2,
-      x: -1.2,
-      z: -0.8,
-      rot: 0,
-      scl: 1,
-      product: {
-        id: 'jf5gf650dc',
-        title: 'Armário Aéreo Itatiaia em Aço 2 Portas Branco Florença',
-        imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80',
-        brand: 'Itatiaia',
-        category: 'Cozinha & Gabinetes',
-        showPin: true,
-        stores: [
-          {
-            store: 'Magazine Luiza',
-            price: 259.90,
-            originalPrice: 319.90,
-            url: 'https://www.magazinevoce.com.br/magazinevendas3d/armario-aereo-itatiaia-em-aco-2-portas-branco-florenca/p/jf5gf650dc/mo/moac/?seller_id=itatiaiamoveiseeletro',
-            installments: '10x de R$ 25,99 sem juros',
-          },
-        ],
-      },
-    },
-    {
-      id: 'fridge-large',
-      name: 'Geladeira Duplex Inox',
-      w: 0.85,
-      d: 0.8,
-      h: 1.9,
-      by: 0,
-      pr: 'fr',
-      modelUrl: '/models/kitchenFridgeLarge.glb',
-      dm: { t: 'metal', c: '#d4d4d8' },
-      uid: 3,
-      x: 0.8,
-      z: -0.7,
-      rot: 0,
-      scl: 1,
-      product: {
-        id: '240941300',
-        title: 'Geladeira Refrigerador Brastemp Frost Free French Door Inox 559L BRO85MK',
-        imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=400&q=80',
-        brand: 'Brastemp',
-        category: 'Eletrodomésticos',
-        showPin: true,
-        stores: [
-          {
-            store: 'Magazine Luiza',
-            price: 6899.0,
-            originalPrice: 7999.0,
-            url: 'https://acesse.one/QITmsvg',
-            installments: '10x de R$ 689,90 sem juros',
-          },
-        ],
-      },
-    },
-  ]);
+  const [furniture, setFurniture] = useState<FurnitureInstance[]>(() =>
+    enrichFurnitureWithCatalog(DEFAULT_SCENE_FURNITURE)
+  );
 
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
@@ -226,6 +139,9 @@ export default function StudioPage() {
   const [snapOn, setSnapOn] = useState(true);
   const [collisionOn, setCollisionOn] = useState(true);
   const [autoTransparency, setAutoTransparency] = useState(true);
+  const [showRaycastLine, setShowRaycastLine] = useState(false);
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+  const [showWallTags, setShowWallTags] = useState<boolean>(true);
 
   // Shoppable Scene Cart Summary Calculation (Automatic sum of primary store [0])
   const { cartCount, cartTotal } = React.useMemo(() => {
@@ -250,65 +166,9 @@ export default function StudioPage() {
   const [showRightSidebar, setShowRightSidebar] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
 
-  const [room, setRoom] = useState<RoomSettings>({
-    width: 4.5,
-    depth: 3.2,
-    height: 2.6,
-    floorColor: '#e2e8f0',
-    floorTileX: 4,
-    floorTileY: 4,
-    walls: {
-      back: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      front: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      left: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      right: { color: '#f8fafc', tileX: 2, tileY: 1 },
-    },
-    openings: [
-      {
-        id: 'door_main',
-        wallSide: 'front',
-        type: 'door-hinged',
-        name: 'Porta de Madeira de Giro',
-        position: 0.25,
-        width: 0.8,
-        height: 2.1,
-        sillHeight: 0,
-        frameColor: '#8b5a2b',
-        leafOpenRatio: 0.35,
-      },
-      {
-        id: 'win_main',
-        wallSide: 'left',
-        type: 'window-standard',
-        name: 'Janela Padrão 2 Folhas',
-        position: 0.5,
-        width: 1.4,
-        height: 1.2,
-        sillHeight: 1.0,
-        frameColor: '#1e293b',
-      },
-    ],
-    lightIntensity: 1.0,
-    exposure: 1.0,
-    environmentPreset: 'dark_studio',
-    reflectionOpacity: 0.05,
-    areaLight: {
-      enabled: true,
-      intensity: 2.0,
-      width: 2.2,
-      height: 1.6,
-      color: '#ffffff',
-      showHelper: true,
-    },
-  });
+  const [room, setRoom] = useState<RoomSettings>(() => DEFAULT_SCENE_ROOM);
 
-  const [cameraSettings, setCameraSettings] = useState({
-    id: 'iso',
-    x: 5.5,
-    y: 4.5,
-    z: 5.5,
-    fov: 45,
-  });
+  const [cameraSettings, setCameraSettings] = useState<CameraSettingsData>(() => DEFAULT_SCENE_CAMERA);
 
   // Restore autosaved session or initial project on mount
   useEffect(() => {
@@ -347,25 +207,8 @@ export default function StudioPage() {
 
   // Keep snapshot ref synced for instant history push
   const currentSnapshotRef = useRef<HistorySnapshot>({
-    furniture: [],
-    room: {
-      width: 4.5,
-      depth: 3.2,
-      height: 2.6,
-      floorColor: '#e2e8f0',
-      floorTileX: 4,
-      floorTileY: 4,
-      walls: {
-        back: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        front: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        left: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        right: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      },
-      lightIntensity: 1.0,
-      exposure: 1.0,
-      environmentPreset: 'dark_studio',
-      reflectionOpacity: 0.05,
-    },
+    furniture: DEFAULT_SCENE_FURNITURE,
+    room: DEFAULT_SCENE_ROOM,
   });
 
   useEffect(() => {
@@ -461,31 +304,51 @@ export default function StudioPage() {
     setTimeout(() => setSaveToast(null), 2500);
   }, []);
 
-  const handleNewProject = useCallback((name: string, width: number, depth: number) => {
+  const handleNewProject = useCallback((name: string, width?: number, depth?: number, startWithDefault = false) => {
     const newId = `proj_${Date.now()}`;
-    const newRoom: RoomSettings = {
-      width,
-      depth,
-      height: 2.6,
-      floorColor: '#e2e8f0',
-      floorTileX: 4,
-      floorTileY: 4,
-      walls: {
-        back: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        front: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        left: { color: '#f8fafc', tileX: 2, tileY: 1 },
-        right: { color: '#f8fafc', tileX: 2, tileY: 1 },
-      },
-      lightIntensity: 1.0,
-      exposure: 1.0,
-      environmentPreset: 'dark_studio',
-      reflectionOpacity: 0.05,
-    };
+    const targetWidth = width || 5.0;
+    const targetDepth = depth || 4.0;
+
+    let newRoom: RoomSettings;
+    let newFurniture: FurnitureInstance[] = [];
+    let newCamera: CameraSettingsData = { id: 'iso', x: 5.5, y: 4.5, z: 5.5, targetX: 0, targetY: 1.04, targetZ: 0, fov: 45 };
+
+    if (startWithDefault) {
+      newRoom = JSON.parse(JSON.stringify(DEFAULT_SCENE_ROOM));
+      newFurniture = enrichFurnitureWithCatalog(DEFAULT_SCENE_FURNITURE);
+      newCamera = DEFAULT_SCENE_CAMERA;
+    } else {
+      newRoom = {
+        width: targetWidth,
+        depth: targetDepth,
+        height: 2.6,
+        floorColor: '#e2e8f0',
+        floorTileX: 4,
+        floorTileY: 4,
+        walls: {
+          back: { color: '#f8fafc', tileX: 2, tileY: 1 },
+          front: { color: '#f8fafc', tileX: 2, tileY: 1 },
+          left: { color: '#f8fafc', tileX: 2, tileY: 1 },
+          right: { color: '#f8fafc', tileX: 2, tileY: 1 },
+        },
+        lightIntensity: 1.0,
+        exposure: 1.0,
+        environmentPreset: 'hdr_144',
+        reflectionOpacity: 0.05,
+        openings: [],
+        customWalls: [],
+        customFloors: [],
+        backgroundFloorPlan: undefined,
+      };
+    }
+
     setProjectId(newId);
     setProjectName(name);
     setRoom(newRoom);
-    setFurniture([]);
+    setFurniture(newFurniture);
     setSelectedUid(null);
+    setSelectedOpeningId(null);
+    setCameraSettings(newCamera);
     setPastStates([]);
     setFutureStates([]);
     saveProject({
@@ -494,10 +357,12 @@ export default function StudioPage() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       room: newRoom,
-      furniture: [],
-      cameraSettings: { id: 'iso', x: 5.5, y: 4.5, z: 5.5, fov: 50 },
+      furniture: newFurniture,
+      cameraSettings: newCamera,
     });
     setIsSaved(true);
+    setSaveToast(`Novo Projeto "${name}" Criado!`);
+    setTimeout(() => setSaveToast(null), 2500);
   }, []);
 
   const handleApplyTemplate = useCallback(
@@ -514,6 +379,7 @@ export default function StudioPage() {
         setRoom(template.room);
         setFurniture(newItems);
         setSelectedUid(null);
+        setSelectedOpeningId(null);
         setSaveToast(`Ambiente "${template.name}" Aplicado!`);
       } else {
         setFurniture((prev) => [...prev, ...newItems]);
@@ -610,11 +476,15 @@ export default function StudioPage() {
   );
 
   const handleAddOpening = useCallback(
-    (preset: OpeningPreset, wallSide: WallSide = 'back', position = 0.5) => {
+    (preset: OpeningPreset, wallSide?: WallSide, position = 0.5) => {
       pushHistory();
+      let targetWall: WallSide = wallSide || 'back';
+      if (!wallSide && room.customWalls && room.customWalls.length > 0) {
+        targetWall = room.customWalls[0].id || 'w_0';
+      }
       const newOpening: WallOpening = {
         id: `op_${Date.now()}`,
-        wallSide,
+        wallSide: targetWall,
         type: preset.type,
         name: preset.name,
         position,
@@ -630,10 +500,10 @@ export default function StudioPage() {
       }));
       setSelectedOpeningId(newOpening.id);
       setSelectedUid(null);
-      setSaveToast(`Vão "${newOpening.name}" Adicionado!`);
-      setTimeout(() => setSaveToast(null), 2500);
+      setSaveToast(`Vão "${newOpening.name}" inserido! Altere a parede no painel lateral.`);
+      setTimeout(() => setSaveToast(null), 3000);
     },
-    [pushHistory]
+    [pushHistory, room.customWalls]
   );
 
   const handleUpdateOpening = useCallback((id: string, updates: Partial<WallOpening>) => {
@@ -644,10 +514,12 @@ export default function StudioPage() {
     }));
   }, [pushHistory]);
 
-  const handleUpdateOpeningPosition = useCallback((id: string, newPos: number) => {
+  const handleUpdateOpeningPosition = useCallback((id: string, newPos: number, newWallSide?: WallSide) => {
     setRoom((prev) => ({
       ...prev,
-      openings: (prev.openings || []).map((o) => (o.id === id ? { ...o, position: newPos } : o)),
+      openings: (prev.openings || []).map((o) =>
+        o.id === id ? { ...o, position: newPos, wallSide: newWallSide || o.wallSide } : o
+      ),
     }));
   }, []);
 
@@ -694,6 +566,12 @@ export default function StudioPage() {
     setSelectedUid(null);
     setSelectedOpeningId(null);
   }, []);
+
+  const handleSelectWall = useCallback((wallId: string) => {
+    if (selectedOpeningId) {
+      handleUpdateOpening(selectedOpeningId, { wallSide: wallId as WallSide, position: 0.5 });
+    }
+  }, [selectedOpeningId, handleUpdateOpening]);
 
   // Global Keyboard Shortcuts (Ctrl+Z = Undo, Ctrl+Y = Redo, Ctrl+S = Save, Ctrl+D = Duplicate, Del = Delete, Esc = Deselect)
   useEffect(() => {
@@ -771,6 +649,13 @@ export default function StudioPage() {
         setIsZenMode((prev) => !prev);
       }
 
+      // Toggle Raycast Visual Line: Ctrl+Shift+L or Cmd+Shift+L
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        setShowRaycastLine((prev) => !prev);
+        return;
+      }
+
       // Zoom In (aproximar câmera): + or = or NumpadAdd
       if (
         (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') &&
@@ -829,156 +714,148 @@ export default function StudioPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#090d16] text-white pt-20">
-      {/* Studio Header Toolbar */}
-      <header className="flex h-14 items-center justify-between border-b border-white/10 bg-surface-glass px-6 backdrop-blur-xl z-20">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsManagerOpen(true)}
-              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-primary hover:bg-primary/90 text-white transition-all shadow-md active:scale-95"
-              title="Gerenciar e abrir projetos salvos"
-            >
-              <FolderOpen className="size-3.5" /> Projetos
-            </button>
-
-            <button
-              onClick={() => setIsTemplatesOpen(true)}
-              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all shadow-md active:scale-95"
-              title="Carregar salas, cozinhas e quartos decorados prontos"
-            >
-              <Sparkles className="size-3.5 text-amber-400" />
-              <span>Ambientes Prontos</span>
-            </button>
-
-            <button
-              onClick={() => setIsAiRenderOpen(true)}
-              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/30 border border-purple-400/40 transition-all active:scale-95 animate-in fade-in"
-              title="Gerar Render Fotorrealista com IA em 1 clique"
-            >
-              <Sparkles className="size-3.5 text-purple-200 animate-pulse" />
-              <span className="bg-gradient-to-r from-white via-purple-100 to-purple-200 bg-clip-text text-transparent">
-                Render IA
-              </span>
-              <span className="px-1 py-0.2 rounded text-[8px] font-black bg-white/20 text-white tracking-widest uppercase">
-                HDR
-              </span>
-            </button>
-
-            {/* 360 Panorama Tour Button */}
-            <button
-              onClick={() => setIsPanoramaOpen(true)}
-              className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-md shadow-blue-600/30 border border-cyan-400/40 transition-all active:scale-95 animate-in fade-in"
-              title="Gerar Panorama Equirretangular 360° (4K) e navegar imersivamente"
-            >
-              <Compass className="size-3.5 text-cyan-200 animate-spin-slow" />
-              <span className="bg-gradient-to-r from-white via-cyan-100 to-blue-200 bg-clip-text text-transparent">
-                Tour 360°
-              </span>
-              <span className="px-1 py-0.2 rounded text-[8px] font-black bg-cyan-400/25 text-cyan-200 tracking-widest uppercase border border-cyan-300/30">
-                4K
-              </span>
-            </button>
-
-            {/* Shoppable Scene Cart Button */}
-            <button
-              onClick={() => {
-                setCartInitialUid(selectedUid);
-                setIsCartOpen(true);
-              }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border ${cartCount > 0
-                ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
-                : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
-                }`}
-              title="Abrir Carrinho do Ambiente / Lista de Compras"
-            >
-              <div className="relative">
-                <ShoppingCart className="size-3.5 text-emerald-400" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                )}
-              </div>
-              <span>
-                {cartCount > 0
-                  ? `Carrinho (${cartCount}) • ${cartTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-                  : 'Carrinho da Cena'}
-              </span>
-            </button>
-
-            <button
-              onClick={handleSaveCurrent}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border ${isSaved
-                ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
-                : 'bg-green-500/20 border-green-500/40 text-green-300 hover:bg-green-500/30'
-                }`}
-              title="Salvar Projeto (Ctrl+S)"
-            >
-              {saveToast ? (
-                <>
-                  <Check className="size-3.5 text-green-400 animate-in zoom-in-50" />
-                  <span className="text-green-400 font-bold">{saveToast}</span>
-                </>
-              ) : (
-                <>
-                  <Save className="size-3.5" />
-                  <span>{isSaved ? 'Salvo' : 'Salvar'}</span>
-                </>
-              )}
-            </button>
-
-            {/* Undo & Redo History Controls */}
-            <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/10">
-              <button
-                onClick={handleUndo}
-                disabled={pastStates.length === 0}
-                className={`p-1.5 rounded-md text-xs font-medium transition-all ${pastStates.length > 0
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
-                  : 'text-white/20 cursor-not-allowed'
-                  }`}
-                title={`Desfazer (Ctrl+Z)${pastStates.length > 0 ? ` (${pastStates.length})` : ''}`}
-              >
-                <Undo2 className="size-3.5" />
-              </button>
-              <button
-                onClick={handleRedo}
-                disabled={futureStates.length === 0}
-                className={`p-1.5 rounded-md text-xs font-medium transition-all ${futureStates.length > 0
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
-                  : 'text-white/20 cursor-not-allowed'
-                  }`}
-                title={`Refazer (Ctrl+Y / Ctrl+Shift+Z)${futureStates.length > 0 ? ` (${futureStates.length})` : ''}`}
-              >
-                <Redo2 className="size-3.5" />
-              </button>
-            </div>
+      {/* Floating Save/Status Toast Notification */}
+      {saveToast && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="bg-neutral-900/95 border border-emerald-500/40 text-emerald-300 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl shadow-emerald-950/50 backdrop-blur-xl flex items-center gap-2">
+            <Check className="size-4 text-emerald-400" />
+            <span>{saveToast}</span>
           </div>
+        </div>
+      )}
 
-          <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
+      {/* Studio Header Toolbar */}
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-surface-glass px-4 lg:px-6 backdrop-blur-xl z-20 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsManagerOpen(true)}
+            className="h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-primary hover:bg-primary/90 text-white transition-all shadow-md active:scale-95 shrink-0 whitespace-nowrap"
+            title="Gerenciar e abrir projetos salvos"
+          >
+            <FolderOpen className="size-3.5" /> Projetos
+          </button>
 
-          {/* Project Title (Editable) */}
-          {/* <div className="flex items-center gap-2 group">
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="bg-transparent text-sm font-bold text-white hover:bg-white/5 focus:bg-white/10 px-2 py-1 rounded-md border border-transparent focus:border-primary/40 focus:outline-none transition-all max-w-[200px] sm:max-w-[320px] truncate"
-              title="Clique para renomear o projeto"
-            />
-            <Edit3 className="size-3 text-white/30 group-hover:text-primary transition-colors hidden sm:block" />
-            <span className="text-[10px] text-on-surface-variant font-mono hidden lg:inline">
-              ({room.width.toFixed(1)}m × {room.depth.toFixed(1)}m • {furniture.length} móveis • {(room.openings || []).length} vãos)
+          <button
+            onClick={() => setIsTemplatesOpen(true)}
+            className="h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all shadow-md active:scale-95 shrink-0 whitespace-nowrap"
+            title="Carregar salas, cozinhas e quartos decorados prontos"
+          >
+            <Sparkles className="size-3.5 text-amber-400" />
+            <span>Ambientes Prontos</span>
+          </button>
+
+          {/* 2D to 3D Floor Planner Button */}
+          <button
+            onClick={() => setIsFloorPlannerOpen(true)}
+            className="h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all shadow-md active:scale-95 shrink-0 whitespace-nowrap animate-in fade-in"
+            title="Desenhar planta baixa 2D personalizada e gerar ambiente 3D sob medida"
+          >
+            <PenTool className="size-3.5 text-blue-400" />
+            <span>Planta 2D / 3D</span>
+          </button>
+
+          <button
+            onClick={() => setIsAiRenderOpen(true)}
+            className="h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/30 border border-purple-400/40 transition-all active:scale-95 shrink-0 whitespace-nowrap animate-in fade-in"
+            title="Gerar Render Fotorrealista com IA em 1 clique"
+          >
+            <Sparkles className="size-3.5 text-purple-200 animate-pulse" />
+            <span className="bg-gradient-to-r from-white via-purple-100 to-purple-200 bg-clip-text text-transparent">
+              Render IA
             </span>
-          </div> */}
+            <span className="px-1 py-0.5 rounded text-[8px] font-black bg-white/20 text-white tracking-widest uppercase">
+              HDR
+            </span>
+          </button>
+
+          {/* 360 Panorama Tour Button */}
+          <button
+            onClick={() => setIsPanoramaOpen(true)}
+            className="h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-md shadow-blue-600/30 border border-cyan-400/40 transition-all active:scale-95 shrink-0 whitespace-nowrap animate-in fade-in"
+            title="Gerar Panorama Equirretangular 360° (4K) e navegar imersivamente"
+          >
+            <Compass className="size-3.5 text-cyan-200 animate-spin-slow" />
+            <span className="bg-gradient-to-r from-white via-cyan-100 to-blue-200 bg-clip-text text-transparent">
+              Tour 360°
+            </span>
+            <span className="px-1 py-0.5 rounded text-[8px] font-black bg-cyan-400/25 text-cyan-200 tracking-widest uppercase border border-cyan-300/30">
+              4K
+            </span>
+          </button>
+
+          {/* Shoppable Scene Cart Button */}
+          <button
+            onClick={() => {
+              setCartInitialUid(selectedUid);
+              setIsCartOpen(true);
+            }}
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-2 text-xs font-bold transition-all shadow-md active:scale-95 border shrink-0 whitespace-nowrap ${cartCount > 0
+              ? 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
+              : 'bg-white/5 hover:bg-white/10 text-white/60 border-white/10'
+              }`}
+            title="Abrir Carrinho do Ambiente / Lista de Compras"
+          >
+            <div className="relative">
+              <ShoppingCart className="size-3.5 text-emerald-400" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </div>
+            <span>
+              {cartCount > 0
+                ? `Carrinho (${cartCount}) • ${cartTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                : 'Carrinho da Cena'}
+            </span>
+          </button>
+
+          <button
+            onClick={handleSaveCurrent}
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all border shrink-0 whitespace-nowrap ${isSaved
+              ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
+              : 'bg-green-500/20 border-green-500/40 text-green-300 hover:bg-green-500/30'
+              }`}
+            title="Salvar Projeto (Ctrl+S)"
+          >
+            <Save className="size-3.5" />
+            <span>{isSaved ? 'Salvo' : 'Salvar'}</span>
+          </button>
+
+          {/* Undo & Redo History Controls */}
+          <div className="flex items-center gap-0.5 bg-white/5 p-0.5 rounded-lg border border-white/10 h-8.5 shrink-0">
+            <button
+              onClick={handleUndo}
+              disabled={pastStates.length === 0}
+              className={`h-7 px-2 rounded-md text-xs font-medium flex items-center justify-center transition-all ${pastStates.length > 0
+                ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-white/20 cursor-not-allowed'
+                }`}
+              title={`Desfazer (Ctrl+Z)${pastStates.length > 0 ? ` (${pastStates.length})` : ''}`}
+            >
+              <Undo2 className="size-3.5" />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={futureStates.length === 0}
+              className={`h-7 px-2 rounded-md text-xs font-medium flex items-center justify-center transition-all ${futureStates.length > 0
+                ? 'text-white/80 hover:text-white hover:bg-white/10 active:scale-95'
+                : 'text-white/20 cursor-not-allowed'
+                }`}
+              title={`Refazer (Ctrl+Y / Ctrl+Shift+Z)${futureStates.length > 0 ? ` (${futureStates.length})` : ''}`}
+            >
+              <Redo2 className="size-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Viewport & Scene Utilities */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 ml-4">
           {/* Menu & Sidebar Toggles */}
-          <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">
+          <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10 h-8.5 shrink-0">
             <button
               onClick={() => setShowLeftSidebar((prev) => !prev)}
-              className={`p-1.5 rounded-md text-xs font-medium transition-all ${showLeftSidebar && !isZenMode
+              className={`h-7 px-2 rounded-md text-xs font-medium flex items-center justify-center transition-all ${showLeftSidebar && !isZenMode
                 ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
                 : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
                 }`}
@@ -989,7 +866,7 @@ export default function StudioPage() {
 
             <button
               onClick={() => setIsZenMode((prev) => !prev)}
-              className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${isZenMode
+              className={`h-7 px-2 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${isZenMode
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                 : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
                 }`}
@@ -1001,7 +878,7 @@ export default function StudioPage() {
 
             <button
               onClick={() => setShowRightSidebar((prev) => !prev)}
-              className={`p-1.5 rounded-md text-xs font-medium transition-all ${showRightSidebar && !isZenMode
+              className={`h-7 px-2 rounded-md text-xs font-medium flex items-center justify-center transition-all ${showRightSidebar && !isZenMode
                 ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
                 : 'text-on-surface-variant hover:text-white hover:bg-white/5 border border-transparent'
                 }`}
@@ -1015,7 +892,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => exportProjectAsJson(currentProjectObject)}
-            className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-all hidden md:flex"
+            className="h-8.5 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 transition-all shrink-0 whitespace-nowrap hidden md:flex"
             title="Exportar arquivo JSON para download"
           >
             <Download className="size-3.5" /> Exportar JSON
@@ -1023,7 +900,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => setShowGrid(!showGrid)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all ${showGrid
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${showGrid
               ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm shadow-blue-500/10'
               : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
@@ -1034,7 +911,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => setSnapOn(!snapOn)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all ${snapOn
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all shrink-0 whitespace-nowrap ${snapOn
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/10'
               : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
@@ -1047,7 +924,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => setAutoTransparency(!autoTransparency)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all ${autoTransparency
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${autoTransparency
               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10'
               : 'bg-white/5 text-neutral-400 hover:text-white border border-white/5'
               }`}
@@ -1059,7 +936,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => setShowProductPins(!showProductPins)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${showProductPins
+            className={`h-8.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${showProductPins
               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
               : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/5'
               }`}
@@ -1073,7 +950,7 @@ export default function StudioPage() {
 
           <button
             onClick={handleClearAll}
-            className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+            className="h-8.5 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all shrink-0 whitespace-nowrap"
             title="Limpar todos os móveis e portas/janelas da cena"
           >
             <Trash2 className="size-3.5" /> Limpar
@@ -1112,7 +989,10 @@ export default function StudioPage() {
             snapOn={snapOn}
             collisionOn={collisionOn}
             autoTransparency={autoTransparency}
+            showRaycastLine={showRaycastLine}
+            onToggleRaycastLine={() => setShowRaycastLine((prev) => !prev)}
             cameraSettings={cameraSettings}
+            onCameraChange={setCameraSettings}
             gizmoEnabled={transformMode !== 'locked'}
             gizmoMode={transformMode === 'locked' ? 'translate' : transformMode}
             onDragStart={pushHistory}
@@ -1130,6 +1010,10 @@ export default function StudioPage() {
             onRegisterCameraControl={(ctrl) => {
               cameraControlRef.current = ctrl;
             }}
+            hoveredWallId={hoveredWallId}
+            onHoverWall={setHoveredWallId}
+            showWallTags={showWallTags}
+            onSelectWall={handleSelectWall}
           />
 
           {/* Floating Toggle Controls inside 3D Viewport */}
@@ -1178,6 +1062,20 @@ export default function StudioPage() {
             >
               <PanelLeft className="size-3.5" />
               <span className="text-[11px] hidden md:inline">Catálogo</span>
+            </button>
+
+            <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+            <button
+              onClick={() => setShowRaycastLine((prev) => !prev)}
+              className={`p-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all ${showRaycastLine
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-inner'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
+              title="Alternar Linha de Raycast de Alinhamento (Ctrl + Shift + L)"
+            >
+              <Crosshair className={`size-3.5 ${showRaycastLine ? 'text-cyan-400' : ''}`} />
+              <span className="text-[11px] hidden md:inline">Raycast</span>
             </button>
 
             <div className="w-px h-4 bg-white/10 mx-0.5" />
@@ -1242,6 +1140,10 @@ export default function StudioPage() {
             onToggleAutoTransparency={setAutoTransparency}
             transformMode={transformMode}
             onTransformModeChange={setTransformMode}
+            hoveredWallId={hoveredWallId}
+            onHoverWall={setHoveredWallId}
+            showWallTags={showWallTags}
+            onToggleWallTags={() => setShowWallTags((prev) => !prev)}
           />
         </div>
       </div>
@@ -1254,9 +1156,9 @@ export default function StudioPage() {
           </span>
           <div className="flex gap-1.5">
             {[
-              { id: 'iso', label: 'Isométrica 3D', pos: { x: 5.5, y: 4.5, z: 5.5, fov: 50 } },
-              { id: 'top', label: 'Planta Baixa (Top)', pos: { x: 0, y: 7.5, z: 0.05, fov: 38 } },
-              { id: 'front', label: 'Elevação Frontal', pos: { x: 0, y: 1.5, z: 6.5, fov: 45 } },
+              { id: 'iso', label: 'Isométrica 3D', pos: { x: 5.5, y: 4.5, z: 5.5, targetX: 0, targetY: room.height * 0.4, targetZ: 0, fov: 50 } },
+              { id: 'top', label: 'Planta Baixa (Top)', pos: { x: 0, y: 7.5, z: 0.05, targetX: 0, targetY: 0, targetZ: 0, fov: 38 } },
+              { id: 'front', label: 'Elevação Frontal', pos: { x: 0, y: 1.5, z: 6.5, targetX: 0, targetY: room.height * 0.4, targetZ: 0, fov: 45 } },
             ].map((v) => (
               <button
                 key={v.id}
@@ -1329,6 +1231,9 @@ export default function StudioPage() {
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+D</kbd> Duplicar</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Del</kbd> Excluir</span>
             <span><kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Esc</kbd> Desmarcar</span>
+            <span className={showRaycastLine ? 'text-cyan-400 font-bold' : ''}>
+              <kbd className="px-1 py-0.5 rounded bg-white/10 text-white font-mono">Ctrl+Shift+L</kbd> Raycast {showRaycastLine ? '(ON)' : ''}
+            </span>
           </div>
           <span className="flex items-center gap-1.5 text-primary font-semibold uppercase tracking-widest">
             <Monitor className="size-3" /> WebGL 2.0 PBR
@@ -1396,6 +1301,20 @@ export default function StudioPage() {
           setSelectedUid(uid);
           setIsCartOpen(false);
           setCartInitialUid(null);
+        }}
+      />
+
+      {/* 2D to 3D Floor Planner Modal */}
+      <FloorPlannerModal
+        isOpen={isFloorPlannerOpen}
+        onClose={() => setIsFloorPlannerOpen(false)}
+        currentRoom={room}
+        onApplyToProject={(updatedRoom, wallSummary) => {
+          pushHistory();
+          setRoom(updatedRoom);
+          setIsSaved(false);
+          setSaveToast(wallSummary || 'Planta 2D aplicada ao 3D com sucesso!');
+          setTimeout(() => setSaveToast(null), 4000);
         }}
       />
     </div>

@@ -52,8 +52,13 @@ import AiRenderModal from '../../studio/components/AiRenderModal';
 import PanoramaViewerModal from '../../studio/components/PanoramaViewerModal';
 import { CATALOG, FLOOR_PBR_PRESETS, WALL_PBR_PRESETS } from '../../studio/lib/furniture-data';
 import { ROOM_TEMPLATES, RoomTemplatePreset } from '../../studio/lib/room-templates';
-import { FurnitureInstance, FurnitureSpec, RoomSettings } from '../../studio/types/furniture';
+import { FurnitureInstance, FurnitureSpec, RoomSettings, CameraSettingsData } from '../../studio/types/furniture';
 import { getAutoSavedProject, saveAutoSaveState, saveProject } from '../../studio/lib/project-storage';
+import {
+  DEFAULT_SCENE_ROOM,
+  DEFAULT_SCENE_FURNITURE,
+  DEFAULT_SCENE_CAMERA,
+} from '../../studio/lib/default-scene-preset';
 
 type MobileStudioTab = 'catalog' | 'properties' | 'room' | 'lighting' | 'cart';
 type JoystickMode = 'object' | 'camera';
@@ -107,63 +112,16 @@ export default function MobileStudioPage() {
   const [isSavedRecently, setIsSavedRecently] = useState<boolean>(false);
 
   // 3D Scene States
-  const [furniture, setFurniture] = useState<FurnitureInstance[]>([]);
+  const [furniture, setFurniture] = useState<FurnitureInstance[]>(() =>
+    enrichFurnitureWithCatalog(DEFAULT_SCENE_FURNITURE)
+  );
   const [selectedUid, setSelectedUid] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [activeWallSide, setActiveWallSide] = useState<'back' | 'front' | 'left' | 'right'>('back');
 
-  const [room, setRoom] = useState<RoomSettings>({
-    width: 4.8,
-    depth: 3.6,
-    height: 2.7,
-    floorColor: '#ffffff',
-    floorTextureUrl: '/textures/floor-porcelain.webp',
-    floorTileX: 4,
-    floorTileY: 4,
-    floorRoughness: 0.15,
-    floorMetalness: 0.05,
-    walls: {
-      back: {
-        color: '#ffffff',
-        textureUrl: '/textures/subway-tile.webp',
-        tileX: 4,
-        tileY: 2,
-        roughness: 0.18,
-        metalness: 0.05,
-      },
-      front: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
-      left: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
-      right: { color: '#f8fafc', tileX: 1, tileY: 1, roughness: 0.9, metalness: 0 },
-    },
-    openings: [],
-    lightIntensity: 2.25,
-    exposure: 1.75,
-    environmentPreset: 'hdr_144',
-    reflectionOpacity: 0.05,
-    areaLight: {
-      enabled: false,
-      intensity: 2.0,
-      width: 2.2,
-      height: 1.6,
-      color: '#ffffff',
-      showHelper: false,
-    },
-    hdrSettings: {
-      intensity: 0.4,
-      rotation: 50,
-      showBackground: true,
-      backgroundBlur: 0.3,
-      disableManualLights: false,
-    },
-  });
+  const [room, setRoom] = useState<RoomSettings>(() => DEFAULT_SCENE_ROOM);
 
-  const [cameraSettings, setCameraSettings] = useState({
-    id: 'iso',
-    x: 5.5,
-    y: 4.5,
-    z: 5.5,
-    fov: 45,
-  });
+  const [cameraSettings, setCameraSettings] = useState<CameraSettingsData>(() => DEFAULT_SCENE_CAMERA);
 
   // Apply room template preset
   const handleApplyTemplate = useCallback(
@@ -699,6 +657,7 @@ export default function MobileStudioPage() {
           onSelectOpening={setSelectedOpeningId}
           onUpdatePosition={handleUpdatePosition}
           cameraSettings={cameraSettings}
+          onCameraChange={setCameraSettings}
           showGrid={false}
           snapOn={true}
           collisionOn={true}

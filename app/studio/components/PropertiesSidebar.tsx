@@ -56,6 +56,10 @@ interface PropertiesSidebarProps {
   onGizmoModeChange?: (mode: 'translate' | 'rotate') => void;
   transformMode?: 'locked' | 'translate' | 'rotate_y' | 'rotate_full';
   onTransformModeChange?: (mode: 'locked' | 'translate' | 'rotate_y' | 'rotate_full') => void;
+  hoveredWallId?: string | null;
+  onHoverWall?: (wallId: string | null) => void;
+  showWallTags?: boolean;
+  onToggleWallTags?: () => void;
 }
 
 export default function PropertiesSidebar({
@@ -83,6 +87,10 @@ export default function PropertiesSidebar({
   onGizmoModeChange,
   transformMode = 'locked',
   onTransformModeChange,
+  hoveredWallId,
+  onHoverWall,
+  showWallTags = true,
+  onToggleWallTags,
 }: PropertiesSidebarProps) {
   const [activeWallTab, setActiveWallTab] = useState<keyof RoomSettings['walls']>('back');
   const [sidebarTab, setSidebarTab] = useState<'item' | 'room'>('item');
@@ -101,8 +109,10 @@ export default function PropertiesSidebar({
   if (selectedOpening) {
     const isDoor = selectedOpening.type.startsWith('door');
     const Icon = isDoor ? DoorOpen : AppWindow;
-    const currentWallLength =
-      selectedOpening.wallSide === 'back' || selectedOpening.wallSide === 'front'
+    const customWall = room.customWalls?.find((w) => w.id === selectedOpening.wallSide);
+    const currentWallLength = customWall
+      ? Math.max(0.1, Math.hypot(customWall.end.x - customWall.start.x, customWall.end.y - customWall.start.y))
+      : selectedOpening.wallSide === 'back' || selectedOpening.wallSide === 'front'
         ? room.width
         : room.depth;
 
@@ -138,7 +148,9 @@ export default function PropertiesSidebar({
                 {selectedOpening.name}
               </h2>
               <span className="text-[10px] text-on-surface-variant font-mono">
-                Parede: {selectedOpening.wallSide.toUpperCase()}
+                {customWall
+                  ? `Parede ${room.customWalls!.findIndex((w) => w.id === selectedOpening.wallSide) + 1} (${currentWallLength.toFixed(2)}m)`
+                  : `Parede: ${(selectedOpening.wallSide || 'back').toUpperCase()}`}
               </span>
             </div>
           </div>
@@ -180,30 +192,97 @@ export default function PropertiesSidebar({
 
         {/* Parede Associada */}
         <div className="space-y-2">
-          <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
-            <Layers className="size-3.5 text-primary" /> Parede Instalada
-          </span>
-          <div className="grid grid-cols-4 gap-1 bg-white/5 p-1 rounded-xl">
-            {(['back', 'front', 'left', 'right'] as const).map((side) => {
-              const labels: Record<WallSide, string> = {
-                back: 'Traseira',
-                front: 'Frontal',
-                left: 'Esquerda',
-                right: 'Direita',
-              };
-              const isActive = selectedOpening.wallSide === side;
-              return (
-                <button
-                  key={side}
-                  onClick={() => onUpdateOpening?.(selectedOpening.id, { wallSide: side })}
-                  className={`py-1 text-[10px] font-semibold rounded-lg transition-all ${isActive ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-white'
-                    }`}
-                >
-                  {labels[side]}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="size-3.5 text-primary" /> Parede Instalada
+            </span>
+            {onToggleWallTags && (
+              <button
+                type="button"
+                onClick={onToggleWallTags}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
+                  showWallTags
+                    ? 'bg-primary/20 text-primary border border-primary/40'
+                    : 'bg-white/5 text-on-surface-variant hover:text-white border border-white/10'
+                }`}
+                title="Exibir/Ocultar números das paredes no espaço 3D"
+              >
+                <Eye className="size-3" />
+                <span>Tags 3D</span>
+              </button>
+            )}
           </div>
+          {room.customWalls && room.customWalls.length > 0 ? (
+            <div className="grid grid-cols-2 gap-1.5 bg-white/5 p-1.5 rounded-xl max-h-52 overflow-y-auto">
+              {room.customWalls.map((w, idx) => {
+                const wallId = w.id || `w_${idx}`;
+                const wLen = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+                const isActive = selectedOpening.wallSide === wallId;
+                const isHovered = hoveredWallId === wallId;
+                return (
+                  <button
+                    key={wallId}
+                    onClick={() => onUpdateOpening?.(selectedOpening.id, { wallSide: wallId })}
+                    onMouseEnter={() => onHoverWall?.(wallId)}
+                    onMouseLeave={() => onHoverWall?.(null)}
+                    className={`px-2.5 py-2 text-[11px] font-semibold rounded-lg transition-all text-left flex items-center justify-between gap-1.5 border ${
+                      isActive
+                        ? 'bg-primary text-white shadow-md shadow-primary/30 border-primary/60 ring-1 ring-white/30'
+                        : isHovered
+                        ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400/50 scale-[1.02]'
+                        : 'bg-white/5 text-on-surface-variant hover:text-white hover:bg-white/10 border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className={`size-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                          isActive
+                            ? 'bg-white text-primary'
+                            : isHovered
+                            ? 'bg-cyan-400 text-slate-900 font-black'
+                            : 'bg-white/15 text-white'
+                        }`}
+                      >
+                        P{idx + 1}
+                      </span>
+                      <span className="truncate text-xs">Parede {idx + 1}</span>
+                    </div>
+                    <span className="text-[10px] font-mono shrink-0 opacity-80">{wLen.toFixed(2)}m</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-1 bg-white/5 p-1 rounded-xl">
+              {(['back', 'front', 'left', 'right'] as const).map((side, idx) => {
+                const labels: Record<string, string> = {
+                  back: 'P1 Traseira',
+                  front: 'P2 Frontal',
+                  left: 'P3 Esquerda',
+                  right: 'P4 Direita',
+                };
+                const isActive = selectedOpening.wallSide === side;
+                const isHovered = hoveredWallId === side;
+                return (
+                  <button
+                    key={side}
+                    onClick={() => onUpdateOpening?.(selectedOpening.id, { wallSide: side })}
+                    onMouseEnter={() => onHoverWall?.(side)}
+                    onMouseLeave={() => onHoverWall?.(null)}
+                    className={`py-1.5 text-[10px] font-semibold rounded-lg transition-all ${
+                      isActive
+                        ? 'bg-primary text-white shadow-sm ring-1 ring-white/30'
+                        : isHovered
+                        ? 'bg-cyan-500/25 text-cyan-200'
+                        : 'text-on-surface-variant hover:text-white'
+                    }`}
+                  >
+                    {labels[side] || side}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Posição na Parede (0% a 100%) */}
@@ -828,7 +907,7 @@ export default function PropertiesSidebar({
                 { id: 'dark_studio', label: 'Estúdio Dark', desc: 'Fundo Dark Slate', icon: '🏢' },
                 { id: 'clean_studio', label: 'Estúdio Claro', desc: 'Clean Studio', icon: '☀️' },
               ].map((p) => {
-                const isActive = (room.environmentPreset || 'dark_studio') === p.id;
+                const isActive = (room.environmentPreset || 'hdr_144') === p.id;
                 return (
                   <button
                     key={p.id}

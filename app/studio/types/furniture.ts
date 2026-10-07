@@ -52,7 +52,7 @@ export interface CatalogCategory {
   items: FurnitureSpec[];
 }
 
-export type WallSide = 'back' | 'front' | 'left' | 'right';
+export type WallSide = 'back' | 'front' | 'left' | 'right' | string;
 
 export type WallOpeningType =
   | 'door-hinged'
@@ -121,6 +121,21 @@ export interface HdrSettings {
   disableManualLights?: boolean; // 100% pure HDR IBL without artificial directional lights
 }
 
+export interface BackgroundFloorPlanConfig {
+  url: string;
+  visible: boolean;
+  opacity: number; // 0.1 to 1.0 (default 0.65)
+  x: number; // center position X in meters (default 0)
+  y: number; // center position Y in meters (default 0)
+  width: number; // real-world width in meters (default 10.0m)
+  rotation: number; // in degrees (0, 90, 180, 270)
+  cropLeft: number; // 0 to 50 %
+  cropRight: number; // 0 to 50 %
+  cropTop: number; // 0 to 50 %
+  cropBottom: number; // 0 to 50 %
+  lock: boolean;
+}
+
 export interface RoomSettings {
   width: number;
   depth: number;
@@ -144,6 +159,69 @@ export interface RoomSettings {
   environmentPreset?: EnvironmentPreset;
   exposure?: number;
   hdrSettings?: HdrSettings;
+  floorplan2d?: Floorplan2DData;
+  customWalls?: CustomWall[];
+  customFloors?: CustomFloor[];
+  backgroundFloorPlan?: BackgroundFloorPlanConfig;
+}
+
+export interface CustomWall {
+  id: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  thickness?: number;
+  height?: number;
+}
+
+export interface CustomFloor {
+  id: string;
+  points: Array<{ x: number; y: number }>;
+  area?: number;
+  name?: string;
+}
+
+export interface Floorplan2DCorner {
+  id: string;
+  x: number; // cm
+  y: number; // cm
+}
+
+export interface Floorplan2DOpening {
+  id: string;
+  wallId: string;
+  type: WallOpeningType;
+  name: string;
+  position: number; // 0..1 along the wall
+  width: number; // cm
+  height: number; // cm
+  sillHeight: number; // cm
+}
+
+export interface Floorplan2DWall {
+  id: string;
+  corner1Id: string;
+  corner2Id: string;
+  thickness: number; // cm (e.g. 15cm)
+  side?: WallSide;
+}
+
+export interface Floorplan2DData {
+  corners: Floorplan2DCorner[];
+  walls: Floorplan2DWall[];
+  openings: Floorplan2DOpening[];
+  ceilingHeight: number; // cm (e.g. 260cm)
+  roomName?: string;
+}
+
+export interface CameraSettingsData {
+  id?: string;
+  x: number;
+  y: number;
+  z: number;
+  targetX?: number;
+  targetY?: number;
+  targetZ?: number;
+  fov?: number;
 }
 
 export interface StudioProject {
@@ -154,12 +232,8 @@ export interface StudioProject {
   thumbnailUrl?: string;
   room: RoomSettings;
   furniture: FurnitureInstance[];
-  cameraSettings?: {
-    id: string;
-    x: number;
-    y: number;
-    z: number;
-    fov: number;
-  };
+  floorplan2d?: Floorplan2DData;
+  cameraSettings?: CameraSettingsData;
 }
+
 
