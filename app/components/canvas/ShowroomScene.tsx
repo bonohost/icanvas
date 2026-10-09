@@ -302,7 +302,7 @@ export default function ShowroomScene() {
                 el.object3D.scale.set(1.0, 1.0, 1.0);
               };
 
-              this.onClick = (evt: any) => {
+              this.triggerAction = (evt: any) => {
                 evt?.stopPropagation?.();
                 window.dispatchEvent(
                   new CustomEvent('carousel-action', {
@@ -311,15 +311,84 @@ export default function ShowroomScene() {
                 );
               };
 
+              // Escutar múltiplos tipos de eventos de clique e gatilho do WebXR / Quest 2 / Mouse
+              const triggerEvents = [
+                'click',
+                'mousedown',
+                'triggerdown',
+                'gripdown',
+                'pinchstarted',
+                'select',
+                'selectstart',
+              ];
+
+              triggerEvents.forEach((evtName) => {
+                el.addEventListener(evtName, this.triggerAction);
+              });
+
               el.addEventListener('mouseenter', this.onMouseEnter);
               el.addEventListener('mouseleave', this.onMouseLeave);
-              el.addEventListener('click', this.onClick);
             },
             remove() {
               const el = this.el;
+              const triggerEvents = [
+                'click',
+                'mousedown',
+                'triggerdown',
+                'gripdown',
+                'pinchstarted',
+                'select',
+                'selectstart',
+              ];
+              triggerEvents.forEach((evtName) => {
+                el.removeEventListener(evtName, this.triggerAction);
+              });
               el.removeEventListener('mouseenter', this.onMouseEnter);
               el.removeEventListener('mouseleave', this.onMouseLeave);
-              el.removeEventListener('click', this.onClick);
+            },
+          });
+        }
+
+        // Componente dedicado para garantir captura de clique do controlador no WebXR / Quest 2
+        if (!AFRAME.components['vr-controller-interact']) {
+          AFRAME.registerComponent('vr-controller-interact', {
+            init() {
+              const el = this.el;
+
+              const handleTrigger = (evt: any) => {
+                const raycaster = el.components?.raycaster;
+                if (!raycaster || !raycaster.intersectedEls || raycaster.intersectedEls.length === 0) return;
+
+                for (const targetEl of raycaster.intersectedEls) {
+                  let curr: any = targetEl;
+                  while (curr && curr !== el.sceneEl) {
+                    if (curr.components && curr.components['carousel-trigger']) {
+                      const action = curr.components['carousel-trigger'].data.action;
+                      window.dispatchEvent(
+                        new CustomEvent('carousel-action', {
+                          detail: { action },
+                        })
+                      );
+                      return;
+                    }
+                    curr = curr.parentElement;
+                  }
+                }
+              };
+
+              const controllerEvents = [
+                'triggerdown',
+                'gripdown',
+                'select',
+                'selectstart',
+                'click',
+                'pinchstarted',
+                'buttondown',
+              ];
+
+              controllerEvents.forEach((evtName) => {
+                el.addEventListener(evtName, handleTrigger);
+              });
             },
           });
         }
@@ -1349,23 +1418,31 @@ export default function ShowroomScene() {
               ></a-cursor>
             </a-camera>
 
-            {/* CONTROLADORES DO QUEST 2 */}
+            {/* CONTROLADORES DO QUEST 2 / WEBXR */}
             <a-entity
               id="rightHand"
               laser-controls="hand: right"
-              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9"
-              oculus-touch-controls="hand: right"
+              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
+              vr-controller-interact
             ></a-entity>
             <a-entity
               id="leftHand"
               laser-controls="hand: left"
-              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9"
-              oculus-touch-controls="hand: left"
+              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
+              vr-controller-interact
             ></a-entity>
 
-            {/* HAND TRACKING */}
-            <a-entity hand-tracking-controls="hand: right"></a-entity>
-            <a-entity hand-tracking-controls="hand: left"></a-entity>
+            {/* HAND TRACKING QUEST 2 (PINCH GESTURE) */}
+            <a-entity
+              hand-tracking-controls="hand: right"
+              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
+              vr-controller-interact
+            ></a-entity>
+            <a-entity
+              hand-tracking-controls="hand: left"
+              raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
+              vr-controller-interact
+            ></a-entity>
           </a-entity>
         </a-scene>
       )}
