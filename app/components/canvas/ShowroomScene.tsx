@@ -393,6 +393,84 @@ export default function ShowroomScene() {
           });
         }
 
+        // Three.js Native WebXR Controller Raycasting (Mesma arquitetura do InteractiveGroup / WebXR Sandbox)
+        if (!AFRAME.components['webxr-controller-manager']) {
+          AFRAME.registerComponent('webxr-controller-manager', {
+            init() {
+              const sceneEl = this.el;
+              const THREE = (window as any).THREE;
+              if (!THREE) return;
+
+              const raycaster = new THREE.Raycaster();
+              const tempMatrix = new THREE.Matrix4();
+              let lastSelectTime = 0;
+
+              const onSelect = (event: any) => {
+                const now = performance.now();
+                if (now - lastSelectTime < 300) return; // Debounce 300ms
+                lastSelectTime = now;
+
+                const controller = event.target;
+                if (!controller) return;
+
+                controller.updateMatrixWorld(true);
+                tempMatrix.identity().extractRotation(controller.matrixWorld);
+                raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+                const leftEl = document.querySelector('#leftArrowEntity') as any;
+                const rightEl = document.querySelector('#rightArrowEntity') as any;
+
+                const checkList = [
+                  { el: leftEl, action: 'prev' },
+                  { el: rightEl, action: 'next' },
+                ];
+
+                for (const item of checkList) {
+                  if (item.el && item.el.object3D) {
+                    const intersects = raycaster.intersectObject(item.el.object3D, true);
+                    if (intersects && intersects.length > 0) {
+                      window.dispatchEvent(
+                        new CustomEvent('carousel-action', {
+                          detail: { action: item.action },
+                        })
+                      );
+                      return;
+                    }
+                  }
+                }
+              };
+
+              const setupWebXR = () => {
+                const renderer = sceneEl.renderer;
+                if (!renderer || !renderer.xr) return;
+
+                const controller0 = renderer.xr.getController(0);
+                const controller1 = renderer.xr.getController(1);
+
+                if (controller0) {
+                  controller0.removeEventListener('select', onSelect);
+                  controller0.removeEventListener('selectstart', onSelect);
+                  controller0.addEventListener('select', onSelect);
+                  controller0.addEventListener('selectstart', onSelect);
+                }
+
+                if (controller1) {
+                  controller1.removeEventListener('select', onSelect);
+                  controller1.removeEventListener('selectstart', onSelect);
+                  controller1.addEventListener('select', onSelect);
+                  controller1.addEventListener('selectstart', onSelect);
+                }
+              };
+
+              sceneEl.addEventListener('enter-vr', setupWebXR);
+              sceneEl.addEventListener('loaded', setupWebXR);
+              setTimeout(setupWebXR, 500);
+              setTimeout(setupWebXR, 1500);
+            },
+          });
+        }
+
         if (!AFRAME.components['gltf-opacity-sync']) {
           AFRAME.registerComponent('gltf-opacity-sync', {
             init() {
@@ -1275,6 +1353,7 @@ export default function ShowroomScene() {
           vr-mode-ui="enabled: true"
           cursor="rayOrigin: mouse; fuse: false"
           raycaster="objects: .clickable"
+          webxr-controller-manager
         >
           {/* Imagem 360° de alta resolução: escritorio4.jpg */}
           <a-sky src="/textures/360/escritorio4.jpg" rotation="0 -130 0"></a-sky>
@@ -1346,6 +1425,7 @@ export default function ShowroomScene() {
             {/* SETAS / TRIÂNGULOS AMARELOS INTERATIVOS */}
             {/* SETA ESQUERDA (ANTERIOR) */}
             <a-entity
+              id="leftArrowEntity"
               position={`${leftArrow.posX} ${leftArrow.posY} ${leftArrow.posZ}`}
               rotation={`${leftArrow.rotX} ${leftArrow.rotY} ${leftArrow.rotZ}`}
               scale={`${leftArrow.scale} ${leftArrow.scale} ${leftArrow.scale}`}
@@ -1372,6 +1452,7 @@ export default function ShowroomScene() {
 
             {/* SETA DIREITA (PRÓXIMO) */}
             <a-entity
+              id="rightArrowEntity"
               position={`${rightArrow.posX} ${rightArrow.posY} ${rightArrow.posZ}`}
               rotation={`${rightArrow.rotX} ${rightArrow.rotY} ${rightArrow.rotZ}`}
               scale={`${rightArrow.scale} ${rightArrow.scale} ${rightArrow.scale}`}
