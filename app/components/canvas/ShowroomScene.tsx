@@ -293,17 +293,24 @@ export default function ShowroomScene() {
             },
             init() {
               const el = this.el;
+              this.isHovered = false;
+              this.lastTriggerTime = 0;
 
               this.onMouseEnter = () => {
+                this.isHovered = true;
                 el.object3D.scale.set(1.25, 1.25, 1.25);
               };
 
               this.onMouseLeave = () => {
+                this.isHovered = false;
                 el.object3D.scale.set(1.0, 1.0, 1.0);
               };
 
-              this.triggerAction = (evt: any) => {
-                evt?.stopPropagation?.();
+              this.fireAction = () => {
+                const now = performance.now();
+                if (now - this.lastTriggerTime < 350) return; // Debounce 350ms
+                this.lastTriggerTime = now;
+
                 window.dispatchEvent(
                   new CustomEvent('carousel-action', {
                     detail: { action: this.data.action },
@@ -311,7 +318,7 @@ export default function ShowroomScene() {
                 );
               };
 
-              // Escutar múltiplos tipos de eventos de clique e gatilho do WebXR / Quest 2 / Mouse
+              // 1. Ouvintes de eventos no próprio elemento
               const triggerEvents = [
                 'click',
                 'mousedown',
@@ -322,73 +329,66 @@ export default function ShowroomScene() {
                 'selectstart',
               ];
 
+              this.handleEvent = (evt: any) => {
+                evt?.stopPropagation?.();
+                this.fireAction();
+              };
+
               triggerEvents.forEach((evtName) => {
-                el.addEventListener(evtName, this.triggerAction);
+                el.addEventListener(evtName, this.handleEvent);
               });
 
               el.addEventListener('mouseenter', this.onMouseEnter);
               el.addEventListener('mouseleave', this.onMouseLeave);
-            },
-            remove() {
-              const el = this.el;
-              const triggerEvents = [
-                'click',
-                'mousedown',
-                'triggerdown',
-                'gripdown',
-                'pinchstarted',
-                'select',
-                'selectstart',
-              ];
-              triggerEvents.forEach((evtName) => {
-                el.removeEventListener(evtName, this.triggerAction);
-              });
-              el.removeEventListener('mouseenter', this.onMouseEnter);
-              el.removeEventListener('mouseleave', this.onMouseLeave);
-            },
-          });
-        }
 
-        // Componente dedicado para garantir captura de clique do controlador no WebXR / Quest 2
-        if (!AFRAME.components['vr-controller-interact']) {
-          AFRAME.registerComponent('vr-controller-interact', {
-            init() {
-              const el = this.el;
-
-              const handleTrigger = (evt: any) => {
-                const raycaster = el.components?.raycaster;
-                if (!raycaster || !raycaster.intersectedEls || raycaster.intersectedEls.length === 0) return;
-
-                for (const targetEl of raycaster.intersectedEls) {
-                  let curr: any = targetEl;
-                  while (curr && curr !== el.sceneEl) {
-                    if (curr.components && curr.components['carousel-trigger']) {
-                      const action = curr.components['carousel-trigger'].data.action;
-                      window.dispatchEvent(
-                        new CustomEvent('carousel-action', {
-                          detail: { action },
-                        })
-                      );
-                      return;
-                    }
-                    curr = curr.parentElement;
-                  }
+              // 2. Ouvinte global enquanto o laser estiver sobre este elemento
+              this.handleGlobalEvent = () => {
+                if (this.isHovered) {
+                  this.fireAction();
                 }
               };
 
-              const controllerEvents = [
+              const globalEvents = [
                 'triggerdown',
                 'gripdown',
                 'select',
                 'selectstart',
-                'click',
                 'pinchstarted',
+                'abuttondown',
+                'xbuttondown',
                 'buttondown',
               ];
 
-              controllerEvents.forEach((evtName) => {
-                el.addEventListener(evtName, handleTrigger);
+              globalEvents.forEach((evt) => {
+                window.addEventListener(evt, this.handleGlobalEvent);
               });
+            },
+            tick() {
+              // 3. WebXR Gamepad Polling: Garante 100% de clique no Quest 2 ao apertar o gatilho
+              if (!this.isHovered) return;
+
+              const scene = this.el.sceneEl;
+              const session = (scene?.renderer as any)?.xr?.getSession?.();
+              if (!session || !session.inputSources) return;
+
+              for (const source of session.inputSources) {
+                if (source.gamepad && source.gamepad.buttons) {
+                  const triggerPressed = source.gamepad.buttons[0]?.pressed;
+                  const gripPressed = source.gamepad.buttons[1]?.pressed;
+                  const buttonPressed =
+                    source.gamepad.buttons[4]?.pressed || source.gamepad.buttons[5]?.pressed;
+
+                  if (triggerPressed || gripPressed || buttonPressed) {
+                    this.fireAction();
+                    break;
+                  }
+                }
+              }
+            },
+            remove() {
+              const el = this.el;
+              el.removeEventListener('mouseenter', this.onMouseEnter);
+              el.removeEventListener('mouseleave', this.onMouseLeave);
             },
           });
         }
@@ -1423,25 +1423,21 @@ export default function ShowroomScene() {
               id="rightHand"
               laser-controls="hand: right"
               raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
-              vr-controller-interact
             ></a-entity>
             <a-entity
               id="leftHand"
               laser-controls="hand: left"
               raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
-              vr-controller-interact
             ></a-entity>
 
             {/* HAND TRACKING QUEST 2 (PINCH GESTURE) */}
             <a-entity
               hand-tracking-controls="hand: right"
               raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
-              vr-controller-interact
             ></a-entity>
             <a-entity
               hand-tracking-controls="hand: left"
               raycaster="objects: .clickable; lineColor: #FACC15; lineOpacity: 0.9; far: 25"
-              vr-controller-interact
             ></a-entity>
           </a-entity>
         </a-scene>
