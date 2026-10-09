@@ -10,12 +10,14 @@ const HomeScene = lazy(() => import('./HomeScene'));
 const MugScene = lazy(() => import('./MugScene'));
 const SofaScene = lazy(() => import('./SofaScene'));
 const Viewer360Scene = lazy(() => import('./Viewer360Scene'));
+const ShowroomScene = lazy(() => import('./ShowroomScene'));
 
 const scenes = {
   '/': <HomeScene />,
   '/mug-simulator': <MugScene />,
   '/sofa-customizer': <SofaScene />,
   '/360-viewer': <Viewer360Scene />,
+  '/showroom': <ShowroomScene />,
 } as const;
 
 export default function Scene(): ReactElement | null {
@@ -30,6 +32,16 @@ export default function Scene(): ReactElement | null {
       <div className="fixed top-0 left-0 w-full h-full z-0">
         <Suspense fallback={null}>
           <Viewer360Scene />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (pathname === '/showroom') {
+    return (
+      <div className="fixed top-0 left-0 w-full h-full z-0">
+        <Suspense fallback={null}>
+          <ShowroomScene />
         </Suspense>
       </div>
     );

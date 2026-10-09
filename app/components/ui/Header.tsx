@@ -8,6 +8,7 @@ import ContactModal from './ContactModal';
 const navItems = [
   { href: '/mug-coffee', label: 'Mug Sim' },
   { href: '/360-viewer', label: 'View 360' },
+  { href: '/showroom', label: 'Showroom' },
   { href: '/studio', label: 'Planner 3D' },
 ];
 
