@@ -47,7 +47,7 @@ export default function Scene(): ReactElement | null {
     );
   }
 
-  if (pathname.startsWith('/mobile') || pathname === '/studio' || pathname === '/mug-coffee' || pathname.startsWith('/pitch') || pathname.startsWith('/invest')) {
+  if (pathname.startsWith('/mobile') || pathname === '/studio' || pathname === '/mug-coffee' || pathname === '/gallery360' || pathname.startsWith('/pitch') || pathname.startsWith('/invest')) {
     return null;
   }
 
