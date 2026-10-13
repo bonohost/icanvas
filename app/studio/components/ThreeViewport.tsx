@@ -12,7 +12,7 @@ import { FurnitureInstance, RoomSettings, WallSettings, FurnitureSpec, WallOpeni
 import { buildFurniture } from '../lib/three-builders';
 import { buildParametricWallGroup, buildOpening3D, calculateAdjustedWallJunctions } from '../lib/wall-builders';
 import { captureEquirectangularPanorama } from '../lib/equirectangularExporter';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Lock, Unlock } from 'lucide-react';
 
 export interface CameraController {
   zoom: (factor: number) => void;
@@ -28,6 +28,7 @@ interface ViewportProps {
   selectedUid: number | null;
   selectedOpeningId?: string | null;
   onSelectOpening?: (id: string | null) => void;
+  onToggleLockOpening?: (id: string) => void;
   onUpdatePosition: (uid: number, x: number, z: number, by?: number, rot?: number) => void;
   onUpdateOpeningPosition?: (id: string, newPos: number, newWallSide?: WallSide) => void;
   onDropFurniture?: (spec: FurnitureSpec, position: { x: number; z: number; by?: number; rot?: number }) => void;
@@ -202,6 +203,7 @@ export default function ThreeViewport({
   selectedUid,
   selectedOpeningId,
   onSelectOpening,
+  onToggleLockOpening,
   onUpdatePosition,
   onUpdateOpeningPosition,
   onDropFurniture,
@@ -360,6 +362,11 @@ export default function ThreeViewport({
   useEffect(() => {
     onSelectOpeningRef.current = onSelectOpening;
   }, [onSelectOpening]);
+
+  const onToggleLockOpeningRef = useRef(onToggleLockOpening);
+  useEffect(() => {
+    onToggleLockOpeningRef.current = onToggleLockOpening;
+  }, [onToggleLockOpening]);
 
   const onUpdateOpeningPositionRef = useRef(onUpdateOpeningPosition);
   useEffect(() => {
@@ -1181,6 +1188,44 @@ export default function ThreeViewport({
             badgeEl.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translate(-50%, -100%)`;
           }
         });
+
+        // Update 2D Door & Window Lock Pins on screen
+        const openingLockEls = container.querySelectorAll<HTMLElement>('[data-opening-lock-id]');
+        if (openingLockEls.length > 0 && wallsGroupRef.current) {
+          const tempPos = new THREE.Vector3();
+          openingLockEls.forEach((pinEl) => {
+            const opId = pinEl.getAttribute('data-opening-lock-id');
+            if (!opId) return;
+            const opening = (roomRef.current.openings || []).find((o) => o.id === opId);
+            if (!opening) {
+              pinEl.style.opacity = '0';
+              pinEl.style.pointerEvents = 'none';
+              return;
+            }
+
+            const opMesh = wallsGroupRef.current?.getObjectByName(`opening_${opId}`);
+            if (!opMesh) {
+              pinEl.style.opacity = '0';
+              pinEl.style.pointerEvents = 'none';
+              return;
+            }
+
+            tempPos.set(0, (opening.height || 2.1) + 0.16, 0);
+            opMesh.localToWorld(tempPos);
+            tempPos.project(cameraRef.current!);
+
+            if (tempPos.z > 1.0 || tempPos.z < -1.0) {
+              pinEl.style.opacity = '0';
+              pinEl.style.pointerEvents = 'none';
+            } else {
+              const screenX = (tempPos.x * 0.5 + 0.5) * w;
+              const screenY = (-(tempPos.y * 0.5) + 0.5) * h;
+              pinEl.style.opacity = '1';
+              pinEl.style.pointerEvents = 'auto';
+              pinEl.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translate(-50%, -100%)`;
+            }
+          });
+        }
       }
     };
     animate();
@@ -2137,13 +2182,16 @@ export default function ThreeViewport({
           onSelectOpeningRef.current?.(opId);
           onSelectRef.current?.(null);
 
+          const currentOp = (roomRef.current.openings || []).find((o) => o.id === opId);
+          const isOpeningLocked = !!currentOp?.locked;
+
           // Find wall parent
           let wallGroup: any = top.parent;
           while (wallGroup && !wallGroup.userData?.isWall && wallGroup.parent) {
             wallGroup = wallGroup.parent;
           }
 
-          if (wallGroup) {
+          if (wallGroup && !isOpeningLocked) {
             onDragStartRef.current?.();
             dragOpening = {
               id: opId,
@@ -2158,7 +2206,7 @@ export default function ThreeViewport({
           if (selectionHelperRef.current) sceneRef.current?.remove(selectionHelperRef.current);
           wallsGroupRef.current.updateMatrixWorld(true);
           top.updateWorldMatrix(true, true);
-          const boxHelper = new THREE.BoxHelper(top, '#f59e0b');
+          const boxHelper = new THREE.BoxHelper(top, isOpeningLocked ? '#f59e0b' : '#06b6d4');
           sceneRef.current?.add(boxHelper);
           selectionHelperRef.current = boxHelper;
           return;
@@ -2221,7 +2269,10 @@ export default function ThreeViewport({
               const targetPos = Math.max(0.08, Math.min(0.92, localHit.x / wallLength + 0.5));
 
               if (selectedOpeningIdRef.current) {
-                onUpdateOpeningPositionRef.current?.(selectedOpeningIdRef.current, targetPos, clickedWallId);
+                const currentOp = (roomRef.current.openings || []).find((o) => o.id === selectedOpeningIdRef.current);
+                if (!currentOp?.locked) {
+                  onUpdateOpeningPositionRef.current?.(selectedOpeningIdRef.current, targetPos, clickedWallId);
+                }
               }
               onSelectWallRef.current?.(clickedWallId);
             }
@@ -3100,6 +3151,62 @@ export default function ThreeViewport({
                 </div>
               );
             })}
+        </div>
+      )}
+
+      {/* 2D Architectural Openings (Doors & Windows) Movement Lock/Unlock Overlay */}
+      {room.openings && room.openings.length > 0 && (
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+          {room.openings.map((opening) => {
+            const isLocked = !!opening.locked;
+            const isSelected = selectedOpeningId === opening.id;
+
+            return (
+              <div
+                key={opening.id}
+                data-opening-lock-id={opening.id}
+                className="absolute top-0 left-0 transition-opacity duration-150 pointer-events-auto"
+                style={{ opacity: 0 }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if (onSelectOpeningRef.current) onSelectOpeningRef.current(opening.id);
+                    if (onSelectRef.current) onSelectRef.current(null);
+                    if (onToggleLockOpeningRef.current) {
+                      onToggleLockOpeningRef.current(opening.id);
+                    }
+                  }}
+                  className={`group relative flex items-center justify-center rounded-full backdrop-blur-md shadow-2xl transition-all duration-300 cursor-pointer ${
+                    isLocked
+                      ? 'w-8 h-8 bg-amber-500/90 hover:bg-amber-600 text-white shadow-amber-500/50 border border-amber-300/80 ring-2 ring-amber-400/40 hover:scale-110'
+                      : 'w-8 h-8 bg-zinc-900/90 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/50 hover:border-emerald-400 shadow-black/90 hover:scale-110'
+                  } ${isSelected ? 'ring-2 ring-white scale-110 shadow-lg' : ''}`}
+                  title={`${opening.name} • ${
+                    isLocked
+                      ? 'Vão Bloqueado (Clique para destravar e mover)'
+                      : 'Vão Livre (Clique para travar movimentação no 3D)'
+                  }`}
+                >
+                  {/* Pulsing Radar Ring */}
+                  <span
+                    className={`absolute inset-0 rounded-full animate-ping pointer-events-none opacity-40 ${
+                      isLocked ? 'bg-amber-400/20' : 'bg-emerald-400/20'
+                    }`}
+                  />
+
+                  {/* Center Padlock Icon */}
+                  {isLocked ? (
+                    <Lock className="w-3.5 h-3.5 transition-transform group-hover:scale-110 drop-shadow" />
+                  ) : (
+                    <Unlock className="w-3.5 h-3.5 transition-transform group-hover:scale-110 drop-shadow" />
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

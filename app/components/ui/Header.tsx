@@ -55,12 +55,12 @@ export default function Header() {
             >
               Contato
             </button>
-            <Link
+            {/* <Link
               href="/mug-coffee"
               className="bg-primary-container text-on-primary-container font-button-md text-button-md px-6 py-2 rounded-DEFAULT hover:opacity-90 transition-opacity active:scale-95 transition-transform shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] cursor-pointer inline-flex items-center justify-center"
-            >
+            >s
               Começar
-            </Link>
+            </Link> */}
           </div>
         </div>
       </header>

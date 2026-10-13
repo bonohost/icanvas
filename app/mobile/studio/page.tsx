@@ -655,6 +655,14 @@ export default function MobileStudioPage() {
           selectedOpeningId={selectedOpeningId}
           onSelect={handleSelectObject}
           onSelectOpening={setSelectedOpeningId}
+          onToggleLockOpening={(id) => {
+            setRoom((prev) => ({
+              ...prev,
+              openings: (prev.openings || []).map((o) =>
+                o.id === id ? { ...o, locked: !o.locked } : o
+              ),
+            }));
+          }}
           onUpdatePosition={handleUpdatePosition}
           cameraSettings={cameraSettings}
           onCameraChange={setCameraSettings}

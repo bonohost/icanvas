@@ -84,6 +84,7 @@ export interface WallOpening {
   glassRoughness?: number; // 0.0 to 1.0
   mullionStyle?: WindowMullionStyle;
   leafOpenRatio?: number; // 0.0 to 1.0
+  locked?: boolean; // When true, prevents dragging or accidental moving in 3D scene
 }
 
 export interface WallSettings {

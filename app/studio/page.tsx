@@ -493,6 +493,7 @@ export default function StudioPage() {
         sillHeight: preset.sillHeight,
         frameColor: preset.frameColor,
         leafOpenRatio: 0.35,
+        locked: false,
       };
       setRoom((prev) => ({
         ...prev,
@@ -505,6 +506,26 @@ export default function StudioPage() {
     },
     [pushHistory, room.customWalls]
   );
+
+  const handleToggleLockOpening = useCallback((id: string) => {
+    setRoom((prev) => {
+      const target = (prev.openings || []).find((o) => o.id === id);
+      if (!target) return prev;
+      const nextLocked = !target.locked;
+      setSaveToast(
+        nextLocked
+          ? `Vão "${target.name}" travado contra movimentação.`
+          : `Vão "${target.name}" destravado para movimentação livre.`
+      );
+      setTimeout(() => setSaveToast(null), 2500);
+      return {
+        ...prev,
+        openings: (prev.openings || []).map((o) =>
+          o.id === id ? { ...o, locked: nextLocked } : o
+        ),
+      };
+    });
+  }, []);
 
   const handleUpdateOpening = useCallback((id: string, updates: Partial<WallOpening>) => {
     pushHistory();
@@ -981,6 +1002,7 @@ export default function StudioPage() {
             selectedUid={selectedUid}
             selectedOpeningId={selectedOpeningId}
             onSelectOpening={handleSelectOpening}
+            onToggleLockOpening={handleToggleLockOpening}
             onUpdatePosition={handleUpdatePosition}
             onUpdateOpeningPosition={handleUpdateOpeningPosition}
             onDropFurniture={handleAdd}

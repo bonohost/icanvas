@@ -157,6 +157,21 @@ export default function PropertiesSidebar({
 
           <div className="flex items-center gap-1">
             <button
+              onClick={() => onUpdateOpening?.(selectedOpening.id, { locked: !selectedOpening.locked })}
+              className={`p-1.5 rounded-lg transition-colors ${
+                selectedOpening.locked
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
+                  : 'bg-white/5 hover:bg-white/10 text-on-surface'
+              }`}
+              title={
+                selectedOpening.locked
+                  ? 'Vão Travado: Clique para destravar movimentação no 3D'
+                  : 'Vão Destravado: Clique para travar contra movimentação acidental'
+              }
+            >
+              {selectedOpening.locked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
+            </button>
+            <button
               onClick={() => onDuplicateOpening?.(selectedOpening.id)}
               className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface transition-colors"
               title="Duplicar Vão na Parede"
@@ -315,6 +330,29 @@ export default function PropertiesSidebar({
               Centralizar (50%)
             </button>
             <span>Fim ({currentWallLength.toFixed(1)}m)</span>
+          </div>
+
+          <div
+            onClick={() => onUpdateOpening?.(selectedOpening.id, { locked: !selectedOpening.locked })}
+            className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+              selectedOpening.locked
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {selectedOpening.locked ? (
+                <Lock className="size-3.5 text-amber-400" />
+              ) : (
+                <Unlock className="size-3.5 text-emerald-400" />
+              )}
+              <span className="text-[11px] font-medium">
+                {selectedOpening.locked ? 'Movimentação no 3D: Bloqueada' : 'Movimentação no 3D: Livre'}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono opacity-80 underline">
+              {selectedOpening.locked ? 'Destravar' : 'Travar'}
+            </span>
           </div>
         </div>
 
