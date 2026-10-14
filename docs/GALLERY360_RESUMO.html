@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>GALLERY360_RESUMO.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="resumo-t%C3%A9cnico-gallery-360--especifica%C3%A7%C3%B5es-para-passeio-virtual-360">Resumo Técnico: Gallery 360 &amp; Especificações para Passeio Virtual 360</h1>
+<p>Este documento reúne o estado da arte do módulo <strong>Gallery 360</strong> desenvolvido para o ecossistema <strong>iCanvas</strong>, detalhando as tecnologias empregadas, arquitetura 3D, recursos de UX/UI e as diretrizes para a evolução do módulo para o <strong>Passeio Virtual 360</strong> (com navegação por hotspots e marcação de objetos/POIs).</p>
+<hr>
+<h2 id="1-vis%C3%A3o-geral-do-gallery-360-atual">1. Visão Geral do Gallery 360 Atual</h2>
+<p>O <strong>Gallery 360</strong> é um visualizador e comparador imersivo de imagens equirretangulares (panoramas 360° em 4K/8K) focado em apresentações arquitetônicas, design de interiores e simulações de ambientes.</p>
+<h3 id="principais-diferenciais-implementados">Principais Diferenciais Implementados:</h3>
+<ul>
+<li><strong>Visualização Esférica Imersiva</strong>: Renderização WebGL em 60+ FPS com projeção invertida de fotos 360°.</li>
+<li><strong>Transição Suave por Transparência (Dual-Sphere Crossfade)</strong>: Comparação em tempo real entre duas cenas (ex: Antes x Depois, Dia x Noite, Variações de Decoração) usando interpolação contínua de opacidade.</li>
+<li><strong>Sistema de Dois Slots (Foto 1 &amp; Foto 2)</strong>: Atribuição flexível de qualquer imagem da galeria ou upload local para o Slot 1 (Base) ou Slot 2 (Camada de Transparência).</li>
+<li><strong>Controle Multi-Dispositivo</strong>: Suporte completo a mouse/trackpad (desktop), gestos de toque (mobile/tablet), giroscópio (Device Orientation) e headsets VR (WebXR e modo imersivo estéreo).</li>
+</ul>
+<hr>
+<h2 id="2-tecnologias-e-depend%C3%AAncias-utilizadas">2. Tecnologias e Dependências Utilizadas</h2>
+<h3 id="core--framework">Core &amp; Framework</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Tecnologia</th>
+<th style="text-align:left">Versão</th>
+<th style="text-align:left">Papel no Projeto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Next.js</strong></td>
+<td style="text-align:left"><code>16.2.12</code></td>
+<td style="text-align:left">Framework React com App Router, Turbopack, compilação otimizada e rotas de aplicação (<code>/gallery360</code>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>React</strong></td>
+<td style="text-align:left"><code>19.2.4</code></td>
+<td style="text-align:left">Biblioteca de UI com Hooks modernos (<code>useRef</code>, <code>useState</code>, <code>useCallback</code>, <code>useEffect</code>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>TypeScript</strong></td>
+<td style="text-align:left"><code>^5.0</code></td>
+<td style="text-align:left">Tipagem estática rigorosa para interfaces de dados de galeria e referências 3D.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="renderiza%C3%A7%C3%A3o-3d--webgl">Renderização 3D &amp; WebGL</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Tecnologia / Biblioteca</th>
+<th style="text-align:left">Versão</th>
+<th style="text-align:left">Utilização e Funcionalidade</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Three.js</strong></td>
+<td style="text-align:left"><code>^0.185.1</code></td>
+<td style="text-align:left">Motor principal do Gallery 360. Criação de cenas, esferas geométricas (<code>SphereGeometry</code>), materiais básicos com textura (<code>MeshBasicMaterial</code>), câmera perspectiva, manipulação de quaternions e render loop.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>@react-three/fiber</strong></td>
+<td style="text-align:left"><code>^9.6.1</code></td>
+<td style="text-align:left">Wrapper React para Three.js disponível na stack do iCanvas para cenas declarativas.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>@react-three/drei</strong></td>
+<td style="text-align:left"><code>^10.7.7</code></td>
+<td style="text-align:left">Utilitários 3D (helpers, controles de câmera e loaders de assets).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>A-Frame / aframe-react</strong></td>
+<td style="text-align:left"><code>^1.8.0</code> / <code>^4.4.0</code></td>
+<td style="text-align:left">Já integrado ao projeto (usado em protótipos de raycasting e arrasto de entidades 3D no <code>/360-viewer</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="estiliza%C3%A7%C3%A3o--ui">Estilização &amp; UI</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Tecnologia</th>
+<th style="text-align:left">Versão</th>
+<th style="text-align:left">Aplicação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Tailwind CSS</strong></td>
+<td style="text-align:left"><code>^4.0</code></td>
+<td style="text-align:left">Estilização utilitária de ponta, dock flutuante com <em>glassmorphism</em> (<code>backdrop-blur-2xl</code>), gradientes HSL e layouts flex/grid responsivos.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Lucide React</strong></td>
+<td style="text-align:left"><code>^1.43.0</code></td>
+<td style="text-align:left">Conjunto de ícones vetoriais modernos (Compass, Glasses/VR, Play/Pause, Upload, ArrowLeftRight, RotateCcw, Sparkles).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="apis-nativas-do-navegador-integradas">APIs Nativas do Navegador Integradas</h3>
+<ul>
+<li><strong>WebGL 2.0 Engine</strong>: Renderização gráfica acelerada por hardware.</li>
+<li><strong>HTML5 2D Canvas API</strong>: Geração dinâmica de placeholders visuais com tipografia e gradiente antes do carregamento completo de texturas pesadas.</li>
+<li><strong>DeviceOrientationEvent API</strong>: Controle giroscópico com cálculo de ângulo de tela (<code>window.screen.orientation</code>) e suporte a solicitação de permissão no iOS 13+ (<code>requestPermission</code>).</li>
+<li><strong>WebXR Device API</strong>: Detecção de sessões imersivas VR (<code>immersive-vr</code>) para óculos de realidade virtual.</li>
+<li><strong>Fullscreen API</strong>: Alternância nativa de tela cheia sem quebra de aspect ratio da câmera Three.js.</li>
+<li><strong>ResizeObserver API</strong>: Redimensionamento fluido do canvas Three.js baseado nas dimensões do elemento contêiner.</li>
+<li><strong>File API &amp; Blob Object URLs</strong>: Upload local de panoramas 360° em tempo de execução sem dependência de storage externo.</li>
+</ul>
+<hr>
+<h2 id="3-arquitetura-t%C3%A9cnica-do-gallery-360-gallery360viewertsx">3. Arquitetura Técnica do Gallery 360 (<code>Gallery360Viewer.tsx</code>)</h2>
+<h3 id="31-a-t%C3%A9cnica-dual-sphere-crossfade">3.1. A Técnica Dual-Sphere (Crossfade)</h3>
+<p>Ao contrário de visualizadores 360° tradicionais que utilizam apenas 1 esfera ou cubemap, o Gallery 360 emprega um sistema de <strong>duas esferas concêntricas invertidas</strong>:</p>
+<ul>
+<li><strong>Esfera 1 (Foto 1 - Base)</strong>: Raio <code>500</code>, escala invertida no eixo X <code>(-1, 1, 1)</code> para visualização interna, <code>mat1.opacity = 1</code> fixo.</li>
+<li><strong>Esfera 2 (Foto 2 - Topo)</strong>: Raio <code>499</code> (evita o problema de <em>z-fighting</em>), <code>transparent: true</code>, <code>opacity</code> atrelado ao estado <code>blendValue</code> (0.00 a 1.00) e <code>depthWrite: false</code> para transparência límpida.</li>
+<li><strong>Controle de Memória VRAM</strong>: Descarte proativo das texturas anteriores (<code>material.map.dispose()</code>) sempre que uma nova foto é carregada, prevenindo vazamentos de memória da GPU.</li>
+</ul>
+<h3 id="32-controle-de-c%C3%A2mera-e-matem%C3%A1tica-esf%C3%A9rica">3.2. Controle de Câmera e Matemática Esférica</h3>
+<ul>
+<li><strong>Posição da Câmera</strong>: Fixa no centro <code>(0, 0, 0)</code>.</li>
+<li><strong>Navegação Angular</strong>: Baseada em Latitude (<code>lat</code> entre -85° e 85°) e Longitude (<code>lon</code>).</li>
+<li><strong>Cálculo Cartesiano</strong>:
+$$\phi = \text{degToRad}(90 - lat)$$
+$$\theta = \text{degToRad}(lon)$$
+$$X = 500 \cdot \sin(\phi) \cdot \cos(\theta)$$
+$$Y = 500 \cdot \cos(\phi)$$
+$$Z = 500 \cdot \sin(\phi) \cdot \sin(\theta)$$
+$$\text{camera.lookAt}(X, Y, Z)$$</li>
+<li><strong>Zoom Dinâmico (FOV)</strong>: FOV interpolado suavemente (<code>targetFov</code> de 30° a 100° com atenuação de 10% por frame no render loop).</li>
+<li><strong>Giroscópio</strong>: Matriz de Euler <code>('YXZ')</code> convertida para Quaternion com compensação de orientação do aparelho.</li>
+</ul>
+<h3 id="33-interface-e-ux">3.3. Interface e UX</h3>
+<ul>
+<li><strong>Dock Inferior Flutuante</strong>:
+<ul>
+<li>Cards de Foto 1 e Foto 2 com indicador de slot ativo.</li>
+<li>Botão de upload local para cada slot.</li>
+<li>Botão de inversão instantânea (<em>Swap</em>) com ajuste dinâmico do slider (<code>blendValue = 1 - blendValue</code>).</li>
+<li>Slider contínuo de transição com botões de salto direto (0% ou 100%).</li>
+<li>Modo automático de transição oscilante (<em>ping-pong</em> a 40ms).</li>
+</ul>
+</li>
+<li><strong>Galeria Lateral (Desktop)</strong>: Colunas esquerda (itens 1-5) e direita (itens 6-10) com miniaturas, indicador de seleção por cor (Azul para Foto 1, Roxo para Foto 2) e atalhos rápidos <code>[1]</code> e <code>[2]</code> no hover.</li>
+<li><strong>Gaveta Mobile</strong>: Carrossel horizontal compacto com scroll touch.</li>
+</ul>
+<h3 id="34-cat%C3%A1logo-atual-de-cenas-10-fotos-360%C2%B0">3.4. Catálogo Atual de Cenas (10 Fotos 360°)</h3>
+<ol>
+<li><code>vibe1</code>: <strong>Rave Lounge 1</strong> (<em>Living</em>) — <strong>Slot Inicial 1</strong></li>
+<li><code>vibe2</code>: <strong>Rave Lounge 2</strong> (<em>Varanda</em>) — <strong>Slot Inicial 2</strong></li>
+<li><code>arch1</code>: <strong>Arquitetura Luxo</strong> (<em>Residencial</em>)</li>
+<li><code>arch2</code>: <strong>Living Integrado</strong> (<em>Interior</em>)</li>
+<li><code>arch3</code>: <strong>Suíte Master</strong> (<em>Interior</em>)</li>
+<li><code>arch4</code>: <strong>Espaço Gourmet</strong> (<em>Lazer</em>)</li>
+<li><code>arch5</code>: <strong>Hall &amp; Jardim</strong> (<em>Paisagismo</em>)</li>
+<li><code>escritorio</code>: <strong>Corporativo Premium</strong> (<em>Comercial</em>)</li>
+<li><code>escritorio3</code>: <strong>Studio Executivo</strong> (<em>Office</em>)</li>
+<li><code>agro</code>: <strong>Panorama Agro</strong> (<em>Exterior</em>)</li>
+</ol>
+<hr>
+<h2 id="4-diretrizes-para-o-novo-m%C3%B3dulo-passeio-virtual-360">4. Diretrizes para o Novo Módulo: Passeio Virtual 360</h2>
+<p>O objetivo do <strong>Passeio Virtual 360</strong> é elevar a experiência de visualização estática para uma navegação espacial completa entre cômodos, adicionando interatividade contextualizada aos objetos.</p>
+<h3 id="41-funcionalidades-chave-a-implementar">4.1. Funcionalidades-Chave a Implementar</h3>
+<h4 id="a-hotspots-de-navega%C3%A7%C3%A3o-troca-de-c%C3%B4modos--cenas">A. Hotspots de Navegação (Troca de Cômodos / Cenas)</h4>
+<ul>
+<li><strong>O que é</strong>: Marcadores tridimensionais (ícones circulares animados com pulso no piso ou em portas) que, ao serem clicados, levam o usuário para outra cena 360° (ex: Sala de Estar $\rightarrow$ Cozinha Gourmet).</li>
+<li><strong>Mecanismo Técnico Recomendado</strong>:
+<ul>
+<li>Posição definida por ângulos esféricos <code>(yaw, pitch)</code> ou vetor espacial <code>(x, y, z)</code> no raio da esfera.</li>
+<li>Implementação via <code>THREE.Sprite</code> ou plano com textura SVG animada voltada para a câmera (<em>billboarding</em> automático).</li>
+<li>Detecção de clique via <code>THREE.Raycaster</code> a partir do clique/toque na tela.</li>
+<li>Efeito de transição suave (animação de zoom-in/FOV reduction seguido de crossfade da nova textura para dar sensação de deslocamento físico).</li>
+</ul>
+</li>
+</ul>
+<h4 id="b-marca%C3%A7%C3%A3o-de-objetos-e-pontos-de-interesse-pois--annotations">B. Marcação de Objetos e Pontos de Interesse (POIs / Annotations)</h4>
+<ul>
+<li><strong>O que é</strong>: Marcadores clicáveis ou com hover posicionados diretamente sobre móveis, revestimentos ou elementos decorativos.</li>
+<li><strong>Tipos de Ação ao Clicar</strong>:
+<ul>
+<li>Abrir Tooltip/Card com título, foto detalhada, medidas, material, preço e botão de ação (&quot;Comprar&quot;, &quot;Ver Variações&quot;, &quot;Mais Detalhes&quot;).</li>
+<li>Disparar áudio explicativo ou vídeo embutido.</li>
+</ul>
+</li>
+<li><strong>Mecanismo de Projeção 3D $\rightarrow$ Tela (HTML/Tailwind Overlay)</strong>:
+<ul>
+<li>Em vez de renderizar texto no Three.js, utiliza-se a projeção do vetor 3D na câmera:<pre class="hljs"><code><div><span class="hljs-keyword">const</span> pos = marker3DPosition.clone().project(camera);
+<span class="hljs-keyword">const</span> screenX = ((pos.x + <span class="hljs-number">1</span>) * width) / <span class="hljs-number">2</span>;
+<span class="hljs-keyword">const</span> screenY = ((-pos.y + <span class="hljs-number">1</span>) * height) / <span class="hljs-number">2</span>;
+<span class="hljs-keyword">const</span> isVisible = pos.z &lt; <span class="hljs-number">1</span>; <span class="hljs-comment">// apenas se estiver na frente da câmera</span>
+</div></code></pre>
+</li>
+<li>Permite criar cards com React e Tailwind CSS perfeitamente responsivos, acessíveis e customizáveis.</li>
+</ul>
+</li>
+</ul>
+<h4 id="c-modo-editor-vs-modo-visualizador-tour-authoring">C. Modo Editor vs. Modo Visualizador (Tour Authoring)</h4>
+<ul>
+<li><strong>Modo Visualizador</strong>: Experiência limpa para o cliente final explorar o ambiente.</li>
+<li><strong>Modo Editor</strong>: Permite ao arquiteto ou desenvolvedor clicar em qualquer ponto da foto 360° para capturar as coordenadas exatas <code>(yaw, pitch)</code> ou <code>(x, y, z)</code> e cadastrar um novo Hotspot ou POI via formulário.</li>
+</ul>
+<h4 id="d-estrutura-de-dados-sugerida-json-schema-para-o-tour">D. Estrutura de Dados Sugerida (JSON Schema para o Tour)</h4>
+<pre class="hljs"><code><div><span class="hljs-keyword">export</span> <span class="hljs-keyword">interface</span> VirtualTourScene {
+  id: <span class="hljs-built_in">string</span>;
+  title: <span class="hljs-built_in">string</span>;
+  panoramaUrl: <span class="hljs-built_in">string</span>;
+  initialView: {
+    yaw: <span class="hljs-built_in">number</span>;   <span class="hljs-comment">// Longitude inicial recomendada</span>
+    pitch: <span class="hljs-built_in">number</span>; <span class="hljs-comment">// Latitude inicial recomendada</span>
+    fov?: <span class="hljs-built_in">number</span>;
+  };
+  navigationHotspots: {
+    id: <span class="hljs-built_in">string</span>;
+    targetSceneId: <span class="hljs-built_in">string</span>;
+    position: { yaw: <span class="hljs-built_in">number</span>; pitch: <span class="hljs-built_in">number</span>; distance?: <span class="hljs-built_in">number</span> };
+    label: <span class="hljs-built_in">string</span>;
+    icon?: <span class="hljs-string">'door'</span> | <span class="hljs-string">'arrow'</span> | <span class="hljs-string">'stairs'</span> | <span class="hljs-string">'elevator'</span>;
+  }[];
+  objectAnnotations: {
+    id: <span class="hljs-built_in">string</span>;
+    position: { yaw: <span class="hljs-built_in">number</span>; pitch: <span class="hljs-built_in">number</span>; distance?: <span class="hljs-built_in">number</span> };
+    title: <span class="hljs-built_in">string</span>;
+    category?: <span class="hljs-built_in">string</span>;
+    description?: <span class="hljs-built_in">string</span>;
+    price?: <span class="hljs-built_in">string</span>;
+    linkUrl?: <span class="hljs-built_in">string</span>;
+    mediaUrl?: <span class="hljs-built_in">string</span>;
+  }[];
+}
+</div></code></pre>
+<hr>
+<h2 id="5-roteiro-sugerido-para-prompt-de-estudo--desenvolvimento">5. Roteiro Sugerido para Prompt de Estudo / Desenvolvimento</h2>
+<p>Ao gerar o prompt para iniciar o desenvolvimento do <strong>Passeio Virtual 360</strong>, inclua:</p>
+<ol>
+<li><strong>Base Técnica Estabelecida</strong>: Mencione que o projeto já possui o core Three.js configurado em Next.js 16 (App Router) + React 19 + Tailwind v4, com gerenciamento eficiente de VRAM e coordenadas esféricas (<code>lat</code>/<code>lon</code>).</li>
+<li><strong>Requisitos de Hotspots</strong>: Defina a biblioteca de ícones/sprites para hotspots, uso de <code>THREE.Raycaster</code>, e animação de transição entre cômodos.</li>
+<li><strong>Requisitos de Marcação de Objetos</strong>: Defina a projeção matemática 3D $\rightarrow$ tela 2D (<code>vector.project(camera)</code>) para tooltips ricas em Tailwind.</li>
+<li><strong>Modo Criação/Edição</strong>: Solicite uma ferramenta de debug/editor onde o clique na cena exiba as coordenadas no console ou num modal para adicionar novos pontos.</li>
+</ol>
+
+</body>
+</html>

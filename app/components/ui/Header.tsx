@@ -9,6 +9,7 @@ const navItems = [
   { href: '/mug-coffee', label: 'Mug Sim' },
   { href: '/360-viewer', label: 'View 360' },
   { href: '/gallery360', label: 'Gallery 360' },
+  { href: '/tour360', label: 'Tour 360' },
   { href: '/showroom', label: 'Showroom' },
   { href: '/studio', label: 'Planner 3D' },
 ];
