@@ -32,6 +32,20 @@ export interface GalleryItem {
 export const GALLERY_ITEMS: GalleryItem[] = [
   // Left 5 Items
   {
+    id: 'vibe1',
+    title: 'Rave Lounge 1',
+    category: 'Living',
+    url: '/images/gallery360/vibe1.jpg',
+    thumbnail: '/images/gallery360/vibe1.jpg',
+  },
+  {
+    id: 'vibe2',
+    title: 'Rave Lounge 2',
+    category: 'Varanda',
+    url: '/images/gallery360/vibe2.jpg',
+    thumbnail: '/images/gallery360/vibe2.jpg',
+  },
+  {
     id: 'arch1',
     title: 'Arquitetura Luxo',
     category: 'Residencial',
@@ -52,6 +66,8 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     url: '/images/gallery360/arch3.jpg',
     thumbnail: '/images/gallery360/arch3.jpg',
   },
+
+  // Right 5 Items
   {
     id: 'arch4',
     title: 'Espaço Gourmet',
@@ -66,8 +82,6 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     url: '/images/gallery360/arch5.jpg',
     thumbnail: '/images/gallery360/arch5.jpg',
   },
-
-  // Right 5 Items
   {
     id: 'escritorio',
     title: 'Corporativo Premium',
@@ -89,20 +103,6 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     url: '/images/gallery360/agro.jpg',
     thumbnail: '/images/gallery360/agro.jpg',
   },
-  {
-    id: 'vibe1',
-    title: 'Lounge Contemporâneo',
-    category: 'Living',
-    url: '/images/gallery360/vibe1.jpg',
-    thumbnail: '/images/gallery360/vibe1.jpg',
-  },
-  {
-    id: 'vibe2',
-    title: 'Sunset Terrace',
-    category: 'Varanda',
-    url: '/images/gallery360/vibe2.jpg',
-    thumbnail: '/images/gallery360/vibe2.jpg',
-  },
 ];
 
 interface Gallery360ViewerProps {
@@ -115,17 +115,20 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
   const fileInput1Ref = useRef<HTMLInputElement>(null);
   const fileInput2Ref = useRef<HTMLInputElement>(null);
 
+  const defaultPhoto1 = GALLERY_ITEMS.find((item) => item.id === 'vibe1') || GALLERY_ITEMS[0];
+  const defaultPhoto2 = GALLERY_ITEMS.find((item) => item.id === 'vibe2') || GALLERY_ITEMS[1];
+
   // Slots State
   const [photo1, setPhoto1] = useState<{ title: string; url: string; id?: string }>({
-    title: GALLERY_ITEMS[0].title,
-    url: GALLERY_ITEMS[0].url,
-    id: GALLERY_ITEMS[0].id,
+    title: defaultPhoto1.title,
+    url: defaultPhoto1.url,
+    id: defaultPhoto1.id,
   });
 
   const [photo2, setPhoto2] = useState<{ title: string; url: string; id?: string }>({
-    title: GALLERY_ITEMS[1].title,
-    url: GALLERY_ITEMS[1].url,
-    id: GALLERY_ITEMS[1].id,
+    title: defaultPhoto2.title,
+    url: defaultPhoto2.url,
+    id: defaultPhoto2.id,
   });
 
   const [targetSlot, setTargetSlot] = useState<1 | 2>(1);
@@ -671,9 +674,8 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
 
       {/* Main Grid: Left 5 thumbnails | Center Viewer | Right 5 thumbnails */}
       <div
-        className={`w-full h-full flex flex-row items-center justify-between gap-3 lg:gap-5 transition-all duration-300 ${
-          isFullscreen ? 'p-0' : 'max-w-[1720px] mx-auto'
-        }`}
+        className={`w-full h-full flex flex-row items-center justify-between gap-3 lg:gap-5 transition-all duration-300 ${isFullscreen ? 'p-0' : 'max-w-[1720px] mx-auto'
+          }`}
       >
         {/* Left Column: 5 Gallery Thumbnails (Only visible when NOT fullscreen) */}
         {!isFullscreen && (
@@ -694,13 +696,12 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
                 <div
                   key={item.id}
                   onClick={() => selectGalleryItem(item, targetSlot)}
-                  className={`group relative rounded-xl overflow-hidden border cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-md flex-1 min-h-[96px] ${
-                    isSelected1
+                  className={`group relative rounded-xl overflow-hidden border cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-md flex-1 min-h-[96px] ${isSelected1
                       ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-950/30'
                       : isSelected2
-                      ? 'border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/30'
-                      : 'border-white/10 hover:border-blue-400/40 bg-slate-900/60'
-                  }`}
+                        ? 'border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/30'
+                        : 'border-white/10 hover:border-blue-400/40 bg-slate-900/60'
+                    }`}
                 >
                   <img
                     src={item.thumbnail}
@@ -762,11 +763,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
         {/* Center: Main 360 Viewer Canvas Container */}
         <div
           ref={containerRef}
-          className={`relative flex-1 flex flex-col items-center justify-center transition-all duration-300 overflow-hidden ${
-            isFullscreen
+          className={`relative flex-1 flex flex-col items-center justify-center transition-all duration-300 overflow-hidden ${isFullscreen
               ? 'fixed inset-0 z-50 w-screen h-screen rounded-none'
               : 'h-[calc(100vh-140px)] max-h-[820px] rounded-3xl border border-white/15 shadow-[0_0_50px_rgba(0,0,0,0.8)] bg-black'
-          }`}
+            }`}
         >
           {/* WebGL Canvas */}
           <div
@@ -833,17 +833,15 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               {/* Foto 1 Slot Button */}
               <div
                 onClick={() => setTargetSlot(1)}
-                className={`flex-1 rounded-xl p-2 sm:px-3.5 sm:py-2.5 flex items-center justify-between border cursor-pointer transition-all active:scale-98 ${
-                  targetSlot === 1
+                className={`flex-1 rounded-xl p-2 sm:px-3.5 sm:py-2.5 flex items-center justify-between border cursor-pointer transition-all active:scale-98 ${targetSlot === 1
                     ? 'bg-blue-600/25 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
                     : 'bg-white/5 hover:bg-white/10 border-white/10'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2 truncate">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      targetSlot === 1 ? 'bg-blue-400 ring-2 ring-blue-300/50' : 'bg-gray-400'
-                    }`}
+                    className={`w-2.5 h-2.5 rounded-full ${targetSlot === 1 ? 'bg-blue-400 ring-2 ring-blue-300/50' : 'bg-gray-400'
+                      }`}
                   />
                   <div className="flex flex-col text-left truncate">
                     <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider">
@@ -879,17 +877,15 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               {/* Foto 2 Slot Button */}
               <div
                 onClick={() => setTargetSlot(2)}
-                className={`flex-1 rounded-xl p-2 sm:px-3.5 sm:py-2.5 flex items-center justify-between border cursor-pointer transition-all active:scale-98 ${
-                  targetSlot === 2
+                className={`flex-1 rounded-xl p-2 sm:px-3.5 sm:py-2.5 flex items-center justify-between border cursor-pointer transition-all active:scale-98 ${targetSlot === 2
                     ? 'bg-purple-600/25 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
                     : 'bg-white/5 hover:bg-white/10 border-white/10'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2 truncate">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      targetSlot === 2 ? 'bg-purple-400 ring-2 ring-purple-300/50' : 'bg-gray-400'
-                    }`}
+                    className={`w-2.5 h-2.5 rounded-full ${targetSlot === 2 ? 'bg-purple-400 ring-2 ring-purple-300/50' : 'bg-gray-400'
+                      }`}
                   />
                   <div className="flex flex-col text-left truncate">
                     <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">
@@ -918,11 +914,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
             <div className="flex items-center gap-3 bg-black/40 px-3 py-2 sm:py-2.5 rounded-xl border border-white/10">
               <button
                 onClick={() => setBlendValue(0)}
-                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors ${
-                  blendValue === 0
+                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors ${blendValue === 0
                     ? 'bg-blue-600/40 text-blue-300 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 Foto 1
               </button>
@@ -941,11 +936,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
 
               <button
                 onClick={() => setBlendValue(1)}
-                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors ${
-                  blendValue === 1
+                className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors ${blendValue === 1
                     ? 'bg-purple-600/40 text-purple-300 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 Foto 2
               </button>
@@ -954,11 +948,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               <button
                 onClick={() => setIsAutoTransition((v) => !v)}
                 title={isAutoTransition ? 'Pausar Transição Automática' : 'Iniciar Transição Suave Automática'}
-                className={`p-1.5 rounded-lg border text-xs font-medium transition-all ${
-                  isAutoTransition
+                className={`p-1.5 rounded-lg border text-xs font-medium transition-all ${isAutoTransition
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
                     : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border-white/10'
-                }`}
+                  }`}
               >
                 {isAutoTransition ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
               </button>
@@ -969,11 +962,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               {/* Giroscópio */}
               <button
                 onClick={toggleGyroscope}
-                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${
-                  isGyroActive
+                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${isGyroActive
                     ? 'bg-amber-600/30 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
                     : 'bg-white/5 hover:bg-white/15 border-white/10 text-gray-200'
-                }`}
+                  }`}
               >
                 <Compass className={`w-4 h-4 ${isGyroActive ? 'text-amber-400 animate-spin' : 'text-amber-400'}`} />
                 <span>Giroscópio</span>
@@ -982,11 +974,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               {/* VR Suporte */}
               <button
                 onClick={toggleVR}
-                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${
-                  stereoVrMode
+                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${stereoVrMode
                     ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.3)]'
                     : 'bg-white/5 hover:bg-white/15 border-white/10 text-gray-200'
-                }`}
+                  }`}
               >
                 <Glasses className="w-4 h-4 text-cyan-400" />
                 <span>Modo VR</span>
@@ -995,11 +986,10 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
               {/* Tela Cheia */}
               <button
                 onClick={toggleFullscreen}
-                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${
-                  isFullscreen
+                className={`flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-medium ${isFullscreen
                     ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
                     : 'bg-white/5 hover:bg-white/15 border-white/10 text-gray-200'
-                }`}
+                  }`}
               >
                 {isFullscreen ? (
                   <>
@@ -1036,13 +1026,12 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
                 <div
                   key={item.id}
                   onClick={() => selectGalleryItem(item, targetSlot)}
-                  className={`group relative rounded-xl overflow-hidden border cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-md flex-1 min-h-[96px] ${
-                    isSelected1
+                  className={`group relative rounded-xl overflow-hidden border cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-md flex-1 min-h-[96px] ${isSelected1
                       ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-950/30'
                       : isSelected2
-                      ? 'border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/30'
-                      : 'border-white/10 hover:border-purple-400/40 bg-slate-900/60'
-                  }`}
+                        ? 'border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/30'
+                        : 'border-white/10 hover:border-purple-400/40 bg-slate-900/60'
+                    }`}
                 >
                   <img
                     src={item.thumbnail}
@@ -1117,13 +1106,12 @@ export default function Gallery360Viewer({ onFullscreenChange }: Gallery360Viewe
                 <div
                   key={item.id}
                   onClick={() => selectGalleryItem(item, targetSlot)}
-                  className={`shrink-0 w-28 h-20 rounded-xl overflow-hidden relative border cursor-pointer ${
-                    isSelected1
+                  className={`shrink-0 w-28 h-20 rounded-xl overflow-hidden relative border cursor-pointer ${isSelected1
                       ? 'border-blue-500 ring-2 ring-blue-500/50'
                       : isSelected2
-                      ? 'border-purple-500 ring-2 ring-purple-500/50'
-                      : 'border-white/10'
-                  }`}
+                        ? 'border-purple-500 ring-2 ring-purple-500/50'
+                        : 'border-white/10'
+                    }`}
                 >
                   <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-1.5">
