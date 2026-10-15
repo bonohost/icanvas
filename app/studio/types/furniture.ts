@@ -164,6 +164,19 @@ export interface RoomSettings {
   customWalls?: CustomWall[];
   customFloors?: CustomFloor[];
   backgroundFloorPlan?: BackgroundFloorPlanConfig;
+  spots?: RoomSpotPin[];
+}
+
+export interface RoomSpotPin {
+  id: string;
+  name: string;
+  x: number; // in meters (2D world)
+  y: number; // in meters (2D world / 3D Z)
+  height?: number; // in meters (default 1.6m eye level)
+  yaw?: number;
+  pitch?: number;
+  roomName?: string;
+  color?: string;
 }
 
 export interface CustomWall {
@@ -179,6 +192,8 @@ export interface CustomFloor {
   points: Array<{ x: number; y: number }>;
   area?: number;
   name?: string;
+  color?: string;
+  material?: string;
 }
 
 export interface Floorplan2DCorner {

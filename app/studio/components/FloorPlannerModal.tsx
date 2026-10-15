@@ -33,10 +33,18 @@ import {
   Scale,
   Percent,
   PlusCircle,
+  Layers,
+  Camera,
+  MapPin,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  Palette,
+  Navigation,
 } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomSettings } from '../types/furniture';
+import { RoomSettings, RoomSpotPin, CustomFloor } from '../types/furniture';
 import { calculateAdjustedWallJunctions } from '../lib/wall-builders';
 
 // --- Data Structures ---
@@ -59,8 +67,38 @@ export interface PlannerRoomLoop {
   corners: PlannerCorner[];
   area: number; // in m²
   name: string;
+  color?: string;
+  material?: string;
   center: { x: number; y: number };
 }
+
+export interface PlannerSpotPin {
+  id: string;
+  name: string;
+  x: number; // in meters (2D world)
+  y: number; // in meters (2D world / 3D Z)
+  height: number; // in meters (default 1.6m eye level)
+  color?: string;
+}
+
+export interface RoomCustomization {
+  id: string;
+  name: string;
+  color?: string;
+  material?: string;
+  center?: { x: number; y: number };
+}
+
+export const PRESET_ROOM_TYPES = [
+  { name: 'Sala de Estar / Jantar', icon: '🛋️', color: '#3b82f6', material: 'madeira' },
+  { name: 'Cozinha Gourmet', icon: '🍳', color: '#10b981', material: 'porcelanato' },
+  { name: 'Quarto Principal / Suíte', icon: '🛏️', color: '#8b5cf6', material: 'madeira' },
+  { name: 'Quarto Solteiro / Home Office', icon: '💻', color: '#ec4899', material: 'madeira' },
+  { name: 'Banheiro / Lavabo', icon: '🚿', color: '#06b6d4', material: 'porcelanato' },
+  { name: 'Varanda / Sacada', icon: '🌿', color: '#f59e0b', material: 'ardosia' },
+  { name: 'Área de Serviço', icon: '🧺', color: '#64748b', material: 'porcelanato' },
+  { name: 'Circulação / Corredor', icon: '🚶', color: '#94a3b8', material: 'porcelanato' },
+];
 
 export interface BackgroundFloorPlanConfig {
   url: string;
@@ -269,7 +307,7 @@ export default function FloorPlannerModal({
   onApplyToProject,
 }: FloorPlannerModalProps) {
   // --- UI & Tool State ---
-  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'split' | 'delete'>('wall');
+  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'split' | 'spot' | 'delete'>('wall');
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(false); // Grade no 2D começa sempre oculta
   const [snapCorner, setSnapCorner] = useState<boolean>(true);
@@ -280,10 +318,82 @@ export default function FloorPlannerModal({
   const [is3DExpanded, setIs3DExpanded] = useState<boolean>(false);
   const [is2DExpanded, setIs2DExpanded] = useState<boolean>(false);
   const [showMeasurements, setShowMeasurements] = useState<boolean>(true);
-  const [history, setHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
-  const [redoHistory, setRedoHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
+  const [history, setHistory] = useState<
+    {
+      corners: PlannerCorner[];
+      walls: PlannerWall[];
+      spots?: PlannerSpotPin[];
+      roomCustomizations?: RoomCustomization[];
+    }[]
+  >([]);
+  const [redoHistory, setRedoHistory] = useState<
+    {
+      corners: PlannerCorner[];
+      walls: PlannerWall[];
+      spots?: PlannerSpotPin[];
+      roomCustomizations?: RoomCustomization[];
+    }[]
+  >([]);
   const [historyToast, setHistoryToast] = useState<string | null>(null);
   const historyToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // --- Photoshop-Style Layers State ---
+  const [layersConfig, setLayersConfig] = useState({
+    walls: { visible: true, locked: false },
+    floors: { visible: true, locked: false, showLabels: true },
+    spots: { visible: true, locked: false },
+    background: { visible: true, locked: false },
+  });
+  const [isLayersCollapsed, setIsLayersCollapsed] = useState<boolean>(false);
+  const [expandedLayerSection, setExpandedLayerSection] = useState<'none' | 'floors' | 'spots'>('none');
+
+  // Spots (Camera Waypoints) State
+  const [spots, setSpots] = useState<PlannerSpotPin[]>(() => {
+    if (currentRoom.spots && currentRoom.spots.length > 0) {
+      return currentRoom.spots.map((s) => ({
+        id: s.id || `spot_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: s.name || 'Novo Spot',
+        x: s.x,
+        y: s.y,
+        height: s.height || 1.6,
+        color: s.color || '#06b6d4',
+      }));
+    }
+    return [];
+  });
+  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
+  const [draggingSpotId, setDraggingSpotId] = useState<string | null>(null);
+  const [spotModal, setSpotModal] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    name: string;
+    height: number;
+    editId?: string;
+  }>({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    name: '',
+    height: 1.6,
+  });
+
+  // Room Customizations State (Custom floor names & colors)
+  const [roomCustomizations, setRoomCustomizations] = useState<RoomCustomization[]>(() => {
+    if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
+      return currentRoom.customFloors
+        .filter((cf) => cf.name || cf.color || cf.material)
+        .map((cf) => ({
+          id: cf.id,
+          name: cf.name || '',
+          color: cf.color,
+          material: cf.material,
+        }));
+    }
+    return [];
+  });
+  const [editingRoom, setEditingRoom] = useState<PlannerRoomLoop | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
   const triggerToast = useCallback((msg: string) => {
     if (historyToastTimeoutRef.current) clearTimeout(historyToastTimeoutRef.current);
@@ -594,7 +704,9 @@ export default function FloorPlannerModal({
         const last = prev[prev.length - 1];
         if (
           JSON.stringify(last.corners) === JSON.stringify(corners) &&
-          JSON.stringify(last.walls) === JSON.stringify(walls)
+          JSON.stringify(last.walls) === JSON.stringify(walls) &&
+          JSON.stringify(last.spots || []) === JSON.stringify(spots) &&
+          JSON.stringify(last.roomCustomizations || []) === JSON.stringify(roomCustomizations)
         ) {
           return prev;
         }
@@ -604,11 +716,13 @@ export default function FloorPlannerModal({
         {
           corners: JSON.parse(JSON.stringify(corners)),
           walls: JSON.parse(JSON.stringify(walls)),
+          spots: JSON.parse(JSON.stringify(spots)),
+          roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
         },
       ];
     });
     setRedoHistory([]);
-  }, [corners, walls]);
+  }, [corners, walls, spots, roomCustomizations]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -619,16 +733,22 @@ export default function FloorPlannerModal({
       {
         corners: JSON.parse(JSON.stringify(corners)),
         walls: JSON.parse(JSON.stringify(walls)),
+        spots: JSON.parse(JSON.stringify(spots)),
+        roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
       },
     ]);
 
     setCorners(prev.corners);
     setWalls(prev.walls);
+    if (prev.spots) setSpots(prev.spots);
+    if (prev.roomCustomizations) setRoomCustomizations(prev.roomCustomizations);
     setHistory((h) => h.slice(0, -1));
     setSelectedCornerId(null);
     setSelectedWallId(null);
+    setSelectedSpotId(null);
+    setSelectedRoomId(null);
     triggerToast('Desfeito (Ctrl+Z)');
-  }, [history, corners, walls, triggerToast]);
+  }, [history, corners, walls, spots, roomCustomizations, triggerToast]);
 
   const handleRedo = useCallback(() => {
     if (redoHistory.length === 0) return;
@@ -639,16 +759,22 @@ export default function FloorPlannerModal({
       {
         corners: JSON.parse(JSON.stringify(corners)),
         walls: JSON.parse(JSON.stringify(walls)),
+        spots: JSON.parse(JSON.stringify(spots)),
+        roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
       },
     ]);
 
     setCorners(next.corners);
     setWalls(next.walls);
+    if (next.spots) setSpots(next.spots);
+    if (next.roomCustomizations) setRoomCustomizations(next.roomCustomizations);
     setRedoHistory((r) => r.slice(0, -1));
     setSelectedCornerId(null);
     setSelectedWallId(null);
+    setSelectedSpotId(null);
+    setSelectedRoomId(null);
     triggerToast('Refeito (Ctrl+Y)');
-  }, [redoHistory, corners, walls, triggerToast]);
+  }, [redoHistory, corners, walls, spots, roomCustomizations, triggerToast]);
 
   const handleStopDrawingChain = useCallback(() => {
     setDrawingStartCornerId(null);
@@ -656,7 +782,16 @@ export default function FloorPlannerModal({
   }, []);
 
   const handleDeleteSelected = useCallback(() => {
-    if (selectedCornerId) {
+    if (selectedSpotId) {
+      saveSnapshot();
+      setSpots((prev) => prev.filter((s) => s.id !== selectedSpotId));
+      setSelectedSpotId(null);
+      triggerToast('Spot excluído (Del)');
+    } else if (selectedCornerId) {
+      if (layersConfig.walls.locked) {
+        triggerToast('Camada de paredes bloqueada');
+        return;
+      }
       saveSnapshot();
       setCorners((prev) => prev.filter((c) => c.id !== selectedCornerId));
       setWalls((prev) =>
@@ -665,12 +800,16 @@ export default function FloorPlannerModal({
       setSelectedCornerId(null);
       triggerToast('Vértice excluído (Del)');
     } else if (selectedWallId) {
+      if (layersConfig.walls.locked) {
+        triggerToast('Camada de paredes bloqueada');
+        return;
+      }
       saveSnapshot();
       setWalls((prev) => prev.filter((w) => w.id !== selectedWallId));
       setSelectedWallId(null);
       triggerToast('Parede excluída (Del)');
     }
-  }, [selectedCornerId, selectedWallId, saveSnapshot, triggerToast]);
+  }, [selectedSpotId, selectedCornerId, selectedWallId, layersConfig.walls.locked, saveSnapshot, triggerToast]);
 
   // Global Keyboard Shortcuts for 2D Floor Planner (Ctrl+Z = Undo, Ctrl+Y = Redo, Del = Delete, Esc = Cancel)
   useEffect(() => {
@@ -881,19 +1020,41 @@ export default function FloorPlannerModal({
 
         if (area > 0.5) {
           // Ignore micro artefacts
+          const center = { x: sumX / n, y: sumY / n };
+          const custom = roomCustomizations.find(
+            (rc) =>
+              rc.id === `room_${idx + 1}` ||
+              (rc.center && Math.hypot(rc.center.x - center.x, rc.center.y - center.y) < 0.6)
+          );
           rooms.push({
             id: `room_${idx + 1}`,
             corners: cycleCorners,
             area: Number(area.toFixed(2)),
-            name: `Cômodo ${idx + 1}`,
-            center: { x: sumX / n, y: sumY / n },
+            name: custom?.name || '', // Não escreve "Cômodo X" por padrão!
+            color: custom?.color,
+            material: custom?.material,
+            center,
           });
         }
       }
     });
 
     setDetectedRooms(rooms);
-  }, [corners, walls]);
+  }, [corners, walls, roomCustomizations]);
+
+  // Helper function to check if a 2D world point is inside a polygon
+  const isPointInPolygon = useCallback((point: { x: number; y: number }, vs: PlannerCorner[]): boolean => {
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+      const xi = vs[i].x;
+      const yi = vs[i].y;
+      const xj = vs[j].x;
+      const yj = vs[j].y;
+      const intersect = yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }, []);
 
   useEffect(() => {
     recalculateRooms();
@@ -1112,38 +1273,66 @@ export default function FloorPlannerModal({
     }
 
     // 2. Draw Detected Room Polygons (Fills & Area badges)
-    detectedRooms.forEach((room) => {
-      if (room.corners.length < 3) return;
-      ctx.beginPath();
-      const firstSc = worldToScreen(room.corners[0].x, room.corners[0].y, canvas);
-      ctx.moveTo(firstSc.x, firstSc.y);
-      for (let i = 1; i < room.corners.length; i++) {
-        const sc = worldToScreen(room.corners[i].x, room.corners[i].y, canvas);
-        ctx.lineTo(sc.x, sc.y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.08)'; // Soft blue fill
-      ctx.fill();
+    if (layersConfig.floors.visible) {
+      detectedRooms.forEach((room) => {
+        if (room.corners.length < 3) return;
+        ctx.beginPath();
+        const firstSc = worldToScreen(room.corners[0].x, room.corners[0].y, canvas);
+        ctx.moveTo(firstSc.x, firstSc.y);
+        for (let i = 1; i < room.corners.length; i++) {
+          const sc = worldToScreen(room.corners[i].x, room.corners[i].y, canvas);
+          ctx.lineTo(sc.x, sc.y);
+        }
+        ctx.closePath();
 
-      // Room Center Label
-      const centerSc = worldToScreen(room.center.x, room.center.y, canvas);
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 12px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${room.name}`, centerSc.x, centerSc.y - 8);
+        const isSelectedRoom = selectedRoomId === room.id;
+        ctx.fillStyle = room.color
+          ? isSelectedRoom
+            ? `${room.color}55`
+            : `${room.color}25`
+          : isSelectedRoom
+          ? 'rgba(59, 130, 246, 0.22)'
+          : 'rgba(59, 130, 246, 0.08)';
+        ctx.fill();
 
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '11px monospace';
-      ctx.fillText(`${room.area} m²`, centerSc.x, centerSc.y + 8);
-    });
+        if (isSelectedRoom) {
+          ctx.strokeStyle = room.color || '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Room Center Label
+        if (layersConfig.floors.showLabels) {
+          const centerSc = worldToScreen(room.center.x, room.center.y, canvas);
+          if (room.name && room.name.trim().length > 0) {
+            ctx.fillStyle = room.color ? '#f8fafc' : '#38bdf8';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(room.name, centerSc.x, centerSc.y - 8);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px monospace';
+            ctx.fillText(`${room.area} m²`, centerSc.x, centerSc.y + 8);
+          } else {
+            // Apenas metragem quadrada sutil sem poluir com 'Cômodo X'!
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.75)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${room.area} m²`, centerSc.x, centerSc.y);
+          }
+        }
+      });
+    }
 
     // Map corners for quick access
     const cornerMap = new Map<string, PlannerCorner>();
     corners.forEach((c) => cornerMap.set(c.id, c));
 
     // 3. Draw Finished Walls
-    walls.forEach((wall) => {
+    if (layersConfig.walls.visible) {
+      walls.forEach((wall) => {
       const c1 = cornerMap.get(wall.startId);
       const c2 = cornerMap.get(wall.endId);
       if (!c1 || !c2) return;
@@ -1246,6 +1435,7 @@ export default function FloorPlannerModal({
         ctx.restore();
       }
     });
+    }
 
     // 3.5. Draw Live Split Point Preview on Wall when Inserir Ponto (split tool) is active
     if (activeTool === 'split' && hoveredWallId && currentMouseWorld) {
@@ -1514,6 +1704,79 @@ export default function FloorPlannerModal({
       ctx.restore();
     }
 
+    // 8. Draw Camera Spots (Waypoints)
+    if (layersConfig.spots.visible) {
+      spots.forEach((spot) => {
+        const spSc = worldToScreen(spot.x, spot.y, canvas);
+        const isSelected = selectedSpotId === spot.id;
+
+        ctx.save();
+        // Pulsing halo
+        ctx.beginPath();
+        ctx.arc(spSc.x, spSc.y, isSelected ? 16 : 13, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? 'rgba(6, 182, 212, 0.45)' : 'rgba(6, 182, 212, 0.25)';
+        ctx.fill();
+
+        // Pin body
+        ctx.beginPath();
+        ctx.arc(spSc.x, spSc.y, isSelected ? 8 : 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = spot.color || '#06b6d4';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Pin Label Badge
+        const label = `📷 ${spot.name}`;
+        ctx.font = 'bold 10px Inter, sans-serif';
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = isSelected ? 'rgba(8, 51, 68, 0.95)' : 'rgba(15, 23, 42, 0.9)';
+        ctx.fillRect(spSc.x - tw / 2 - 6, spSc.y - 28, tw + 12, 18);
+        ctx.strokeStyle = isSelected ? '#22d3ee' : '#334155';
+        ctx.lineWidth = isSelected ? 1.5 : 1;
+        ctx.strokeRect(spSc.x - tw / 2 - 6, spSc.y - 28, tw + 12, 18);
+
+        ctx.fillStyle = isSelected ? '#67e8f9' : '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, spSc.x, spSc.y - 19);
+        ctx.restore();
+      });
+    }
+
+    // 9. Draw Active Spot Placer Preview
+    if (activeTool === 'spot' && currentMouseWorld) {
+      const msSc = worldToScreen(currentMouseWorld.x, currentMouseWorld.y, canvas);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(msSc.x, msSc.y, 14, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(msSc.x, msSc.y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = '#06b6d4';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const tip = '📍 Clique para posicionar Spot de Câmera';
+      ctx.font = 'bold 10px Inter, sans-serif';
+      const tw = ctx.measureText(tip).width;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.fillRect(msSc.x - tw / 2 - 6, msSc.y - 28, tw + 12, 18);
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(msSc.x - tw / 2 - 6, msSc.y - 28, tw + 12, 18);
+
+      ctx.fillStyle = '#67e8f9';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tip, msSc.x, msSc.y - 19);
+      ctx.restore();
+    }
+
     ctx.restore();
   }, [
     corners,
@@ -1539,6 +1802,10 @@ export default function FloorPlannerModal({
     dragAxisLock,
     hoveredWallId,
     showGrid,
+    layersConfig,
+    spots,
+    selectedSpotId,
+    selectedRoomId,
   ]);
 
   // Animation Loop for smooth 2D drawing
