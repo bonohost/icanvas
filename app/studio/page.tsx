@@ -607,6 +607,11 @@ export default function StudioPage() {
         return;
       }
 
+      // Do not run 3D studio shortcuts when the 2D floor planner modal is open
+      if (isFloorPlannerOpen) {
+        return;
+      }
+
       // Undo: Ctrl+Z or Cmd+Z (without Shift)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -718,6 +723,7 @@ export default function StudioPage() {
     handleRemoveOpening,
     handleSaveCurrent,
     handleDeselectAll,
+    isFloorPlannerOpen,
   ]);
 
   const handleClearAll = () => {

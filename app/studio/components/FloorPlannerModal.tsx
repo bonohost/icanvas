@@ -32,6 +32,7 @@ import {
   AlertCircle,
   Scale,
   Percent,
+  PlusCircle,
 } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -268,9 +269,9 @@ export default function FloorPlannerModal({
   onApplyToProject,
 }: FloorPlannerModalProps) {
   // --- UI & Tool State ---
-  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'delete'>('wall');
+  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'split' | 'delete'>('wall');
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
-  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [showGrid, setShowGrid] = useState<boolean>(false); // Grade no 2D começa sempre oculta
   const [snapCorner, setSnapCorner] = useState<boolean>(true);
   const [gridStep, setGridStep] = useState<number>(0.10); // 0.10m = 10cm
   const [wallHeight, setWallHeight] = useState<number>(currentRoom.height || 2.6);
@@ -280,6 +281,17 @@ export default function FloorPlannerModal({
   const [is2DExpanded, setIs2DExpanded] = useState<boolean>(false);
   const [showMeasurements, setShowMeasurements] = useState<boolean>(true);
   const [history, setHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
+  const [redoHistory, setRedoHistory] = useState<{ corners: PlannerCorner[]; walls: PlannerWall[] }[]>([]);
+  const [historyToast, setHistoryToast] = useState<string | null>(null);
+  const historyToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerToast = useCallback((msg: string) => {
+    if (historyToastTimeoutRef.current) clearTimeout(historyToastTimeoutRef.current);
+    setHistoryToast(msg);
+    historyToastTimeoutRef.current = setTimeout(() => {
+      setHistoryToast(null);
+    }, 1800);
+  }, []);
 
   // Helper to parse RoomSettings into planner corners & walls
   const parseRoomToPlanner = useCallback((room: RoomSettings) => {
@@ -345,6 +357,8 @@ export default function FloorPlannerModal({
       setWalls(data.walls);
       setWallHeight(data.height);
       setHistory([]);
+      setRedoHistory([]);
+      setShowGrid(false); // Sempre começa com a grade 2D oculta
       setSelectedCornerId(null);
       setSelectedWallId(null);
       setDrawingStartCornerId(null);
@@ -575,22 +589,218 @@ export default function FloorPlannerModal({
 
   // Push history snapshot before modifications
   const saveSnapshot = useCallback(() => {
-    setHistory((prev) => [
-      ...prev.slice(-15),
+    setHistory((prev) => {
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1];
+        if (
+          JSON.stringify(last.corners) === JSON.stringify(corners) &&
+          JSON.stringify(last.walls) === JSON.stringify(walls)
+        ) {
+          return prev;
+        }
+      }
+      return [
+        ...prev.slice(-30),
+        {
+          corners: JSON.parse(JSON.stringify(corners)),
+          walls: JSON.parse(JSON.stringify(walls)),
+        },
+      ];
+    });
+    setRedoHistory([]);
+  }, [corners, walls]);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+
+    setRedoHistory((r) => [
+      ...r.slice(-30),
       {
         corners: JSON.parse(JSON.stringify(corners)),
         walls: JSON.parse(JSON.stringify(walls)),
       },
     ]);
-  }, [corners, walls]);
 
-  const handleUndo = () => {
-    if (history.length === 0) return;
-    const prev = history[history.length - 1];
     setCorners(prev.corners);
     setWalls(prev.walls);
     setHistory((h) => h.slice(0, -1));
-  };
+    setSelectedCornerId(null);
+    setSelectedWallId(null);
+    triggerToast('Desfeito (Ctrl+Z)');
+  }, [history, corners, walls, triggerToast]);
+
+  const handleRedo = useCallback(() => {
+    if (redoHistory.length === 0) return;
+    const next = redoHistory[redoHistory.length - 1];
+
+    setHistory((h) => [
+      ...h.slice(-30),
+      {
+        corners: JSON.parse(JSON.stringify(corners)),
+        walls: JSON.parse(JSON.stringify(walls)),
+      },
+    ]);
+
+    setCorners(next.corners);
+    setWalls(next.walls);
+    setRedoHistory((r) => r.slice(0, -1));
+    setSelectedCornerId(null);
+    setSelectedWallId(null);
+    triggerToast('Refeito (Ctrl+Y)');
+  }, [redoHistory, corners, walls, triggerToast]);
+
+  const handleStopDrawingChain = useCallback(() => {
+    setDrawingStartCornerId(null);
+    setSelectedCornerId(null);
+  }, []);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedCornerId) {
+      saveSnapshot();
+      setCorners((prev) => prev.filter((c) => c.id !== selectedCornerId));
+      setWalls((prev) =>
+        prev.filter((w) => w.startId !== selectedCornerId && w.endId !== selectedCornerId)
+      );
+      setSelectedCornerId(null);
+      triggerToast('Vértice excluído (Del)');
+    } else if (selectedWallId) {
+      saveSnapshot();
+      setWalls((prev) => prev.filter((w) => w.id !== selectedWallId));
+      setSelectedWallId(null);
+      triggerToast('Parede excluída (Del)');
+    }
+  }, [selectedCornerId, selectedWallId, saveSnapshot, triggerToast]);
+
+  // Global Keyboard Shortcuts for 2D Floor Planner (Ctrl+Z = Undo, Ctrl+Y = Redo, Del = Delete, Esc = Cancel)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Undo: Ctrl+Z or Cmd+Z (without Shift)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleUndo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Cmd+Y, or Ctrl+Shift+Z / Cmd+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRedo();
+        return;
+      }
+
+      // Delete: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedCornerId || selectedWallId) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDeleteSelected();
+          return;
+        }
+      }
+
+      // Escape: Stop drawing chain or clear selection
+      if (e.key === 'Escape') {
+        if (drawingStartCornerId) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleStopDrawingChain();
+          return;
+        }
+        if (selectedCornerId || selectedWallId) {
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedCornerId(null);
+          setSelectedWallId(null);
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [
+    isOpen,
+    handleUndo,
+    handleRedo,
+    selectedCornerId,
+    selectedWallId,
+    drawingStartCornerId,
+    handleDeleteSelected,
+    handleStopDrawingChain,
+  ]);
+
+  // Split Wall: Insert a new corner point between two existing endpoints
+  const handleSplitWall = useCallback(
+    (wall: PlannerWall, customX?: number, customY?: number) => {
+      const c1 = corners.find((c) => c.id === wall.startId);
+      const c2 = corners.find((c) => c.id === wall.endId);
+      if (!c1 || !c2) return;
+
+      let splitX = customX !== undefined ? customX : (c1.x + c2.x) / 2;
+      let splitY = customY !== undefined ? customY : (c1.y + c2.y) / 2;
+
+      splitX = Number(splitX.toFixed(3));
+      splitY = Number(splitY.toFixed(3));
+
+      // Avoid creating a point too close to existing endpoints (< 5cm)
+      if (Math.hypot(splitX - c1.x, splitY - c1.y) < 0.05 || Math.hypot(splitX - c2.x, splitY - c2.y) < 0.05) {
+        return;
+      }
+
+      saveSnapshot();
+
+      const newCornerId = `c_${Date.now()}`;
+      const newCorner: PlannerCorner = {
+        id: newCornerId,
+        x: splitX,
+        y: splitY,
+      };
+
+      const wall1: PlannerWall = {
+        id: `w_${Date.now()}_1`,
+        startId: wall.startId,
+        endId: newCornerId,
+        thickness: wall.thickness,
+        height: wall.height,
+      };
+
+      const wall2: PlannerWall = {
+        id: `w_${Date.now()}_2`,
+        startId: newCornerId,
+        endId: wall.endId,
+        thickness: wall.thickness,
+        height: wall.height,
+      };
+
+      setCorners((prev) => [...prev, newCorner]);
+      setWalls((prev) => {
+        const remaining = prev.filter((w) => w.id !== wall.id);
+        return [...remaining, wall1, wall2];
+      });
+
+      setSelectedCornerId(newCornerId);
+      setSelectedWallId(null);
+    },
+    [corners, saveSnapshot]
+  );
 
   // --- Cycle / Closed Room Detection Algorithm ---
   const recalculateRooms = useCallback(() => {
@@ -942,14 +1152,23 @@ export default function FloorPlannerModal({
       const sc2 = worldToScreen(c2.x, c2.y, canvas);
 
       const isSelected = selectedWallId === wall.id;
-      const isHovered = hoveredWallId === wall.id && activeTool === 'select' && !draggingCornerId && !draggingWallId;
+      const isHovered =
+        hoveredWallId === wall.id &&
+        (activeTool === 'select' || activeTool === 'split') &&
+        !draggingCornerId &&
+        !draggingWallId;
       const isDragging = draggingWallId === wall.id;
       const wallThicknessPx = Math.max(4, wall.thickness * zoom);
 
       // Glow / Aura for hovered, dragged or selected wall
       if (isSelected || isHovered || isDragging) {
         ctx.save();
-        ctx.strokeStyle = isDragging || isSelected ? 'rgba(245, 158, 11, 0.35)' : 'rgba(56, 189, 248, 0.3)';
+        ctx.strokeStyle =
+          isDragging || isSelected
+            ? 'rgba(245, 158, 11, 0.35)'
+            : activeTool === 'split'
+            ? 'rgba(16, 185, 129, 0.45)'
+            : 'rgba(56, 189, 248, 0.3)';
         ctx.lineWidth = wallThicknessPx + 12;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -960,7 +1179,14 @@ export default function FloorPlannerModal({
       }
 
       // Wall Main Line
-      ctx.strokeStyle = isSelected || isDragging ? '#f59e0b' : isHovered ? '#38bdf8' : '#e2e8f0';
+      ctx.strokeStyle =
+        isSelected || isDragging
+          ? '#f59e0b'
+          : activeTool === 'split' && isHovered
+          ? '#10b981'
+          : isHovered
+          ? '#38bdf8'
+          : '#e2e8f0';
       ctx.lineWidth = wallThicknessPx;
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -969,7 +1195,14 @@ export default function FloorPlannerModal({
       ctx.stroke();
 
       // Inner Core line
-      ctx.strokeStyle = isSelected || isDragging ? '#fbbf24' : isHovered ? '#7dd3fc' : '#64748b';
+      ctx.strokeStyle =
+        isSelected || isDragging
+          ? '#fbbf24'
+          : activeTool === 'split' && isHovered
+          ? '#34d399'
+          : isHovered
+          ? '#7dd3fc'
+          : '#64748b';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(sc1.x, sc1.y);
@@ -1013,6 +1246,67 @@ export default function FloorPlannerModal({
         ctx.restore();
       }
     });
+
+    // 3.5. Draw Live Split Point Preview on Wall when Inserir Ponto (split tool) is active
+    if (activeTool === 'split' && hoveredWallId && currentMouseWorld) {
+      const splitTargetWall = walls.find((w) => w.id === hoveredWallId);
+      if (splitTargetWall) {
+        const c1 = cornerMap.get(splitTargetWall.startId);
+        const c2 = cornerMap.get(splitTargetWall.endId);
+        if (c1 && c2) {
+          const dx = c2.x - c1.x;
+          const dy = c2.y - c1.y;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq > 0) {
+            let t = ((currentMouseWorld.x - c1.x) * dx + (currentMouseWorld.y - c1.y) * dy) / lenSq;
+            t = Math.max(0.05, Math.min(0.95, t));
+            const isMidpoint = Math.abs(t - 0.5) < 0.08;
+            if (isMidpoint) t = 0.5;
+
+            const splitX = c1.x + t * dx;
+            const splitY = c1.y + t * dy;
+            const spSc = worldToScreen(splitX, splitY, canvas);
+
+            ctx.save();
+            // Outer Halo
+            ctx.beginPath();
+            ctx.arc(spSc.x, spSc.y, 14, 0, Math.PI * 2);
+            ctx.fillStyle = isMidpoint ? 'rgba(16, 185, 129, 0.45)' : 'rgba(6, 182, 212, 0.35)';
+            ctx.fill();
+
+            // Point Dot
+            ctx.beginPath();
+            ctx.arc(spSc.x, spSc.y, 6.5, 0, Math.PI * 2);
+            ctx.fillStyle = isMidpoint ? '#10b981' : '#06b6d4';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Measurement Distances
+            const d1 = Math.hypot(splitX - c1.x, splitY - c1.y);
+            const d2 = Math.hypot(c2.x - splitX, c2.y - splitY);
+            const label = isMidpoint
+              ? `⚡ Ponto Médio: ${d1.toFixed(2)}m | ${d2.toFixed(2)}m (Clique para dividir)`
+              : `📍 Inserir Ponto: ${d1.toFixed(2)}m | ${d2.toFixed(2)}m (Clique para dividir)`;
+
+            ctx.font = 'bold 10px monospace';
+            const textW = ctx.measureText(label).width;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.fillRect(spSc.x - textW / 2 - 7, spSc.y - 30, textW + 14, 18);
+            ctx.strokeStyle = isMidpoint ? '#10b981' : '#06b6d4';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(spSc.x - textW / 2 - 7, spSc.y - 30, textW + 14, 18);
+
+            ctx.fillStyle = isMidpoint ? '#34d399' : '#67e8f9';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, spSc.x, spSc.y - 21);
+            ctx.restore();
+          }
+        }
+      }
+    }
 
     // 4. Draw Active Wall Preview while Drawing
     if (activeTool === 'wall' && drawingStartCornerId && currentMouseWorld) {
@@ -1714,6 +2008,27 @@ export default function FloorPlannerModal({
           dragWallStartRef.current = null;
         }
       }
+    } else if (activeTool === 'split') {
+      const nearestWall = getNearestWall(world.x, world.y, Math.max(0.45, 26 / zoom));
+      if (nearestWall) {
+        const c1 = corners.find((c) => c.id === nearestWall.startId);
+        const c2 = corners.find((c) => c.id === nearestWall.endId);
+        if (c1 && c2) {
+          const dx = c2.x - c1.x;
+          const dy = c2.y - c1.y;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq > 0) {
+            let t = ((world.x - c1.x) * dx + (world.y - c1.y) * dy) / lenSq;
+            t = Math.max(0.05, Math.min(0.95, t));
+            if (Math.abs(t - 0.5) < 0.08) {
+              t = 0.5;
+            }
+            const splitX = c1.x + t * dx;
+            const splitY = c1.y + t * dy;
+            handleSplitWall(nearestWall, splitX, splitY);
+          }
+        }
+      }
     } else if (activeTool === 'delete') {
       saveSnapshot();
       if (nearestCorner) {
@@ -1769,7 +2084,7 @@ export default function FloorPlannerModal({
         dx = 0;
       }
 
-      if (snapCorner || showGrid) {
+      if (snapCorner || snapGrid) {
         const step = gridStep || 0.1;
         dx = Math.round(dx / step) * step;
         dy = Math.round(dy / step) * step;
@@ -1819,12 +2134,12 @@ export default function FloorPlannerModal({
     }
 
     // 3. Hover detection for interactive cursor styling
-    if (activeTool === 'select' && !isPanning) {
-      if (nearestCorner) {
+    if ((activeTool === 'select' || activeTool === 'split') && !isPanning) {
+      if (nearestCorner && activeTool !== 'split') {
         setHoveredCornerId(nearestCorner.id);
         setHoveredWallId(null);
       } else {
-        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom));
+        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.45, 26 / zoom));
         setHoveredWallId(nearestWall ? nearestWall.id : null);
         setHoveredCornerId(null);
       }
@@ -1892,11 +2207,6 @@ export default function FloorPlannerModal({
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88;
     setZoom((prev) => Math.min(150, Math.max(15, prev * zoomFactor)));
-  };
-
-  const handleStopDrawingChain = () => {
-    setDrawingStartCornerId(null);
-    setSelectedCornerId(null);
   };
 
   const handleClearAll = () => {
@@ -2090,17 +2400,32 @@ export default function FloorPlannerModal({
               </div>
             </div>
 
+            {/* Desfazer (Ctrl+Z) */}
             <button
               onClick={handleUndo}
               disabled={history.length === 0}
-              className={`p-2 rounded-xl border text-xs font-semibold transition-all ${
+              className={`p-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center ${
                 history.length > 0
-                  ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                  ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white hover:text-primary active:scale-95 shadow-sm'
                   : 'bg-white/2 border-white/5 text-white/20 cursor-not-allowed'
               }`}
-              title="Desfazer última alteração"
+              title="Desfazer (Ctrl+Z)"
             >
               <RotateCcw className="size-4" />
+            </button>
+
+            {/* Refazer (Ctrl+Y) */}
+            <button
+              onClick={handleRedo}
+              disabled={redoHistory.length === 0}
+              className={`p-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center ${
+                redoHistory.length > 0
+                  ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white hover:text-primary active:scale-95 shadow-sm'
+                  : 'bg-white/2 border-white/5 text-white/20 cursor-not-allowed'
+              }`}
+              title="Refazer (Ctrl+Y ou Ctrl+Shift+Z)"
+            >
+              <RotateCw className="size-4" />
             </button>
 
             <button
@@ -2184,6 +2509,22 @@ export default function FloorPlannerModal({
             >
               <Move className="size-3.5" />
               <span>Mover Canto / Parede</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTool('split');
+                handleStopDrawingChain();
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
+                activeTool === 'split'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-md shadow-emerald-500/20 ring-1 ring-emerald-500/30'
+                  : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+              title="Inserir um novo vértice (ponto) ao longo de uma parede para dividi-la"
+            >
+              <PlusCircle className="size-3.5 text-emerald-400" />
+              <span>Inserir Ponto</span>
             </button>
 
             <button
@@ -2332,6 +2673,8 @@ export default function FloorPlannerModal({
                   ? 'grabbing'
                   : activeTool === 'wall'
                   ? 'crosshair'
+                  : activeTool === 'split'
+                  ? 'crosshair'
                   : activeTool === 'delete'
                   ? 'pointer'
                   : activeTool === 'select'
@@ -2390,6 +2733,14 @@ export default function FloorPlannerModal({
               </span>
             </div>
 
+            {/* History Action Toast Badge (Ctrl+Z / Ctrl+Y Feedback) */}
+            {historyToast && (
+              <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none bg-slate-900/95 border border-primary/50 text-white px-4 py-2 rounded-xl shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 animate-in fade-in zoom-in-95 duration-150">
+                <Sparkles className="size-4 text-primary animate-pulse" />
+                <span>{historyToast}</span>
+              </div>
+            )}
+
             {/* Top-Left Floating Controls: Instruction Badge & Selected Vertex / Wall Coordinate Inspector */}
             <div className="absolute top-3 left-3 z-20 flex flex-col gap-2 items-start pointer-events-none">
               {/* Instruction / Calibration Badge */}
@@ -2404,6 +2755,8 @@ export default function FloorPlannerModal({
                     ? drawingStartCornerId
                       ? 'Clique no ponto final ou em outro canto para fechar a parede (Esc para parar)'
                       : 'Clique no grid para iniciar uma nova parede'
+                    : activeTool === 'split'
+                    ? 'Clique em qualquer parede para inserir um novo ponto e dividi-la em 2 segmentos'
                     : activeTool === 'select'
                     ? selectedCornerId
                       ? 'Vértice selecionado: ajuste as posições X e Y ou arraste (Shift = Travar X | Ctrl = Travar Y)'
@@ -2427,6 +2780,17 @@ export default function FloorPlannerModal({
                   <span className="text-[10px] text-amber-200/80 font-medium hidden sm:inline">
                     (Shift = Trava Eixo X • Ctrl = Trava Eixo Y)
                   </span>
+
+                  {/* Button to split selected wall at midpoint */}
+                  <button
+                    onClick={() => handleSplitWall(selectedWall)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold transition-all shadow-sm active:scale-95 ml-1"
+                    title="Inserir um novo ponto exatamente no meio desta parede (dividir ao meio)"
+                  >
+                    <PlusCircle className="size-3.5 text-emerald-400" />
+                    <span>Dividir no Meio</span>
+                  </button>
+
                   <button
                     onClick={() => setSelectedWallId(null)}
                     className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors ml-1"
