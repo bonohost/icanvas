@@ -2247,7 +2247,8 @@ export default function FloorPlannerModal({
     dirLight.shadow.camera.right = 10;
     dirLight.shadow.camera.top = 10;
     dirLight.shadow.camera.bottom = -10;
-    dirLight.shadow.bias = -0.0005;
+    dirLight.shadow.bias = 0.00002; // Positive bias prevents shadow acne
+    dirLight.shadow.normalBias = 0.03;
     scene.add(dirLight);
 
     // 6. Grid Helper
@@ -2391,11 +2392,23 @@ export default function FloorPlannerModal({
       baseFloorMesh.receiveShadow = true;
       floorsGroup.add(baseFloorMesh);
 
-      // 2.2 Pisos gerados de cada ambiente elevados pelo menos 3mm (0.0035m) acima do piso padrão
-      const GENERATED_FLOOR_ELEVATION = 0.0035; // 3.5mm (>= 3 milímetros) acima do piso padrão
-      allRooms.forEach((room) => {
-        if (room.corners.length < 3) return;
+      // 2.2 Pisos gerados de cada ambiente com espessura 3D real (12mm) e deduplicação
+      const FLOOR_THICKNESS = 0.012; // 12mm de espessura física do piso
+      const seenSignatures = new Set<string>();
+      const uniqueRooms = allRooms.filter((r) => {
+        if (r.corners.length < 3) return false;
+        let cx = 0, cy = 0;
+        r.corners.forEach((c) => { cx += c.x; cy += c.y; });
+        cx = Number((cx / r.corners.length).toFixed(2));
+        cy = Number((cy / r.corners.length).toFixed(2));
+        const areaSig = Number((r.area || 0).toFixed(1));
+        const sig = `${cx}_${cy}_${areaSig}`;
+        if (seenSignatures.has(sig)) return false;
+        seenSignatures.add(sig);
+        return true;
+      });
 
+      uniqueRooms.forEach((room) => {
         const shape = new THREE.Shape();
         shape.moveTo(room.corners[0].x, -room.corners[0].y);
         for (let i = 1; i < room.corners.length; i++) {
@@ -2414,12 +2427,19 @@ export default function FloorPlannerModal({
           color: floorColorHex,
           roughness: 0.35,
           metalness: 0.1,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -4,
         });
 
-        const floorGeo = new THREE.ShapeGeometry(shape);
+        const extrudeSettings = {
+          depth: FLOOR_THICKNESS,
+          bevelEnabled: false,
+        };
+        const floorGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
         const floorMesh = new THREE.Mesh(floorGeo, roomFloorMaterial);
         floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.y = GENERATED_FLOOR_ELEVATION;
+        floorMesh.position.y = 0.001; // Base apoia em 1mm e topo atinge 13mm (espessura real e > 3mm do padrão)
         floorMesh.receiveShadow = true;
 
         floorsGroup.add(floorMesh);

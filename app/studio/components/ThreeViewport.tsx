@@ -810,7 +810,7 @@ export default function ThreeViewport({
     const width = Math.max(container.clientWidth, 400);
     const height = Math.max(container.clientHeight, 300);
 
-    const camera = new THREE.PerspectiveCamera(cameraSettings.fov, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(cameraSettings.fov, width / height, 0.1, 250);
     camera.position.set(cameraSettings.x, cameraSettings.y, cameraSettings.z);
     camera.layers.enable(LAYER_DEFAULT);
     camera.layers.enable(LAYER_TECHNICAL);
@@ -823,7 +823,7 @@ export default function ThreeViewport({
       preserveDrawingBuffer: true,
     });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = room.exposure ?? 1.0;
@@ -892,8 +892,8 @@ export default function ThreeViewport({
     topLight.castShadow = true;
     topLight.shadow.mapSize.set(2048, 2048);
     topLight.shadow.radius = 3;
-    topLight.shadow.bias = -0.0001;
-    topLight.shadow.normalBias = 0.02;
+    topLight.shadow.bias = 0.00002; // Positive bias prevents self-shadowing acne / zebra striping
+    topLight.shadow.normalBias = 0.04;
 
     const d = 12;
     topLight.shadow.camera.left = -d;
@@ -1523,10 +1523,24 @@ export default function ThreeViewport({
       floorMeshRef.current = baseFloor;
       floorGroupRef.current.add(baseFloor);
 
-      // 2. Pisos gerados (custom floors) elevados pelo menos 3mm (0.0035m) acima do piso padrão
-      const GENERATED_FLOOR_ELEVATION = 0.0035; // 3.5mm (>= 3 milímetros) acima do piso padrão (y = 0)
-      room.customFloors!.forEach((fl) => {
-        if (!fl.points || fl.points.length < 3) return;
+      // 2. Deduplicar pisos customizados idênticos ou sobrepostos
+      const seenSignatures = new Set<string>();
+      const uniqueFloors = room.customFloors!.filter((fl) => {
+        if (!fl.points || fl.points.length < 3) return false;
+        let cx = 0, cy = 0;
+        fl.points.forEach((p) => { cx += p.x; cy += p.y; });
+        cx = Number((cx / fl.points.length).toFixed(2));
+        cy = Number((cy / fl.points.length).toFixed(2));
+        const areaSig = Number((fl.area || 0).toFixed(1));
+        const sig = `${cx}_${cy}_${areaSig}`;
+        if (seenSignatures.has(sig)) return false;
+        seenSignatures.add(sig);
+        return true;
+      });
+
+      // 3. Pisos gerados com ESPESSURA 3D real (12mm) evitando qualquer flickering ou z-fighting
+      const FLOOR_THICKNESS = 0.012; // 12 milímetros de espessura física do piso
+      uniqueFloors.forEach((fl) => {
         const shape = new THREE.Shape();
         shape.moveTo(fl.points[0].x, -fl.points[0].y);
         for (let i = 1; i < fl.points.length; i++) {
@@ -1534,21 +1548,33 @@ export default function ThreeViewport({
         }
         shape.closePath();
 
-        let customMat = floorMat;
+        let customMat: THREE.MeshStandardMaterial;
         if (fl.color) {
           customMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(fl.color),
             roughness: room.floorRoughness ?? 0.55,
             metalness: room.floorMetalness ?? 0.02,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -4,
           });
+        } else {
+          customMat = floorMat.clone();
+          customMat.polygonOffset = true;
+          customMat.polygonOffsetFactor = -1;
+          customMat.polygonOffsetUnits = -4;
         }
 
-        const floorGeo = new THREE.ShapeGeometry(shape);
+        const extrudeSettings = {
+          depth: FLOOR_THICKNESS,
+          bevelEnabled: false,
+        };
+        const floorGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
         const floorMesh = new THREE.Mesh(floorGeo, customMat);
         floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.y = GENERATED_FLOOR_ELEVATION;
+        floorMesh.position.y = 0.001; // Base apoia em 1mm e topo atinge 13mm (espessura real e > 3mm do padrão)
         floorMesh.receiveShadow = true;
-        floorMesh.userData = { isFloor: true, id: fl.id, name: fl.name };
+        floorMesh.userData = { isFloor: true, id: fl.id, name: fl.name, thickness: FLOOR_THICKNESS };
         floorGroupRef.current.add(floorMesh);
       });
 
@@ -1661,7 +1687,7 @@ export default function ThreeViewport({
     }
     const maxDim = Math.max(room.width, room.depth);
     const grid = new THREE.GridHelper(maxDim, maxDim * 2, '#3b82f6', '#334155');
-    grid.position.y = 0.004; // Slightly above generated floors (0.0035m) so grid overlay remains clearly visible when active
+    grid.position.y = 0.015; // Slightly above 12mm extruded floors (0.013m) so grid overlay remains clearly visible when active
     grid.visible = showGrid;
     sceneRef.current.add(grid);
     gridHelperRef.current = grid;
