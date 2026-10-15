@@ -70,6 +70,7 @@ export interface PlannerRoomLoop {
   color?: string;
   material?: string;
   center: { x: number; y: number };
+  isManual?: boolean;
 }
 
 export interface PlannerSpotPin {
@@ -307,7 +308,7 @@ export default function FloorPlannerModal({
   onApplyToProject,
 }: FloorPlannerModalProps) {
   // --- UI & Tool State ---
-  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'split' | 'spot' | 'delete'>('wall');
+  const [activeTool, setActiveTool] = useState<'wall' | 'select' | 'split' | 'spot' | 'room' | 'delete'>('wall');
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
   const [showGrid, setShowGrid] = useState<boolean>(false); // Grade no 2D começa sempre oculta
   const [snapCorner, setSnapCorner] = useState<boolean>(true);
@@ -324,6 +325,7 @@ export default function FloorPlannerModal({
       walls: PlannerWall[];
       spots?: PlannerSpotPin[];
       roomCustomizations?: RoomCustomization[];
+      manualFloors?: PlannerRoomLoop[];
     }[]
   >([]);
   const [redoHistory, setRedoHistory] = useState<
@@ -332,6 +334,7 @@ export default function FloorPlannerModal({
       walls: PlannerWall[];
       spots?: PlannerSpotPin[];
       roomCustomizations?: RoomCustomization[];
+      manualFloors?: PlannerRoomLoop[];
     }[]
   >([]);
   const [historyToast, setHistoryToast] = useState<string | null>(null);
@@ -392,6 +395,39 @@ export default function FloorPlannerModal({
     }
     return [];
   });
+  const [manualFloors, setManualFloors] = useState<PlannerRoomLoop[]>(() => {
+    if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
+      return currentRoom.customFloors
+        .filter((cf) => cf.points && cf.points.length >= 3)
+        .map((cf, fIdx) => {
+          let sumX = 0;
+          let sumY = 0;
+          cf.points.forEach((p) => {
+            sumX += p.x;
+            sumY += p.y;
+          });
+          const n = cf.points.length;
+          return {
+            id: cf.id || `custom_floor_${fIdx + 1}`,
+            corners: cf.points.map((p, pIdx) => ({
+              id: `cf_pt_${fIdx}_${pIdx}`,
+              x: p.x,
+              y: p.y,
+            })),
+            area: cf.area || 0,
+            name: cf.name || '',
+            color: cf.color,
+            material: cf.material,
+            center: { x: sumX / n, y: sumY / n },
+            isManual: true,
+          };
+        });
+    }
+    return [];
+  });
+  const [manualRoomPoints, setManualRoomPoints] = useState<
+    Array<{ x: number; y: number; cornerId?: string }>
+  >([]);
   const [editingRoom, setEditingRoom] = useState<PlannerRoomLoop | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
@@ -506,6 +542,20 @@ export default function FloorPlannerModal({
 
   // Detected Rooms
   const [detectedRooms, setDetectedRooms] = useState<PlannerRoomLoop[]>([]);
+
+  // Combined Rooms (Auto-detected + Manual Floors)
+  const allRooms = useMemo(() => {
+    const list: PlannerRoomLoop[] = [...manualFloors];
+    detectedRooms.forEach((ar) => {
+      const hasManualOverlap = manualFloors.some(
+        (mf) => Math.hypot(mf.center.x - ar.center.x, mf.center.y - ar.center.y) < 0.6
+      );
+      if (!hasManualOverlap) {
+        list.push(ar);
+      }
+    });
+    return list;
+  }, [detectedRooms, manualFloors]);
 
   // 2D Interaction Refs & State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -695,6 +745,7 @@ export default function FloorPlannerModal({
   const threeControlsRef = useRef<OrbitControls | null>(null);
   const wallsGroupRef = useRef<THREE.Group | null>(null);
   const floorsGroupRef = useRef<THREE.Group | null>(null);
+  const spotsGroupRef = useRef<THREE.Group | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
   // Push history snapshot before modifications
@@ -706,7 +757,8 @@ export default function FloorPlannerModal({
           JSON.stringify(last.corners) === JSON.stringify(corners) &&
           JSON.stringify(last.walls) === JSON.stringify(walls) &&
           JSON.stringify(last.spots || []) === JSON.stringify(spots) &&
-          JSON.stringify(last.roomCustomizations || []) === JSON.stringify(roomCustomizations)
+          JSON.stringify(last.roomCustomizations || []) === JSON.stringify(roomCustomizations) &&
+          JSON.stringify(last.manualFloors || []) === JSON.stringify(manualFloors)
         ) {
           return prev;
         }
@@ -718,11 +770,12 @@ export default function FloorPlannerModal({
           walls: JSON.parse(JSON.stringify(walls)),
           spots: JSON.parse(JSON.stringify(spots)),
           roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
+          manualFloors: JSON.parse(JSON.stringify(manualFloors)),
         },
       ];
     });
     setRedoHistory([]);
-  }, [corners, walls, spots, roomCustomizations]);
+  }, [corners, walls, spots, roomCustomizations, manualFloors]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -735,6 +788,7 @@ export default function FloorPlannerModal({
         walls: JSON.parse(JSON.stringify(walls)),
         spots: JSON.parse(JSON.stringify(spots)),
         roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
+        manualFloors: JSON.parse(JSON.stringify(manualFloors)),
       },
     ]);
 
@@ -742,13 +796,14 @@ export default function FloorPlannerModal({
     setWalls(prev.walls);
     if (prev.spots) setSpots(prev.spots);
     if (prev.roomCustomizations) setRoomCustomizations(prev.roomCustomizations);
+    if (prev.manualFloors) setManualFloors(prev.manualFloors);
     setHistory((h) => h.slice(0, -1));
     setSelectedCornerId(null);
     setSelectedWallId(null);
     setSelectedSpotId(null);
     setSelectedRoomId(null);
     triggerToast('Desfeito (Ctrl+Z)');
-  }, [history, corners, walls, spots, roomCustomizations, triggerToast]);
+  }, [history, corners, walls, spots, roomCustomizations, manualFloors, triggerToast]);
 
   const handleRedo = useCallback(() => {
     if (redoHistory.length === 0) return;
@@ -761,6 +816,7 @@ export default function FloorPlannerModal({
         walls: JSON.parse(JSON.stringify(walls)),
         spots: JSON.parse(JSON.stringify(spots)),
         roomCustomizations: JSON.parse(JSON.stringify(roomCustomizations)),
+        manualFloors: JSON.parse(JSON.stringify(manualFloors)),
       },
     ]);
 
@@ -768,13 +824,14 @@ export default function FloorPlannerModal({
     setWalls(next.walls);
     if (next.spots) setSpots(next.spots);
     if (next.roomCustomizations) setRoomCustomizations(next.roomCustomizations);
+    if (next.manualFloors) setManualFloors(next.manualFloors);
     setRedoHistory((r) => r.slice(0, -1));
     setSelectedCornerId(null);
     setSelectedWallId(null);
     setSelectedSpotId(null);
     setSelectedRoomId(null);
     triggerToast('Refeito (Ctrl+Y)');
-  }, [redoHistory, corners, walls, spots, roomCustomizations, triggerToast]);
+  }, [redoHistory, corners, walls, spots, roomCustomizations, manualFloors, triggerToast]);
 
   const handleStopDrawingChain = useCallback(() => {
     setDrawingStartCornerId(null);
@@ -808,8 +865,16 @@ export default function FloorPlannerModal({
       setWalls((prev) => prev.filter((w) => w.id !== selectedWallId));
       setSelectedWallId(null);
       triggerToast('Parede excluída (Del)');
+    } else if (selectedRoomId) {
+      const isManual = manualFloors.some((mf) => mf.id === selectedRoomId);
+      if (isManual) {
+        saveSnapshot();
+        setManualFloors((prev) => prev.filter((f) => f.id !== selectedRoomId));
+        setSelectedRoomId(null);
+        triggerToast('Ambiente manual excluído (Del)');
+      }
     }
-  }, [selectedSpotId, selectedCornerId, selectedWallId, layersConfig.walls.locked, saveSnapshot, triggerToast]);
+  }, [selectedSpotId, selectedCornerId, selectedWallId, selectedRoomId, manualFloors, layersConfig.walls.locked, saveSnapshot, triggerToast]);
 
   // Global Keyboard Shortcuts for 2D Floor Planner (Ctrl+Z = Undo, Ctrl+Y = Redo, Del = Delete, Esc = Cancel)
   useEffect(() => {
@@ -847,7 +912,14 @@ export default function FloorPlannerModal({
 
       // Delete: Delete or Backspace
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedCornerId || selectedWallId) {
+        if (activeTool === 'room' && e.key === 'Backspace' && manualRoomPoints.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          setManualRoomPoints((prev) => prev.slice(0, -1));
+          triggerToast('Último ponto removido');
+          return;
+        }
+        if (selectedCornerId || selectedWallId || selectedSpotId || selectedRoomId) {
           e.preventDefault();
           e.stopPropagation();
           handleDeleteSelected();
@@ -855,19 +927,42 @@ export default function FloorPlannerModal({
         }
       }
 
-      // Escape: Stop drawing chain or clear selection
+      // Enter: Close and finish room polygon
+      if (e.key === 'Enter') {
+        if (activeTool === 'room' && manualRoomPoints.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          finishManualRoomRef.current();
+          return;
+        }
+      }
+
+      // Escape: Stop drawing chain, clear manual room points, or clear selection
       if (e.key === 'Escape') {
+        if (activeTool === 'room') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (manualRoomPoints.length > 0) {
+            setManualRoomPoints([]);
+            triggerToast('Seleção de pontos cancelada');
+          } else {
+            setActiveTool('select');
+          }
+          return;
+        }
         if (drawingStartCornerId) {
           e.preventDefault();
           e.stopPropagation();
           handleStopDrawingChain();
           return;
         }
-        if (selectedCornerId || selectedWallId) {
+        if (selectedCornerId || selectedWallId || selectedSpotId || selectedRoomId) {
           e.preventDefault();
           e.stopPropagation();
           setSelectedCornerId(null);
           setSelectedWallId(null);
+          setSelectedSpotId(null);
+          setSelectedRoomId(null);
           return;
         }
       }
@@ -877,13 +972,18 @@ export default function FloorPlannerModal({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [
     isOpen,
+    activeTool,
+    manualRoomPoints,
     handleUndo,
     handleRedo,
     selectedCornerId,
     selectedWallId,
+    selectedSpotId,
+    selectedRoomId,
     drawingStartCornerId,
     handleDeleteSelected,
     handleStopDrawingChain,
+    triggerToast,
   ]);
 
   // Split Wall: Insert a new corner point between two existing endpoints
@@ -941,7 +1041,7 @@ export default function FloorPlannerModal({
     [corners, saveSnapshot]
   );
 
-  // --- Cycle / Closed Room Detection Algorithm ---
+  // --- Robust Planar Face Traversal (Minimal Closed Rooms Detection) ---
   const recalculateRooms = useCallback(() => {
     if (corners.length < 3 || walls.length < 3) {
       setDetectedRooms([]);
@@ -952,95 +1052,246 @@ export default function FloorPlannerModal({
     const cornerMap = new Map<string, PlannerCorner>();
     corners.forEach((c) => cornerMap.set(c.id, c));
 
-    const adj = new Map<string, string[]>();
+    // 1. Build Adjacency List with Outgoing Polar Angles
+    const adj = new Map<string, Array<{ to: string; angle: number }>>();
     corners.forEach((c) => adj.set(c.id, []));
 
     walls.forEach((w) => {
-      if (cornerMap.has(w.startId) && cornerMap.has(w.endId)) {
-        adj.get(w.startId)?.push(w.endId);
-        adj.get(w.endId)?.push(w.startId);
-      }
+      if (w.startId === w.endId) return;
+      const c1 = cornerMap.get(w.startId);
+      const c2 = cornerMap.get(w.endId);
+      if (!c1 || !c2) return;
+      const a12 = Math.atan2(c2.y - c1.y, c2.x - c1.x);
+      const a21 = Math.atan2(c1.y - c2.y, c1.x - c2.x);
+      adj.get(w.startId)?.push({ to: w.endId, angle: a12 });
+      adj.get(w.endId)?.push({ to: w.startId, angle: a21 });
     });
 
-    // Detect Simple Closed Polygons (Eulerian / Cycle Traversal)
-    const visitedCycles: string[][] = [];
-    const rooms: PlannerRoomLoop[] = [];
-
-    // Check for Simple Closed Loop including all connected boundary corners
-    const findCycleFrom = (startId: string, currentId: string, path: string[], visited: Set<string>) => {
-      if (path.length > 2 && currentId === startId) {
-        // Closed loop found
-        const canonical = [...path].sort().join('-');
-        if (!visitedCycles.some((c) => c.sort().join('-') === canonical)) {
-          visitedCycles.push([...path]);
-        }
-        return;
-      }
-
-      if (path.length >= 10) return; // limit depth for responsiveness
-
-      const neighbors = adj.get(currentId) || [];
-      for (const n of neighbors) {
-        const prevId = path[path.length - 2];
-        if (n === prevId) continue; // don't go backwards along same wall
-        if (n === startId && path.length >= 3) {
-          findCycleFrom(startId, n, [...path, n], visited);
-        } else if (!visited.has(n)) {
-          visited.add(n);
-          findCycleFrom(startId, n, [...path, n], visited);
-          visited.delete(n);
+    // 2. Prune Dead-End Walls (vertices with degree 1 cannot be part of any closed room)
+    let pruned = true;
+    while (pruned) {
+      pruned = false;
+      for (const [cid, edges] of adj.entries()) {
+        if (edges.length === 1) {
+          const otherId = edges[0].to;
+          adj.set(cid, []);
+          const otherEdges = adj.get(otherId);
+          if (otherEdges) {
+            adj.set(otherId, otherEdges.filter((e) => e.to !== cid));
+          }
+          pruned = true;
         }
       }
-    };
+    }
 
+    // 3. Sort Outgoing Edges Counter-Clockwise (by angle ascending)
     corners.forEach((c) => {
-      findCycleFrom(c.id, c.id, [c.id], new Set([c.id]));
+      adj.get(c.id)?.sort((a, b) => a.angle - b.angle);
     });
 
-    // Calculate Area and Center for each cycle using Shoelace formula
-    visitedCycles.forEach((cycle, idx) => {
-      const cycleCorners = cycle
-        .map((id) => cornerMap.get(id))
-        .filter((c): c is PlannerCorner => Boolean(c));
+    // 4. Traverse Planar Faces using Left-Turn (next edge in CCW order)
+    const visitedEdges = new Set<string>();
+    interface RawFace {
+      corners: PlannerCorner[];
+      signedArea: number;
+      area: number;
+      center: { x: number; y: number };
+    }
+    const rawFaces: RawFace[] = [];
 
-      if (cycleCorners.length >= 3) {
-        let area = 0;
+    for (const c of corners) {
+      const edges = adj.get(c.id) || [];
+      for (const edge of edges) {
+        const edgeKey = `${c.id}->${edge.to}`;
+        if (visitedEdges.has(edgeKey)) continue;
+
+        const pathIds: string[] = [c.id];
+        let u = c.id;
+        let v = edge.to;
+        let infiniteLoopGuard = 0;
+
+        while (infiniteLoopGuard++ < 120) {
+          visitedEdges.add(`${u}->${v}`);
+          pathIds.push(v);
+
+          const cu = cornerMap.get(u);
+          const cv = cornerMap.get(v);
+          if (!cu || !cv) break;
+
+          const outEdges = adj.get(v);
+          if (!outEdges || outEdges.length === 0) break;
+
+          // Find index of edge pointing back to u
+          const backIdx = outEdges.findIndex((e) => e.to === u);
+          if (backIdx === -1) break;
+
+          // Next edge in CCW cyclic order is (backIdx + 1) % outEdges.length
+          const nextEdge = outEdges[(backIdx + 1) % outEdges.length];
+
+          u = v;
+          v = nextEdge.to;
+
+          if (u === c.id && v === edge.to) {
+            break; // Loop completed
+          }
+        }
+
+        // Drop duplicate closing corner from array
+        if (pathIds.length > 3 && pathIds[0] === pathIds[pathIds.length - 1]) {
+          pathIds.pop();
+        }
+
+        if (pathIds.length < 3) continue;
+
+        // Map to corners
+        const faceCorners = pathIds
+          .map((id) => cornerMap.get(id))
+          .filter((corner): corner is PlannerCorner => Boolean(corner));
+
+        if (faceCorners.length < 3) continue;
+
+        // Shoelace Signed Area & Centroid
+        let signedArea = 0;
         let sumX = 0;
         let sumY = 0;
-        const n = cycleCorners.length;
+        let centroidX = 0;
+        let centroidY = 0;
+        const n = faceCorners.length;
 
         for (let i = 0; i < n; i++) {
-          const c1 = cycleCorners[i];
-          const c2 = cycleCorners[(i + 1) % n];
-          area += c1.x * c2.y - c2.x * c1.y;
-          sumX += c1.x;
-          sumY += c1.y;
+          const p1 = faceCorners[i];
+          const p2 = faceCorners[(i + 1) % n];
+          const cross = p1.x * p2.y - p2.x * p1.y;
+          signedArea += cross;
+          sumX += p1.x;
+          sumY += p1.y;
+          centroidX += (p1.x + p2.x) * cross;
+          centroidY += (p1.y + p2.y) * cross;
         }
-        area = Math.abs(area) / 2;
+        signedArea /= 2;
+        const area = Math.abs(signedArea);
 
-        if (area > 0.5) {
-          // Ignore micro artefacts
-          const center = { x: sumX / n, y: sumY / n };
-          const custom = roomCustomizations.find(
-            (rc) =>
-              rc.id === `room_${idx + 1}` ||
-              (rc.center && Math.hypot(rc.center.x - center.x, rc.center.y - center.y) < 0.6)
-          );
-          rooms.push({
-            id: `room_${idx + 1}`,
-            corners: cycleCorners,
-            area: Number(area.toFixed(2)),
-            name: custom?.name || '', // Não escreve "Cômodo X" por padrão!
-            color: custom?.color,
-            material: custom?.material,
-            center,
-          });
+        // Ignore micro slivers or invalid faces
+        if (area < 0.4) continue;
+
+        let center = { x: sumX / n, y: sumY / n };
+        if (Math.abs(signedArea) > 0.001) {
+          center = {
+            x: centroidX / (6 * signedArea),
+            y: centroidY / (6 * signedArea),
+          };
         }
+
+        rawFaces.push({
+          corners: faceCorners,
+          signedArea,
+          area: Number(area.toFixed(2)),
+          center,
+        });
       }
+    }
+
+    // 5. Separate Interior Rooms from Unbounded Exterior Face
+    const negFaces = rawFaces.filter((f) => f.signedArea < 0);
+    const posFaces = rawFaces.filter((f) => f.signedArea > 0);
+
+    let interiorFaces: RawFace[] = [];
+    if (negFaces.length > 0 && posFaces.length > 0) {
+      if (negFaces.length >= posFaces.length) {
+        interiorFaces = negFaces;
+      } else {
+        interiorFaces = posFaces;
+      }
+    } else {
+      interiorFaces = rawFaces.filter((f) => f.area < 1000);
+    }
+
+    // Sort interior faces for stable indexing
+    interiorFaces.sort((a, b) => a.center.x - b.center.x || a.center.y - b.center.y);
+
+    // Build Final Room Objects and preserve customizations
+    const rooms: PlannerRoomLoop[] = interiorFaces.map((face, idx) => {
+      const custom = roomCustomizations.find(
+        (rc) =>
+          rc.id === `room_${idx + 1}` ||
+          (rc.center && Math.hypot(rc.center.x - face.center.x, rc.center.y - face.center.y) < 0.8)
+      );
+
+      return {
+        id: `room_${idx + 1}`,
+        corners: face.corners,
+        area: face.area,
+        name: custom?.name || '',
+        color: custom?.color,
+        material: custom?.material,
+        center: face.center,
+      };
     });
 
     setDetectedRooms(rooms);
   }, [corners, walls, roomCustomizations]);
+
+  // Complete & finalize manual room polygon
+  const handleFinishManualRoom = useCallback(() => {
+    if (manualRoomPoints.length < 3) {
+      triggerToast('Marque pelo menos 3 pontos para formar o ambiente');
+      return;
+    }
+
+    let signedArea = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let centroidX = 0;
+    let centroidY = 0;
+    const n = manualRoomPoints.length;
+
+    for (let i = 0; i < n; i++) {
+      const p1 = manualRoomPoints[i];
+      const p2 = manualRoomPoints[(i + 1) % n];
+      const cross = p1.x * p2.y - p2.x * p1.y;
+      signedArea += cross;
+      sumX += p1.x;
+      sumY += p1.y;
+      centroidX += (p1.x + p2.x) * cross;
+      centroidY += (p1.y + p2.y) * cross;
+    }
+    signedArea /= 2;
+    const area = Number(Math.abs(signedArea).toFixed(2));
+
+    let center = { x: sumX / n, y: sumY / n };
+    if (Math.abs(signedArea) > 0.001) {
+      center = {
+        x: centroidX / (6 * signedArea),
+        y: centroidY / (6 * signedArea),
+      };
+    }
+
+    const newRoomId = `manual_room_${Date.now()}`;
+    const newRoom: PlannerRoomLoop = {
+      id: newRoomId,
+      corners: manualRoomPoints.map((p, idx) => ({
+        id: p.cornerId || `mp_${Date.now()}_${idx}`,
+        x: p.x,
+        y: p.y,
+      })),
+      area,
+      name: '',
+      color: '#8b5cf6',
+      material: 'madeira',
+      center,
+      isManual: true,
+    };
+
+    saveSnapshot();
+    setManualFloors((prev) => [...prev, newRoom]);
+    setManualRoomPoints([]);
+    setSelectedRoomId(newRoom.id);
+    setEditingRoom(newRoom);
+    triggerToast(`Ambiente de ${area} m² criado! Defina o nome e o piso.`);
+  }, [manualRoomPoints, saveSnapshot, triggerToast]);
+
+  const finishManualRoomRef = useRef(handleFinishManualRoom);
+  finishManualRoomRef.current = handleFinishManualRoom;
 
   // Helper function to check if a 2D world point is inside a polygon
   const isPointInPolygon = useCallback((point: { x: number; y: number }, vs: PlannerCorner[]): boolean => {
@@ -1272,9 +1523,9 @@ export default function FloorPlannerModal({
       ctx.fillText('(0,0)', centerX + 4, centerY - 4);
     }
 
-    // 2. Draw Detected Room Polygons (Fills & Area badges)
+    // 2. Draw Detected & Manual Room Polygons (Fills & Area badges)
     if (layersConfig.floors.visible) {
-      detectedRooms.forEach((room) => {
+      allRooms.forEach((room) => {
         if (room.corners.length < 3) return;
         ctx.beginPath();
         const firstSc = worldToScreen(room.corners[0].x, room.corners[0].y, canvas);
@@ -1777,11 +2028,120 @@ export default function FloorPlannerModal({
       ctx.restore();
     }
 
+    // 10. Draw In-Progress Manual Room Point Selection
+    if (activeTool === 'room') {
+      ctx.save();
+
+      const snappedCorner = snappedCornerId ? corners.find((c) => c.id === snappedCornerId) : null;
+
+      // Draw semi-transparent polygon preview if 2 or more points
+      if (manualRoomPoints.length >= 2 && currentMouseWorld) {
+        ctx.beginPath();
+        const p0Sc = worldToScreen(manualRoomPoints[0].x, manualRoomPoints[0].y, canvas);
+        ctx.moveTo(p0Sc.x, p0Sc.y);
+        for (let i = 1; i < manualRoomPoints.length; i++) {
+          const sc = worldToScreen(manualRoomPoints[i].x, manualRoomPoints[i].y, canvas);
+          ctx.lineTo(sc.x, sc.y);
+        }
+        const targetWorld = snappedCorner ? { x: snappedCorner.x, y: snappedCorner.y } : currentMouseWorld;
+        const targetSc = worldToScreen(targetWorld.x, targetWorld.y, canvas);
+        ctx.lineTo(targetSc.x, targetSc.y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+        ctx.fill();
+      }
+
+      // Draw perimeter lines between already-selected points
+      if (manualRoomPoints.length >= 2) {
+        ctx.beginPath();
+        const firstSc = worldToScreen(manualRoomPoints[0].x, manualRoomPoints[0].y, canvas);
+        ctx.moveTo(firstSc.x, firstSc.y);
+        for (let i = 1; i < manualRoomPoints.length; i++) {
+          const sc = worldToScreen(manualRoomPoints[i].x, manualRoomPoints[i].y, canvas);
+          ctx.lineTo(sc.x, sc.y);
+        }
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+
+      // Draw dashed rubber-band line from last point to current mouse / snapped target
+      if (manualRoomPoints.length > 0 && currentMouseWorld) {
+        const lastPt = manualRoomPoints[manualRoomPoints.length - 1];
+        const lastSc = worldToScreen(lastPt.x, lastPt.y, canvas);
+        const targetWorld = snappedCorner ? { x: snappedCorner.x, y: snappedCorner.y } : currentMouseWorld;
+        const targetSc = worldToScreen(targetWorld.x, targetWorld.y, canvas);
+
+        ctx.beginPath();
+        ctx.moveTo(lastSc.x, lastSc.y);
+        ctx.lineTo(targetSc.x, targetSc.y);
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#a5b4fc';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw numbered badges on selected vertices
+      manualRoomPoints.forEach((p, idx) => {
+        const sc = worldToScreen(p.x, p.y, canvas);
+        const isFirst = idx === 0;
+
+        // Halo
+        ctx.beginPath();
+        ctx.arc(sc.x, sc.y, isFirst ? 14 : 10, 0, Math.PI * 2);
+        ctx.fillStyle = isFirst ? 'rgba(34, 197, 94, 0.35)' : 'rgba(99, 102, 241, 0.3)';
+        ctx.fill();
+
+        // Pin core
+        ctx.beginPath();
+        ctx.arc(sc.x, sc.y, isFirst ? 8 : 6, 0, Math.PI * 2);
+        ctx.fillStyle = isFirst ? '#22c55e' : '#6366f1';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Vertex index number
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${idx + 1}`, sc.x, sc.y - 14);
+      });
+
+      // Special highlight on 1st point when polygon can be closed (>= 3 points)
+      if (manualRoomPoints.length >= 3) {
+        const fSc = worldToScreen(manualRoomPoints[0].x, manualRoomPoints[0].y, canvas);
+        ctx.beginPath();
+        ctx.arc(fSc.x, fSc.y, 18, 0, Math.PI * 2);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const tip = 'Clique no Ponto 1 para fechar o ambiente';
+        ctx.font = 'bold 10px Inter, sans-serif';
+        const tw = ctx.measureText(tip).width;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.fillRect(fSc.x - tw / 2 - 6, fSc.y + 14, tw + 12, 18);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(fSc.x - tw / 2 - 6, fSc.y + 14, tw + 12, 18);
+        ctx.fillStyle = '#4ade80';
+        ctx.fillText(tip, fSc.x, fSc.y + 23);
+      }
+
+      ctx.restore();
+    }
+
     ctx.restore();
   }, [
     corners,
     walls,
-    detectedRooms,
+    allRooms,
+    manualRoomPoints,
     pan,
     zoom,
     gridStep,
@@ -1897,10 +2257,13 @@ export default function FloorPlannerModal({
 
     const wallsGroup = new THREE.Group();
     const floorsGroup = new THREE.Group();
+    const spotsGroup = new THREE.Group();
     scene.add(wallsGroup);
     scene.add(floorsGroup);
+    scene.add(spotsGroup);
     wallsGroupRef.current = wallsGroup;
     floorsGroupRef.current = floorsGroup;
+    spotsGroupRef.current = spotsGroup;
 
     // 7. Animation Loop
     const animate = () => {
@@ -1998,31 +2361,111 @@ export default function FloorPlannerModal({
     });
 
     // 2. Build 3D Floors
-    const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      roughness: 0.4,
-      metalness: 0.1,
-    });
+    floorsGroup.visible = layersConfig.floors.visible;
+    if (layersConfig.floors.visible) {
+      allRooms.forEach((room) => {
+        if (room.corners.length < 3) return;
 
-    detectedRooms.forEach((room) => {
-      if (room.corners.length < 3) return;
+        const shape = new THREE.Shape();
+        shape.moveTo(room.corners[0].x, -room.corners[0].y);
+        for (let i = 1; i < room.corners.length; i++) {
+          shape.lineTo(room.corners[i].x, -room.corners[i].y);
+        }
+        shape.closePath();
 
-      const shape = new THREE.Shape();
-      shape.moveTo(room.corners[0].x, -room.corners[0].y);
-      for (let i = 1; i < room.corners.length; i++) {
-        shape.lineTo(room.corners[i].x, -room.corners[i].y);
+        let floorColorHex = 0x334155;
+        if (room.color) {
+          floorColorHex = parseInt(room.color.replace('#', '0x'), 16);
+        } else if (currentRoom.floorColor) {
+          floorColorHex = parseInt(currentRoom.floorColor.replace('#', '0x'), 16);
+        }
+
+        const roomFloorMaterial = new THREE.MeshStandardMaterial({
+          color: floorColorHex,
+          roughness: 0.35,
+          metalness: 0.1,
+        });
+
+        const floorGeo = new THREE.ShapeGeometry(shape);
+        const floorMesh = new THREE.Mesh(floorGeo, roomFloorMaterial);
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.position.y = 0.005;
+        floorMesh.receiveShadow = true;
+
+        floorsGroup.add(floorMesh);
+      });
+    }
+
+    // 3. Build 3D Spots Markers (Camera Waypoint Pins)
+    if (spotsGroupRef.current) {
+      const spotsGroup = spotsGroupRef.current;
+      while (spotsGroup.children.length > 0) {
+        const obj = spotsGroup.children[0] as THREE.Mesh;
+        if (obj.geometry) obj.geometry.dispose();
+        spotsGroup.remove(obj);
       }
-      shape.closePath();
 
-      const floorGeo = new THREE.ShapeGeometry(shape);
-      const floorMesh = new THREE.Mesh(floorGeo, floorMaterial);
-      floorMesh.rotation.x = -Math.PI / 2;
-      floorMesh.position.y = 0.005;
-      floorMesh.receiveShadow = true;
+      if (layersConfig.spots.visible) {
+        spots.forEach((spot) => {
+          const spotGroup = new THREE.Group();
+          spotGroup.position.set(spot.x, 0, spot.y);
 
-      floorsGroup.add(floorMesh);
-    });
-  }, [corners, walls, detectedRooms, wallHeight, wallThickness]);
+          // Floor target ring
+          const ringGeo = new THREE.RingGeometry(0.18, 0.25, 24);
+          const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x06b6d4,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8,
+          });
+          const ring = new THREE.Mesh(ringGeo, ringMat);
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.y = 0.02;
+          spotGroup.add(ring);
+
+          // Vertical indicator pin
+          const pinGeo = new THREE.CylinderGeometry(0.015, 0.015, spot.height || 1.6, 8);
+          const pinMat = new THREE.MeshBasicMaterial({
+            color: 0x06b6d4,
+            transparent: true,
+            opacity: 0.6,
+          });
+          const pin = new THREE.Mesh(pinGeo, pinMat);
+          pin.position.y = (spot.height || 1.6) / 2;
+          spotGroup.add(pin);
+
+          // Eye-level camera marker
+          const sphereGeo = new THREE.SphereGeometry(0.12, 16, 16);
+          const sphereMat = new THREE.MeshStandardMaterial({
+            color: 0x22d3ee,
+            emissive: 0x0891b2,
+            emissiveIntensity: 0.6,
+            roughness: 0.2,
+            metalness: 0.3,
+          });
+          const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+          sphere.position.y = spot.height || 1.6;
+          spotGroup.add(sphere);
+
+          spotsGroup.add(spotGroup);
+        });
+      }
+    }
+  }, [corners, walls, allRooms, wallHeight, wallThickness, layersConfig, spots, currentRoom.floorColor]);
+
+  // Teleport 3D camera to selected spot
+  const handleFlyToSpot = useCallback((spot: PlannerSpotPin) => {
+    if (!threeCameraRef.current || !threeControlsRef.current) return;
+    const cam = threeCameraRef.current;
+    const ctrl = threeControlsRef.current;
+
+    // Position camera at spot location at eye level (1.60m)
+    cam.position.set(spot.x, spot.height || 1.6, spot.y);
+    // Look slightly towards room center
+    ctrl.target.set(spot.x, 1.4, spot.y - 1.2);
+    ctrl.update();
+    triggerToast(`Câmera posicionada em: ${spot.name}`);
+  }, [triggerToast]);
 
   // --- Background Floor Plan Helpers ---
   const handleLoadBgUrl = (urlToLoad?: string) => {
@@ -2236,20 +2679,85 @@ export default function FloorPlannerModal({
           setDrawingStartCornerId(endCornerId);
         }
       }
+    } else if (activeTool === 'spot') {
+      const hitRoom = allRooms.find((r) => isPointInPolygon({ x: world.x, y: world.y }, r.corners));
+      const suggestedName = hitRoom?.name ? `Spot ${hitRoom.name}` : `Spot ${spots.length + 1}`;
+      setSpotModal({
+        isOpen: true,
+        x: Number(world.x.toFixed(2)),
+        y: Number(world.y.toFixed(2)),
+        name: suggestedName,
+        height: 1.6,
+      });
+      return;
+    } else if (activeTool === 'room') {
+      if (layersConfig.floors.locked) {
+        triggerToast('Camada de pisos está bloqueada');
+        return;
+      }
+
+      // Snap to corner if hovering near existing corner, otherwise use world point
+      const pt = nearestCorner
+        ? { x: nearestCorner.x, y: nearestCorner.y, cornerId: nearestCorner.id }
+        : { x: Number(world.x.toFixed(2)), y: Number(world.y.toFixed(2)) };
+
+      // Check if clicking close to the first point to close polygon
+      if (manualRoomPoints.length >= 3) {
+        const firstPt = manualRoomPoints[0];
+        const distToFirst = Math.hypot(pt.x - firstPt.x, pt.y - firstPt.y);
+        if (
+          distToFirst < Math.max(0.35, 20 / zoom) ||
+          (pt.cornerId && pt.cornerId === firstPt.cornerId)
+        ) {
+          handleFinishManualRoom();
+          return;
+        }
+      }
+
+      // Avoid adding duplicate point consecutively
+      if (manualRoomPoints.length > 0) {
+        const lastPt = manualRoomPoints[manualRoomPoints.length - 1];
+        if (Math.hypot(pt.x - lastPt.x, pt.y - lastPt.y) < 0.05) {
+          return;
+        }
+      }
+
+      setManualRoomPoints((prev) => [...prev, pt]);
+      triggerToast(`Ponto ${manualRoomPoints.length + 1} marcado`);
+      return;
     } else if (activeTool === 'select') {
-      if (nearestCorner) {
+      // 1. Check if clicking on an existing spot
+      if (layersConfig.spots.visible && !layersConfig.spots.locked) {
+        const clickedSpot = spots.find((s) => Math.hypot(s.x - world.x, s.y - world.y) < Math.max(0.35, 20 / zoom));
+        if (clickedSpot) {
+          setSelectedSpotId(clickedSpot.id);
+          setDraggingSpotId(clickedSpot.id);
+          setSelectedCornerId(null);
+          setSelectedWallId(null);
+          setSelectedRoomId(null);
+          saveSnapshot();
+          return;
+        }
+      }
+
+      // 2. Check corners (if walls not locked)
+      if (!layersConfig.walls.locked && nearestCorner) {
         setSelectedCornerId(nearestCorner.id);
         setSelectedWallId(null);
+        setSelectedSpotId(null);
+        setSelectedRoomId(null);
         setDraggingCornerId(nearestCorner.id);
         setDraggingWallId(null);
         dragWallStartRef.current = null;
         dragCornerStartRef.current = { id: nearestCorner.id, x: nearestCorner.x, y: nearestCorner.y };
         saveSnapshot();
       } else {
-        const nearestWall = getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom));
+        const nearestWall = !layersConfig.walls.locked ? getNearestWall(world.x, world.y, Math.max(0.35, 22 / zoom)) : null;
         if (nearestWall) {
           setSelectedWallId(nearestWall.id);
           setSelectedCornerId(null);
+          setSelectedSpotId(null);
+          setSelectedRoomId(null);
           setDraggingCornerId(null);
           setDraggingWallId(nearestWall.id);
           dragCornerStartRef.current = null;
@@ -2267,8 +2775,22 @@ export default function FloorPlannerModal({
           }
           saveSnapshot();
         } else {
+          // Check if clicking a room / floor
+          if (layersConfig.floors.visible && !layersConfig.floors.locked) {
+            const hitRoom = allRooms.find((r) => isPointInPolygon({ x: world.x, y: world.y }, r.corners));
+            if (hitRoom) {
+              setSelectedRoomId(hitRoom.id);
+              setEditingRoom(hitRoom);
+              setSelectedCornerId(null);
+              setSelectedWallId(null);
+              setSelectedSpotId(null);
+              return;
+            }
+          }
           setSelectedCornerId(null);
           setSelectedWallId(null);
+          setSelectedSpotId(null);
+          setSelectedRoomId(null);
           setDraggingCornerId(null);
           setDraggingWallId(null);
           dragCornerStartRef.current = null;
@@ -2276,6 +2798,10 @@ export default function FloorPlannerModal({
         }
       }
     } else if (activeTool === 'split') {
+      if (layersConfig.walls.locked) {
+        triggerToast('Camada de paredes bloqueada');
+        return;
+      }
       const nearestWall = getNearestWall(world.x, world.y, Math.max(0.45, 26 / zoom));
       if (nearestWall) {
         const c1 = corners.find((c) => c.id === nearestWall.startId);
@@ -2297,6 +2823,19 @@ export default function FloorPlannerModal({
         }
       }
     } else if (activeTool === 'delete') {
+      if (layersConfig.spots.visible) {
+        const clickedSpot = spots.find((s) => Math.hypot(s.x - world.x, s.y - world.y) < Math.max(0.35, 20 / zoom));
+        if (clickedSpot) {
+          saveSnapshot();
+          setSpots((prev) => prev.filter((s) => s.id !== clickedSpot.id));
+          triggerToast('Spot excluído');
+          return;
+        }
+      }
+      if (layersConfig.walls.locked) {
+        triggerToast('Camada de paredes bloqueada');
+        return;
+      }
       saveSnapshot();
       if (nearestCorner) {
         setCorners((prev) => prev.filter((c) => c.id !== nearestCorner.id));
@@ -2328,6 +2867,17 @@ export default function FloorPlannerModal({
     }
 
     const world = screenToWorld(sx, sy, canvas);
+
+    // 0. Dragging Camera Spot
+    if (draggingSpotId) {
+      setSpots((prev) =>
+        prev.map((s) =>
+          s.id === draggingSpotId ? { ...s, x: Number(world.x.toFixed(2)), y: Number(world.y.toFixed(2)) } : s
+        )
+      );
+      setCurrentMouseWorld(world);
+      return;
+    }
 
     // Detect Axis Lock (Shift = Lock X / dy=0, Ctrl = Lock Y / dx=0)
     const lockX = Boolean(e.shiftKey && !e.ctrlKey);
@@ -2401,7 +2951,7 @@ export default function FloorPlannerModal({
     }
 
     // 3. Hover detection for interactive cursor styling
-    if ((activeTool === 'select' || activeTool === 'split') && !isPanning) {
+    if ((activeTool === 'select' || activeTool === 'split' || activeTool === 'room') && !isPanning) {
       if (nearestCorner && activeTool !== 'split') {
         setHoveredCornerId(nearestCorner.id);
         setHoveredWallId(null);
@@ -2421,6 +2971,7 @@ export default function FloorPlannerModal({
       setIsPanning(false);
     }
     setDragAxisLock('none');
+    setDraggingSpotId(null);
     if (draggingWallId) {
       setDraggingWallId(null);
       dragWallStartRef.current = null;
@@ -2584,11 +3135,13 @@ export default function FloorPlannerModal({
       })
       .filter((w): w is NonNullable<typeof w> => w !== null);
 
-    const customFloors = detectedRooms.map((r) => ({
+    const customFloors = allRooms.map((r) => ({
       id: r.id,
       points: r.corners.map((c) => ({ x: c.x, y: c.y })),
       area: r.area,
       name: r.name,
+      color: r.color,
+      material: r.material,
     }));
 
     const updatedRoom: RoomSettings = {
@@ -2598,19 +3151,20 @@ export default function FloorPlannerModal({
       height: wallHeight,
       customWalls,
       customFloors,
+      spots: spots.length > 0 ? spots : undefined,
       backgroundFloorPlan: bgConfig.url ? bgConfig : undefined,
     };
 
     onApplyToProject(
       updatedRoom,
-      `Planta 2D aplicada: ${calculatedWidth}m × ${calculatedDepth}m (${calculatedArea} m² • ${customWalls.length} paredes)`
+      `Planta 2D aplicada: ${calculatedWidth}m × ${calculatedDepth}m (${calculatedArea} m² • ${customWalls.length} paredes • ${allRooms.length} ambientes)`
     );
     onClose();
   };
 
   if (!isOpen) return null;
 
-  const totalArea = detectedRooms.reduce((acc, r) => acc + r.area, 0);
+  const totalArea = allRooms.reduce((acc, r) => acc + r.area, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200">
@@ -2636,9 +3190,9 @@ export default function FloorPlannerModal({
               </div>
               <p className="text-[11px] text-slate-400 font-mono hidden sm:block">
                 {walls.length} paredes • {corners.length} cantos •{' '}
-                {detectedRooms.length > 0
-                  ? `${detectedRooms.length} cômodo(s) fechado(s) • ${totalArea.toFixed(1)} m²`
-                  : 'Desenhe paredes fechadas para formar cômodos'}
+                {allRooms.length > 0
+                  ? `${allRooms.length} ambiente(s) • ${totalArea.toFixed(1)} m²`
+                  : 'Desenhe paredes ou use "+ Criar Ambiente"'}
               </p>
             </div>
           </div>
@@ -2796,6 +3350,40 @@ export default function FloorPlannerModal({
 
             <button
               onClick={() => {
+                setActiveTool('spot');
+                handleStopDrawingChain();
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
+                activeTool === 'spot'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-md shadow-cyan-500/20 ring-1 ring-cyan-500/30'
+                  : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+              title="Adicionar Spot de Câmera (Pin) no ambiente para gerar lista de posições e navegar rapidamente em 3D"
+            >
+              <Camera className="size-3.5 text-cyan-400" />
+              <span>+ Spot de Câmera</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTool('room');
+                setManualRoomPoints([]);
+                handleStopDrawingChain();
+                triggerToast('Modo Ambiente: Clique nos cantos (vértices) para traçar o contorno do cômodo');
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
+                activeTool === 'room'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400 ring-1 ring-indigo-400/40'
+                  : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5'
+              }`}
+              title="Selecionar pontos sequencialmente para gerar o polígono e piso de um ambiente"
+            >
+              <Palette className="size-3.5 text-indigo-300" />
+              <span>+ Criar Ambiente</span>
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTool('delete');
                 handleStopDrawingChain();
               }}
@@ -2938,9 +3526,9 @@ export default function FloorPlannerModal({
               style={{
                 cursor: isPanning
                   ? 'grabbing'
-                  : activeTool === 'wall'
+                  : activeTool === 'wall' || activeTool === 'split' || activeTool === 'room'
                   ? 'crosshair'
-                  : activeTool === 'split'
+                  : activeTool === 'spot'
                   ? 'crosshair'
                   : activeTool === 'delete'
                   ? 'pointer'
@@ -2956,6 +3544,37 @@ export default function FloorPlannerModal({
               }}
               className="w-full h-full block touch-none select-none"
             />
+
+            {/* Room Selection Floating HUD */}
+            {activeTool === 'room' && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-slate-900/90 border border-indigo-500/40 rounded-full px-4 py-1.5 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95">
+                <div className="size-2 rounded-full bg-indigo-400 animate-ping" />
+                <span className="text-xs font-semibold text-slate-200">
+                  {manualRoomPoints.length === 0
+                    ? 'Clique nos cantos ou paredes para marcar os pontos do ambiente'
+                    : `${manualRoomPoints.length} ponto(s) marcado(s)`}
+                </span>
+                {manualRoomPoints.length >= 3 && (
+                  <button
+                    onClick={handleFinishManualRoom}
+                    className="ml-2 px-3 py-0.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md transition-all animate-pulse"
+                  >
+                    Concluir Ambiente (Enter)
+                  </button>
+                )}
+                {manualRoomPoints.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setManualRoomPoints([]);
+                      triggerToast('Pontos limpos');
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 text-[11px] font-medium"
+                  >
+                    Limpar (Esc)
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* 2D Overlay Floating Controls */}
             <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-slate-900/80 border border-white/10 p-1 rounded-xl backdrop-blur-md shadow-lg">
@@ -3024,6 +3643,12 @@ export default function FloorPlannerModal({
                       : 'Clique no grid para iniciar uma nova parede'
                     : activeTool === 'split'
                     ? 'Clique em qualquer parede para inserir um novo ponto e dividi-la em 2 segmentos'
+                    : activeTool === 'spot'
+                    ? 'Clique em qualquer ambiente para posicionar um Spot de Câmera 3D'
+                    : activeTool === 'room'
+                    ? manualRoomPoints.length >= 3
+                      ? 'Clique no ponto 1 ou pressione Enter para fechar o ambiente'
+                      : 'Clique nos vértices da parede para delimitar o contorno do cômodo'
                     : activeTool === 'select'
                     ? selectedCornerId
                       ? 'Vértice selecionado: ajuste as posições X e Y ou arraste (Shift = Travar X | Ctrl = Travar Y)'
@@ -3032,6 +3657,438 @@ export default function FloorPlannerModal({
                       : 'Clique e arraste qualquer canto ou parede (Shift = Travar X | Ctrl = Travar Y)'
                     : 'Clique em uma parede ou vértice para excluir'}
                 </p>
+              </div>
+
+              {/* Photoshop-style Layers Panel (Controle de Camadas) */}
+              <div className="pointer-events-auto w-64 bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-md overflow-hidden text-xs flex flex-col transition-all">
+                {/* Header with Layers icon & minimize toggle */}
+                <div
+                  className="px-3 py-2 bg-slate-800/80 border-b border-white/10 flex items-center justify-between cursor-pointer select-none"
+                  onClick={() => setIsLayersCollapsed(!isLayersCollapsed)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Layers className="size-4 text-primary" />
+                    <span className="font-bold text-white text-[11px] tracking-wide uppercase">
+                      Camadas (Layers)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {isLayersCollapsed ? 'Expandir' : 'Recolher'}
+                    </span>
+                    {isLayersCollapsed ? (
+                      <ChevronDown className="size-3.5 text-slate-400" />
+                    ) : (
+                      <ChevronUp className="size-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </div>
+
+                {!isLayersCollapsed && (
+                  <div className="p-1.5 flex flex-col gap-1 max-h-[50vh] overflow-y-auto">
+                    {/* Layer 1: Spots de Câmera (Hotspots / Pins) */}
+                    <div className="rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all p-1.5 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {/* Visibility Eye */}
+                          <button
+                            onClick={() =>
+                              setLayersConfig((prev) => ({
+                                ...prev,
+                                spots: { ...prev.spots, visible: !prev.spots.visible },
+                              }))
+                            }
+                            className={`p-1 rounded-md transition-colors ${
+                              layersConfig.spots.visible
+                                ? 'text-cyan-400 hover:text-cyan-300'
+                                : 'text-slate-600 hover:text-slate-500'
+                            }`}
+                            title={layersConfig.spots.visible ? 'Ocultar Spots de Câmera' : 'Exibir Spots de Câmera'}
+                          >
+                            {layersConfig.spots.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                          </button>
+
+                          {/* Lock */}
+                          <button
+                            onClick={() =>
+                              setLayersConfig((prev) => ({
+                                ...prev,
+                                spots: { ...prev.spots, locked: !prev.spots.locked },
+                              }))
+                            }
+                            className={`p-1 rounded-md transition-colors ${
+                              layersConfig.spots.locked
+                                ? 'text-amber-400 hover:text-amber-300'
+                                : 'text-slate-600 hover:text-slate-400'
+                            }`}
+                            title={layersConfig.spots.locked ? 'Desbloquear Spots' : 'Bloquear Spots'}
+                          >
+                            {layersConfig.spots.locked ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
+                            <Camera className="size-3.5 text-cyan-400" />
+                            <span className="font-semibold text-slate-200 text-[11px]">Spots de Câmera</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                            {spots.length}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setExpandedLayerSection((prev) => (prev === 'spots' ? 'none' : 'spots'))
+                            }
+                            className="p-1 rounded hover:bg-white/10 text-slate-400"
+                            title="Ver lista de spots"
+                          >
+                            <ChevronDown
+                              className={`size-3 transition-transform ${
+                                expandedLayerSection === 'spots' ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sub-list: Spots List with Teleport Button */}
+                      {expandedLayerSection === 'spots' && (
+                        <div className="mt-1 pt-1 border-t border-white/10 flex flex-col gap-1 pl-1">
+                          {spots.length === 0 ? (
+                            <p className="text-[10px] text-slate-500 italic py-1 px-2">
+                              Nenhum spot criado. Use a ferramenta &quot;+ Spot de Câmera&quot; e clique no ambiente.
+                            </p>
+                          ) : (
+                            spots.map((spot) => (
+                              <div
+                                key={spot.id}
+                                className={`flex items-center justify-between px-2 py-1 rounded-lg text-[10px] transition-all ${
+                                  selectedSpotId === spot.id
+                                    ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
+                                    : 'bg-black/20 hover:bg-white/10 text-slate-300'
+                                }`}
+                              >
+                                <span
+                                  className="truncate flex-1 cursor-pointer font-medium"
+                                  onClick={() => {
+                                    setSelectedSpotId(spot.id);
+                                    handleFlyToSpot(spot);
+                                  }}
+                                  title={`Posicionar câmera em ${spot.name}`}
+                                >
+                                  📷 {spot.name}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleFlyToSpot(spot)}
+                                    className="p-1 rounded hover:bg-cyan-500/30 text-cyan-400 transition-colors"
+                                    title="Navegar Câmera 3D para este Ponto"
+                                  >
+                                    <Navigation className="size-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSpotModal({
+                                        isOpen: true,
+                                        x: spot.x,
+                                        y: spot.y,
+                                        name: spot.name,
+                                        height: spot.height || 1.6,
+                                        editId: spot.id,
+                                      });
+                                    }}
+                                    className="p-1 rounded hover:bg-white/20 text-slate-400 hover:text-white transition-colors"
+                                    title="Editar Nome do Spot"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      saveSnapshot();
+                                      setSpots((prev) => prev.filter((s) => s.id !== spot.id));
+                                    }}
+                                    className="p-1 rounded hover:bg-red-500/20 text-red-400 transition-colors"
+                                    title="Excluir Spot"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                          <button
+                            onClick={() => {
+                              setActiveTool('spot');
+                              handleStopDrawingChain();
+                            }}
+                            className="mt-1 w-full py-1 px-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] flex items-center justify-center gap-1"
+                          >
+                            <Camera className="size-3" />
+                            <span>+ Adicionar Spot no Canvas</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Layer 2: Pisos & Ambientes (Floors / Rooms) */}
+                    <div className="rounded-xl bg-white/5 border border-white/5 hover:border-blue-500/30 transition-all p-1.5 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {/* Visibility Eye */}
+                          <button
+                            onClick={() =>
+                              setLayersConfig((prev) => ({
+                                ...prev,
+                                floors: { ...prev.floors, visible: !prev.floors.visible },
+                              }))
+                            }
+                            className={`p-1 rounded-md transition-colors ${
+                              layersConfig.floors.visible
+                                ? 'text-blue-400 hover:text-blue-300'
+                                : 'text-slate-600 hover:text-slate-500'
+                            }`}
+                            title={layersConfig.floors.visible ? 'Ocultar Pisos e Ambientes' : 'Exibir Pisos e Ambientes'}
+                          >
+                            {layersConfig.floors.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                          </button>
+
+                          {/* Lock */}
+                          <button
+                            onClick={() =>
+                              setLayersConfig((prev) => ({
+                                ...prev,
+                                floors: { ...prev.floors, locked: !prev.floors.locked },
+                              }))
+                            }
+                            className={`p-1 rounded-md transition-colors ${
+                              layersConfig.floors.locked
+                                ? 'text-amber-400 hover:text-amber-300'
+                                : 'text-slate-600 hover:text-slate-400'
+                            }`}
+                            title={layersConfig.floors.locked ? 'Desbloquear Pisos' : 'Bloquear Pisos'}
+                          >
+                            {layersConfig.floors.locked ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
+                            <Palette className="size-3.5 text-blue-400" />
+                            <span className="font-semibold text-slate-200 text-[11px]">Pisos & Ambientes</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            {allRooms.length}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setExpandedLayerSection((prev) => (prev === 'floors' ? 'none' : 'floors'))
+                            }
+                            className="p-1 rounded hover:bg-white/10 text-slate-400"
+                            title="Ver lista de ambientes"
+                          >
+                            <ChevronDown
+                              className={`size-3 transition-transform ${
+                                expandedLayerSection === 'floors' ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sub-list: Detected & Manual Rooms List with customizer trigger */}
+                      {expandedLayerSection === 'floors' && (
+                        <div className="mt-1 pt-1 border-t border-white/10 flex flex-col gap-1 pl-1">
+                          <button
+                            onClick={() => {
+                              setActiveTool('room');
+                              setManualRoomPoints([]);
+                              handleStopDrawingChain();
+                              triggerToast('Clique nos vértices para criar o ambiente');
+                            }}
+                            className="w-full mb-1 py-1 px-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <PlusCircle className="size-3" />
+                            <span>+ Selecionar Pontos para Ambiente</span>
+                          </button>
+
+                          {allRooms.length === 0 ? (
+                            <p className="text-[10px] text-slate-500 italic py-1 px-2">
+                              Desenhe paredes fechadas ou clique acima para marcar os pontos do ambiente.
+                            </p>
+                          ) : (
+                            allRooms.map((room, idx) => (
+                              <div
+                                key={room.id}
+                                onClick={() => {
+                                  setSelectedRoomId(room.id);
+                                  setEditingRoom(room);
+                                }}
+                                className={`flex items-center justify-between px-2 py-1 rounded-lg text-[10px] cursor-pointer transition-all ${
+                                  selectedRoomId === room.id
+                                    ? 'bg-blue-500/20 text-blue-200 border border-blue-500/40'
+                                    : 'bg-black/20 hover:bg-white/10 text-slate-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <div
+                                    className="size-2.5 rounded-full shrink-0 border border-white/30"
+                                    style={{ backgroundColor: room.color || '#3b82f6' }}
+                                  />
+                                  <span className="font-medium truncate">
+                                    {room.name || (room.isManual ? `Ambiente Manual ${idx + 1}` : `Piso ${idx + 1}`)}
+                                  </span>
+                                  {room.isManual && (
+                                    <span className="px-1 py-0.2 rounded text-[8px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-semibold">
+                                      Manual
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-mono text-slate-400">
+                                    {room.area}m²
+                                  </span>
+                                  <span className="text-slate-400 hover:text-white" title="Personalizar ambiente">✏️</span>
+                                  {room.isManual && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        saveSnapshot();
+                                        setManualFloors((prev) => prev.filter((f) => f.id !== room.id));
+                                        if (selectedRoomId === room.id) setSelectedRoomId(null);
+                                        triggerToast('Ambiente manual removido');
+                                      }}
+                                      className="text-slate-500 hover:text-red-400 p-0.5 ml-0.5"
+                                      title="Excluir ambiente"
+                                    >
+                                      <Trash2 className="size-2.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Layer 3: Paredes (Walls) */}
+                    <div className="rounded-xl bg-white/5 border border-white/5 hover:border-amber-500/30 transition-all p-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {/* Visibility Eye */}
+                        <button
+                          onClick={() =>
+                            setLayersConfig((prev) => ({
+                              ...prev,
+                              walls: { ...prev.walls, visible: !prev.walls.visible },
+                            }))
+                          }
+                          className={`p-1 rounded-md transition-colors ${
+                            layersConfig.walls.visible
+                              ? 'text-amber-400 hover:text-amber-300'
+                              : 'text-slate-600 hover:text-slate-500'
+                          }`}
+                          title={layersConfig.walls.visible ? 'Ocultar Paredes' : 'Exibir Paredes'}
+                        >
+                          {layersConfig.walls.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                        </button>
+
+                        {/* Lock */}
+                        <button
+                          onClick={() =>
+                            setLayersConfig((prev) => ({
+                              ...prev,
+                              walls: { ...prev.walls, locked: !prev.walls.locked },
+                            }))
+                          }
+                          className={`p-1 rounded-md transition-colors ${
+                            layersConfig.walls.locked
+                              ? 'text-amber-400 hover:text-amber-300'
+                              : 'text-slate-600 hover:text-slate-400'
+                          }`}
+                          title={layersConfig.walls.locked ? 'Desbloquear Paredes' : 'Bloquear Paredes'}
+                        >
+                          {layersConfig.walls.locked ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+                        </button>
+
+                        <div className="flex items-center gap-1.5">
+                          <PenTool className="size-3.5 text-amber-400" />
+                          <span className="font-semibold text-slate-200 text-[11px]">Paredes 2D/3D</span>
+                        </div>
+                      </div>
+
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {walls.length}
+                      </span>
+                    </div>
+
+                    {/* Layer 4: Planta de Fundo (Background Image) */}
+                    <div className="rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/30 transition-all p-1.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {/* Visibility Eye */}
+                        <button
+                          onClick={() => {
+                            const newVis = !layersConfig.background.visible;
+                            setLayersConfig((prev) => ({
+                              ...prev,
+                              background: { ...prev.background, visible: newVis },
+                            }));
+                            setBgConfig((prev) => ({ ...prev, visible: newVis }));
+                          }}
+                          className={`p-1 rounded-md transition-colors ${
+                            layersConfig.background.visible && bgConfig.visible
+                              ? 'text-indigo-400 hover:text-indigo-300'
+                              : 'text-slate-600 hover:text-slate-500'
+                          }`}
+                          title="Alternar visibilidade da imagem de fundo"
+                        >
+                          {layersConfig.background.visible && bgConfig.visible ? (
+                            <Eye className="size-3.5" />
+                          ) : (
+                            <EyeOff className="size-3.5" />
+                          )}
+                        </button>
+
+                        {/* Lock */}
+                        <button
+                          onClick={() => {
+                            const newLock = !layersConfig.background.locked;
+                            setLayersConfig((prev) => ({
+                              ...prev,
+                              background: { ...prev.background, locked: newLock },
+                            }));
+                            setBgConfig((prev) => ({ ...prev, lock: newLock }));
+                          }}
+                          className={`p-1 rounded-md transition-colors ${
+                            layersConfig.background.locked || bgConfig.lock
+                              ? 'text-amber-400 hover:text-amber-300'
+                              : 'text-slate-600 hover:text-slate-400'
+                          }`}
+                          title="Travar imagem de fundo"
+                        >
+                          {layersConfig.background.locked || bgConfig.lock ? (
+                            <Lock className="size-3.5" />
+                          ) : (
+                            <Unlock className="size-3.5" />
+                          )}
+                        </button>
+
+                        <div className="flex items-center gap-1.5">
+                          <ImageIcon className="size-3.5 text-indigo-400" />
+                          <span className="font-semibold text-slate-200 text-[11px]">Planta de Fundo</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setShowBgImagePanel(!showBgImagePanel)}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30"
+                      >
+                        Ajustar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Selected Wall Floating Inspector */}
@@ -3936,6 +4993,317 @@ export default function FloorPlannerModal({
                     >
                       Fechar
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para Adicionar / Editar Spot de Câmera */}
+            {spotModal.isOpen && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="w-96 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400">
+                        <Camera className="size-4" />
+                      </div>
+                      <h3 className="font-bold text-white text-sm">
+                        {spotModal.editId ? 'Editar Spot de Câmera' : 'Novo Spot de Câmera'}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setSpotModal((prev) => ({ ...prev, isOpen: false }))}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">
+                      Nome do Ponto / Ambiente:
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={spotModal.name}
+                      onChange={(e) => setSpotModal((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Ex: Câmera Sala, Ponto Cozinha, Suíte..."
+                      className="w-full bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-medium outline-none focus:border-cyan-400"
+                    />
+                  </div>
+
+                  {/* Preset Quick Chips */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Sugestões Rápidas:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        'Câmera Sala',
+                        'Câmera Cozinha',
+                        'Câmera Quarto',
+                        'Câmera Banheiro',
+                        'Câmera Varanda',
+                        'Câmera Hall',
+                      ].map((presetName) => (
+                        <button
+                          key={presetName}
+                          onClick={() => setSpotModal((prev) => ({ ...prev, name: presetName }))}
+                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white text-[10px] font-medium border border-white/5 transition-all"
+                        >
+                          {presetName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Height */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                      <span>Altura do Ponto de Vista:</span>
+                      <span className="text-cyan-400 font-mono text-xs">{spotModal.height.toFixed(2)}m</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0.8"
+                        max="2.4"
+                        step="0.05"
+                        value={spotModal.height}
+                        onChange={(e) =>
+                          setSpotModal((prev) => ({ ...prev, height: parseFloat(e.target.value) }))
+                        }
+                        className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                      <span>0.80m (Sentado)</span>
+                      <span>1.60m (Em Pé)</span>
+                      <span>2.20m (Teto)</span>
+                    </div>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                    <button
+                      onClick={() => setSpotModal((prev) => ({ ...prev, isOpen: false }))}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/10"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => {
+                        saveSnapshot();
+                        const finalName = spotModal.name.trim() || `Spot ${spots.length + 1}`;
+                        if (spotModal.editId) {
+                          setSpots((prev) =>
+                            prev.map((s) =>
+                              s.id === spotModal.editId
+                                ? { ...s, name: finalName, height: spotModal.height }
+                                : s
+                            )
+                          );
+                        } else {
+                          const newSpot: PlannerSpotPin = {
+                            id: `spot_${Date.now()}`,
+                            name: finalName,
+                            x: spotModal.x,
+                            y: spotModal.y,
+                            height: spotModal.height,
+                            color: '#06b6d4',
+                          };
+                          setSpots((prev) => [...prev, newSpot]);
+                          setSelectedSpotId(newSpot.id);
+                        }
+                        setSpotModal((prev) => ({ ...prev, isOpen: false }));
+                        triggerToast(`Spot "${finalName}" salvo!`);
+                      }}
+                      className="px-4 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-md shadow-cyan-500/20 active:scale-95"
+                    >
+                      Salvar Spot
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para Personalizar Piso e Ambiente */}
+            {editingRoom && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                <div className="w-96 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
+                        <Palette className="size-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-sm">
+                          {editingRoom.isManual ? 'Personalizar Ambiente (Manual)' : 'Personalizar Ambiente / Piso'}
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Área: {editingRoom.area} m² {editingRoom.isManual ? '• Polígono Manual' : '• Detecção Automática'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setEditingRoom(null)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">
+                      Nome do Cômodo:
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={editingRoom.name || ''}
+                      onChange={(e) =>
+                        setEditingRoom((prev) => (prev ? { ...prev, name: e.target.value } : null))
+                      }
+                      placeholder="Ex: Quarto casal, Cozinha, Sala..."
+                      className="w-full bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-medium outline-none focus:border-blue-400"
+                    />
+                  </div>
+
+                  {/* Preset Room Types */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Modelos de Cômodos:
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {PRESET_ROOM_TYPES.map((preset) => (
+                        <button
+                          key={preset.name}
+                          onClick={() => {
+                            setEditingRoom((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    name: preset.name,
+                                    color: preset.color,
+                                    material: preset.material,
+                                  }
+                                : null
+                            );
+                          }}
+                          className={`p-1.5 rounded-lg text-left text-[10px] font-medium border transition-all flex items-center gap-1.5 ${
+                            editingRoom.name === preset.name
+                              ? 'bg-blue-500/20 text-blue-200 border-blue-500/50'
+                              : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/5'
+                          }`}
+                        >
+                          <span>{preset.icon}</span>
+                          <span className="truncate">{preset.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Floor Color Palette */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Cor / Tonalidade do Piso:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {[
+                        { label: 'Madeira Natural', color: '#b45309' },
+                        { label: 'Madeira Clara', color: '#d97706' },
+                        { label: 'Porcelanato Branco', color: '#e2e8f0' },
+                        { label: 'Porcelanato Cinza', color: '#64748b' },
+                        { label: 'Cimento Queimado', color: '#475569' },
+                        { label: 'Mármore / Escuro', color: '#1e293b' },
+                        { label: 'Azul Acqua', color: '#0284c7' },
+                        { label: 'Verde Sálvia', color: '#059669' },
+                      ].map((c) => (
+                        <button
+                          key={c.color}
+                          onClick={() =>
+                            setEditingRoom((prev) => (prev ? { ...prev, color: c.color } : null))
+                          }
+                          className={`size-6 rounded-full border-2 transition-all ${
+                            editingRoom.color === c.color ? 'border-white scale-110 shadow-md' : 'border-white/20 hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: c.color }}
+                          title={c.label}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                    <button
+                      onClick={() => {
+                        saveSnapshot();
+                        if (editingRoom.isManual) {
+                          setManualFloors((prev) => prev.filter((f) => f.id !== editingRoom.id));
+                          if (selectedRoomId === editingRoom.id) setSelectedRoomId(null);
+                          setEditingRoom(null);
+                          triggerToast('Ambiente manual excluído');
+                        } else {
+                          setRoomCustomizations((prev) =>
+                            prev.filter((rc) => rc.id !== editingRoom.id)
+                          );
+                          setEditingRoom(null);
+                          triggerToast('Personalização removida');
+                        }
+                      }}
+                      className="text-[11px] text-red-400 hover:underline"
+                    >
+                      {editingRoom.isManual ? 'Excluir Este Ambiente' : 'Limpar Nome'}
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingRoom(null)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/10"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => {
+                          saveSnapshot();
+                          const updatedName = editingRoom.name.trim();
+                          if (editingRoom.isManual) {
+                            setManualFloors((prev) =>
+                              prev.map((f) =>
+                                f.id === editingRoom.id
+                                  ? {
+                                      ...f,
+                                      name: updatedName,
+                                      color: editingRoom.color,
+                                      material: editingRoom.material,
+                                    }
+                                  : f
+                              )
+                            );
+                          } else {
+                            setRoomCustomizations((prev) => {
+                              const filtered = prev.filter((rc) => rc.id !== editingRoom.id);
+                              return [
+                                ...filtered,
+                                {
+                                  id: editingRoom.id,
+                                  name: updatedName,
+                                  color: editingRoom.color,
+                                  material: editingRoom.material,
+                                  center: editingRoom.center,
+                                },
+                              ];
+                            });
+                          }
+                          setEditingRoom(null);
+                          triggerToast(updatedName ? `Ambiente "${updatedName}" definido!` : 'Piso atualizado!');
+                        }}
+                        className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/20 active:scale-95"
+                      >
+                        Salvar Ambiente
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
