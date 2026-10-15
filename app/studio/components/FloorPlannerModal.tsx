@@ -513,6 +513,37 @@ export default function FloorPlannerModal({
       setIs3DExpanded(false);
       setIs2DExpanded(false);
 
+      if (currentRoom.customFloors && currentRoom.customFloors.length > 0) {
+        const loadedFloors: PlannerRoomLoop[] = currentRoom.customFloors
+          .filter((cf) => cf.points && cf.points.length >= 3)
+          .map((cf, fIdx) => {
+            let sumX = 0;
+            let sumY = 0;
+            cf.points.forEach((p) => {
+              sumX += p.x;
+              sumY += p.y;
+            });
+            const n = cf.points.length;
+            return {
+              id: cf.id || `custom_floor_${fIdx + 1}`,
+              corners: cf.points.map((p, pIdx) => ({
+                id: `cf_pt_${fIdx}_${pIdx}`,
+                x: p.x,
+                y: p.y,
+              })),
+              area: cf.area || 0,
+              name: cf.name || (fIdx === 0 ? 'Ambiente Principal' : `Ambiente ${fIdx + 1}`),
+              color: cf.color || '#8b5cf6',
+              material: cf.material || 'madeira',
+              center: { x: sumX / n, y: sumY / n },
+              isManual: true,
+            };
+          });
+        setManualFloors(loadedFloors);
+      } else {
+        setManualFloors([]);
+      }
+
       if (currentRoom.backgroundFloorPlan && currentRoom.backgroundFloorPlan.url) {
         setBgConfig(currentRoom.backgroundFloorPlan);
         setBgUrlInput(
@@ -540,22 +571,8 @@ export default function FloorPlannerModal({
     }
   }, [isOpen, currentRoom, parseRoomToPlanner]);
 
-  // Detected Rooms
-  const [detectedRooms, setDetectedRooms] = useState<PlannerRoomLoop[]>([]);
-
-  // Combined Rooms (Auto-detected + Manual Floors)
-  const allRooms = useMemo(() => {
-    const list: PlannerRoomLoop[] = [...manualFloors];
-    detectedRooms.forEach((ar) => {
-      const hasManualOverlap = manualFloors.some(
-        (mf) => Math.hypot(mf.center.x - ar.center.x, mf.center.y - ar.center.y) < 0.6
-      );
-      if (!hasManualOverlap) {
-        list.push(ar);
-      }
-    });
-    return list;
-  }, [detectedRooms, manualFloors]);
+  // Ambientes gerenciados 100% manualmente pelo usuário (sem auto-geração indesejada)
+  const allRooms = manualFloors;
 
   // 2D Interaction Refs & State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1041,195 +1058,8 @@ export default function FloorPlannerModal({
     [corners, saveSnapshot]
   );
 
-  // --- Robust Planar Face Traversal (Minimal Closed Rooms Detection) ---
-  const recalculateRooms = useCallback(() => {
-    if (corners.length < 3 || walls.length < 3) {
-      setDetectedRooms([]);
-      return;
-    }
-
-    // Build Adjacency Map
-    const cornerMap = new Map<string, PlannerCorner>();
-    corners.forEach((c) => cornerMap.set(c.id, c));
-
-    // 1. Build Adjacency List with Outgoing Polar Angles
-    const adj = new Map<string, Array<{ to: string; angle: number }>>();
-    corners.forEach((c) => adj.set(c.id, []));
-
-    walls.forEach((w) => {
-      if (w.startId === w.endId) return;
-      const c1 = cornerMap.get(w.startId);
-      const c2 = cornerMap.get(w.endId);
-      if (!c1 || !c2) return;
-      const a12 = Math.atan2(c2.y - c1.y, c2.x - c1.x);
-      const a21 = Math.atan2(c1.y - c2.y, c1.x - c2.x);
-      adj.get(w.startId)?.push({ to: w.endId, angle: a12 });
-      adj.get(w.endId)?.push({ to: w.startId, angle: a21 });
-    });
-
-    // 2. Prune Dead-End Walls (vertices with degree 1 cannot be part of any closed room)
-    let pruned = true;
-    while (pruned) {
-      pruned = false;
-      for (const [cid, edges] of adj.entries()) {
-        if (edges.length === 1) {
-          const otherId = edges[0].to;
-          adj.set(cid, []);
-          const otherEdges = adj.get(otherId);
-          if (otherEdges) {
-            adj.set(otherId, otherEdges.filter((e) => e.to !== cid));
-          }
-          pruned = true;
-        }
-      }
-    }
-
-    // 3. Sort Outgoing Edges Counter-Clockwise (by angle ascending)
-    corners.forEach((c) => {
-      adj.get(c.id)?.sort((a, b) => a.angle - b.angle);
-    });
-
-    // 4. Traverse Planar Faces using Left-Turn (next edge in CCW order)
-    const visitedEdges = new Set<string>();
-    interface RawFace {
-      corners: PlannerCorner[];
-      signedArea: number;
-      area: number;
-      center: { x: number; y: number };
-    }
-    const rawFaces: RawFace[] = [];
-
-    for (const c of corners) {
-      const edges = adj.get(c.id) || [];
-      for (const edge of edges) {
-        const edgeKey = `${c.id}->${edge.to}`;
-        if (visitedEdges.has(edgeKey)) continue;
-
-        const pathIds: string[] = [c.id];
-        let u = c.id;
-        let v = edge.to;
-        let infiniteLoopGuard = 0;
-
-        while (infiniteLoopGuard++ < 120) {
-          visitedEdges.add(`${u}->${v}`);
-          pathIds.push(v);
-
-          const cu = cornerMap.get(u);
-          const cv = cornerMap.get(v);
-          if (!cu || !cv) break;
-
-          const outEdges = adj.get(v);
-          if (!outEdges || outEdges.length === 0) break;
-
-          // Find index of edge pointing back to u
-          const backIdx = outEdges.findIndex((e) => e.to === u);
-          if (backIdx === -1) break;
-
-          // Next edge in CCW cyclic order is (backIdx + 1) % outEdges.length
-          const nextEdge = outEdges[(backIdx + 1) % outEdges.length];
-
-          u = v;
-          v = nextEdge.to;
-
-          if (u === c.id && v === edge.to) {
-            break; // Loop completed
-          }
-        }
-
-        // Drop duplicate closing corner from array
-        if (pathIds.length > 3 && pathIds[0] === pathIds[pathIds.length - 1]) {
-          pathIds.pop();
-        }
-
-        if (pathIds.length < 3) continue;
-
-        // Map to corners
-        const faceCorners = pathIds
-          .map((id) => cornerMap.get(id))
-          .filter((corner): corner is PlannerCorner => Boolean(corner));
-
-        if (faceCorners.length < 3) continue;
-
-        // Shoelace Signed Area & Centroid
-        let signedArea = 0;
-        let sumX = 0;
-        let sumY = 0;
-        let centroidX = 0;
-        let centroidY = 0;
-        const n = faceCorners.length;
-
-        for (let i = 0; i < n; i++) {
-          const p1 = faceCorners[i];
-          const p2 = faceCorners[(i + 1) % n];
-          const cross = p1.x * p2.y - p2.x * p1.y;
-          signedArea += cross;
-          sumX += p1.x;
-          sumY += p1.y;
-          centroidX += (p1.x + p2.x) * cross;
-          centroidY += (p1.y + p2.y) * cross;
-        }
-        signedArea /= 2;
-        const area = Math.abs(signedArea);
-
-        // Ignore micro slivers or invalid faces
-        if (area < 0.4) continue;
-
-        let center = { x: sumX / n, y: sumY / n };
-        if (Math.abs(signedArea) > 0.001) {
-          center = {
-            x: centroidX / (6 * signedArea),
-            y: centroidY / (6 * signedArea),
-          };
-        }
-
-        rawFaces.push({
-          corners: faceCorners,
-          signedArea,
-          area: Number(area.toFixed(2)),
-          center,
-        });
-      }
-    }
-
-    // 5. Separate Interior Rooms from Unbounded Exterior Face
-    const negFaces = rawFaces.filter((f) => f.signedArea < 0);
-    const posFaces = rawFaces.filter((f) => f.signedArea > 0);
-
-    let interiorFaces: RawFace[] = [];
-    if (negFaces.length > 0 && posFaces.length > 0) {
-      if (negFaces.length >= posFaces.length) {
-        interiorFaces = negFaces;
-      } else {
-        interiorFaces = posFaces;
-      }
-    } else {
-      interiorFaces = rawFaces.filter((f) => f.area < 1000);
-    }
-
-    // Sort interior faces for stable indexing
-    interiorFaces.sort((a, b) => a.center.x - b.center.x || a.center.y - b.center.y);
-
-    // Build Final Room Objects and preserve customizations
-    const rooms: PlannerRoomLoop[] = interiorFaces.map((face, idx) => {
-      const custom = roomCustomizations.find(
-        (rc) =>
-          rc.id === `room_${idx + 1}` ||
-          (rc.center && Math.hypot(rc.center.x - face.center.x, rc.center.y - face.center.y) < 0.8)
-      );
-
-      return {
-        id: `room_${idx + 1}`,
-        corners: face.corners,
-        area: face.area,
-        name: custom?.name || '',
-        color: custom?.color,
-        material: custom?.material,
-        center: face.center,
-      };
-    });
-
-    setDetectedRooms(rooms);
-  }, [corners, walls, roomCustomizations]);
+  // Desativado: geração automática de ambientes removida a favor do modo manual
+  const recalculateRooms = useCallback(() => {}, []);
 
   // Complete & finalize manual room polygon
   const handleFinishManualRoom = useCallback(() => {
@@ -1306,10 +1136,6 @@ export default function FloorPlannerModal({
     }
     return inside;
   }, []);
-
-  useEffect(() => {
-    recalculateRooms();
-  }, [recalculateRooms]);
 
   // --- Coordinate Transformations ---
   const screenToWorld = useCallback(
@@ -3989,34 +3815,38 @@ export default function FloorPlannerModal({
                                     style={{ backgroundColor: room.color || '#3b82f6' }}
                                   />
                                   <span className="font-medium truncate">
-                                    {room.name || (room.isManual ? `Ambiente Manual ${idx + 1}` : `Piso ${idx + 1}`)}
+                                    {room.name || `Ambiente ${idx + 1}`}
                                   </span>
-                                  {room.isManual && (
-                                    <span className="px-1 py-0.2 rounded text-[8px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-semibold">
-                                      Manual
-                                    </span>
-                                  )}
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[9px] font-mono text-slate-400">
                                     {room.area}m²
                                   </span>
-                                  <span className="text-slate-400 hover:text-white" title="Personalizar ambiente">✏️</span>
-                                  {room.isManual && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        saveSnapshot();
-                                        setManualFloors((prev) => prev.filter((f) => f.id !== room.id));
-                                        if (selectedRoomId === room.id) setSelectedRoomId(null);
-                                        triggerToast('Ambiente manual removido');
-                                      }}
-                                      className="text-slate-500 hover:text-red-400 p-0.5 ml-0.5"
-                                      title="Excluir ambiente"
-                                    >
-                                      <Trash2 className="size-2.5" />
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedRoomId(room.id);
+                                      setEditingRoom(room);
+                                    }}
+                                    className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                    title="Personalizar ambiente"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      saveSnapshot();
+                                      setManualFloors((prev) => prev.filter((f) => f.id !== room.id));
+                                      if (selectedRoomId === room.id) setSelectedRoomId(null);
+                                      if (editingRoom?.id === room.id) setEditingRoom(null);
+                                      triggerToast(`Ambiente "${room.name || `Ambiente ${idx + 1}`}" removido`);
+                                    }}
+                                    className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors ml-0.5"
+                                    title="Excluir ambiente"
+                                  >
+                                    <Trash2 className="size-3 text-red-400/80 hover:text-red-400" />
+                                  </button>
                                 </div>
                               </div>
                             ))
@@ -5292,22 +5122,15 @@ export default function FloorPlannerModal({
                     <button
                       onClick={() => {
                         saveSnapshot();
-                        if (editingRoom.isManual) {
-                          setManualFloors((prev) => prev.filter((f) => f.id !== editingRoom.id));
-                          if (selectedRoomId === editingRoom.id) setSelectedRoomId(null);
-                          setEditingRoom(null);
-                          triggerToast('Ambiente manual excluído');
-                        } else {
-                          setRoomCustomizations((prev) =>
-                            prev.filter((rc) => rc.id !== editingRoom.id)
-                          );
-                          setEditingRoom(null);
-                          triggerToast('Personalização removida');
-                        }
+                        setManualFloors((prev) => prev.filter((f) => f.id !== editingRoom.id));
+                        if (selectedRoomId === editingRoom.id) setSelectedRoomId(null);
+                        setEditingRoom(null);
+                        triggerToast('Ambiente excluído');
                       }}
-                      className="text-[11px] text-red-400 hover:underline"
+                      className="text-[11px] text-red-400 hover:underline flex items-center gap-1"
                     >
-                      {editingRoom.isManual ? 'Excluir Este Ambiente' : 'Limpar Nome'}
+                      <Trash2 className="size-3" />
+                      <span>Excluir Este Ambiente</span>
                     </button>
                     <div className="flex items-center gap-2">
                       <button
@@ -5320,34 +5143,18 @@ export default function FloorPlannerModal({
                         onClick={() => {
                           saveSnapshot();
                           const updatedName = editingRoom.name.trim();
-                          if (editingRoom.isManual) {
-                            setManualFloors((prev) =>
-                              prev.map((f) =>
-                                f.id === editingRoom.id
-                                  ? {
-                                      ...f,
-                                      name: updatedName,
-                                      color: editingRoom.color,
-                                      material: editingRoom.material,
-                                    }
-                                  : f
-                              )
-                            );
-                          } else {
-                            setRoomCustomizations((prev) => {
-                              const filtered = prev.filter((rc) => rc.id !== editingRoom.id);
-                              return [
-                                ...filtered,
-                                {
-                                  id: editingRoom.id,
-                                  name: updatedName,
-                                  color: editingRoom.color,
-                                  material: editingRoom.material,
-                                  center: editingRoom.center,
-                                },
-                              ];
-                            });
-                          }
+                          setManualFloors((prev) =>
+                            prev.map((f) =>
+                              f.id === editingRoom.id
+                                ? {
+                                    ...f,
+                                    name: updatedName || f.name,
+                                    color: editingRoom.color,
+                                    material: editingRoom.material,
+                                  }
+                                : f
+                            )
+                          );
                           setEditingRoom(null);
                           triggerToast(updatedName ? `Ambiente "${updatedName}" definido!` : 'Piso atualizado!');
                         }}
