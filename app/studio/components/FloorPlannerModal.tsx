@@ -2384,6 +2384,7 @@ export default function FloorPlannerModal({
         color: defaultBaseColorHex,
         roughness: 0.6,
         metalness: 0.05,
+        side: THREE.DoubleSide,
       });
       const baseFloorGeo = new THREE.PlaneGeometry(baseW, baseD);
       const baseFloorMesh = new THREE.Mesh(baseFloorGeo, baseFloorMaterial);
@@ -2430,6 +2431,7 @@ export default function FloorPlannerModal({
           polygonOffset: true,
           polygonOffsetFactor: -1,
           polygonOffsetUnits: -4,
+          side: THREE.DoubleSide,
         });
 
         const extrudeSettings = {

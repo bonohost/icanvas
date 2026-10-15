@@ -1495,6 +1495,7 @@ export default function ThreeViewport({
         color: new THREE.Color(room.floorColor),
         roughness: room.floorRoughness ?? 0.55,
         metalness: room.floorMetalness ?? 0.02,
+        side: THREE.DoubleSide,
       });
       floorMatRef.current = floorMat;
 
@@ -1557,12 +1558,14 @@ export default function ThreeViewport({
             polygonOffset: true,
             polygonOffsetFactor: -1,
             polygonOffsetUnits: -4,
+            side: THREE.DoubleSide,
           });
         } else {
           customMat = floorMat.clone();
           customMat.polygonOffset = true;
           customMat.polygonOffsetFactor = -1;
           customMat.polygonOffsetUnits = -4;
+          customMat.side = THREE.DoubleSide;
         }
 
         const extrudeSettings = {
@@ -1584,6 +1587,7 @@ export default function ThreeViewport({
         color: new THREE.Color('#cbd5e1'),
         roughness: 0.8,
         metalness: 0.05,
+        side: THREE.DoubleSide,
       });
       const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
       outdoor.position.y = -0.005;
@@ -1609,6 +1613,7 @@ export default function ThreeViewport({
         color: new THREE.Color(room.floorColor),
         roughness: room.floorRoughness ?? 0.55,
         metalness: room.floorMetalness ?? 0.02,
+        side: THREE.DoubleSide,
       });
       floorMatRef.current = floorMat;
 
@@ -1639,6 +1644,7 @@ export default function ThreeViewport({
         color: new THREE.Color('#cbd5e1'), // Bright natural terrace stone
         roughness: 0.8,
         metalness: 0.05,
+        side: THREE.DoubleSide,
       });
       const outdoor = new THREE.Mesh(outdoorGeo, outdoorMat);
       outdoor.position.y = -0.005;
@@ -1651,6 +1657,7 @@ export default function ThreeViewport({
       floorMatRef.current.color.set(room.floorColor);
       floorMatRef.current.roughness = room.floorRoughness ?? 0.55;
       floorMatRef.current.metalness = room.floorMetalness ?? 0.02;
+      floorMatRef.current.side = THREE.DoubleSide;
 
       const tex = getOrLoadTexture(
         room.floorTextureUrl,
