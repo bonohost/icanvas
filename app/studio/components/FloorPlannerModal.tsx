@@ -2363,6 +2363,36 @@ export default function FloorPlannerModal({
     // 2. Build 3D Floors
     floorsGroup.visible = layersConfig.floors.visible;
     if (layersConfig.floors.visible) {
+      // 2.1 Base standard floor (piso padrão) at y = 0
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      corners.forEach((c) => {
+        if (c.x < minX) minX = c.x;
+        if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.y > maxY) maxY = c.y;
+      });
+      const boundW = isFinite(minX) && maxX > minX ? (maxX - minX) : (currentRoom.width || 8);
+      const boundD = isFinite(minY) && maxY > minY ? (maxY - minY) : (currentRoom.depth || 6);
+      const baseW = Math.max(boundW, currentRoom.width || 8, 4) + 1.5;
+      const baseD = Math.max(boundD, currentRoom.depth || 6, 4) + 1.5;
+      let defaultBaseColorHex = 0x1e293b;
+      if (currentRoom.floorColor) {
+        defaultBaseColorHex = parseInt(currentRoom.floorColor.replace('#', '0x'), 16);
+      }
+      const baseFloorMaterial = new THREE.MeshStandardMaterial({
+        color: defaultBaseColorHex,
+        roughness: 0.6,
+        metalness: 0.05,
+      });
+      const baseFloorGeo = new THREE.PlaneGeometry(baseW, baseD);
+      const baseFloorMesh = new THREE.Mesh(baseFloorGeo, baseFloorMaterial);
+      baseFloorMesh.rotation.x = -Math.PI / 2;
+      baseFloorMesh.position.y = 0; // Nível 0 do piso padrão
+      baseFloorMesh.receiveShadow = true;
+      floorsGroup.add(baseFloorMesh);
+
+      // 2.2 Pisos gerados de cada ambiente elevados pelo menos 3mm (0.0035m) acima do piso padrão
+      const GENERATED_FLOOR_ELEVATION = 0.0035; // 3.5mm (>= 3 milímetros) acima do piso padrão
       allRooms.forEach((room) => {
         if (room.corners.length < 3) return;
 
@@ -2389,7 +2419,7 @@ export default function FloorPlannerModal({
         const floorGeo = new THREE.ShapeGeometry(shape);
         const floorMesh = new THREE.Mesh(floorGeo, roomFloorMaterial);
         floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.y = 0.005;
+        floorMesh.position.y = GENERATED_FLOOR_ELEVATION;
         floorMesh.receiveShadow = true;
 
         floorsGroup.add(floorMesh);

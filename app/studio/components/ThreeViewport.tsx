@@ -1513,6 +1513,18 @@ export default function ThreeViewport({
         floorMat.map = initialTex;
       }
 
+      // 1. Piso padrão (base floor slab) at y = 0
+      const baseFloorGeo = new THREE.PlaneGeometry(room.width, room.depth);
+      const baseFloor = new THREE.Mesh(baseFloorGeo, floorMat);
+      baseFloor.rotation.x = -Math.PI / 2;
+      baseFloor.position.y = 0;
+      baseFloor.receiveShadow = true;
+      baseFloor.userData = { isFloor: true, isBaseFloor: true, w: room.width, d: room.depth };
+      floorMeshRef.current = baseFloor;
+      floorGroupRef.current.add(baseFloor);
+
+      // 2. Pisos gerados (custom floors) elevados pelo menos 3mm (0.0035m) acima do piso padrão
+      const GENERATED_FLOOR_ELEVATION = 0.0035; // 3.5mm (>= 3 milímetros) acima do piso padrão (y = 0)
       room.customFloors!.forEach((fl) => {
         if (!fl.points || fl.points.length < 3) return;
         const shape = new THREE.Shape();
@@ -1522,12 +1534,21 @@ export default function ThreeViewport({
         }
         shape.closePath();
 
+        let customMat = floorMat;
+        if (fl.color) {
+          customMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(fl.color),
+            roughness: room.floorRoughness ?? 0.55,
+            metalness: room.floorMetalness ?? 0.02,
+          });
+        }
+
         const floorGeo = new THREE.ShapeGeometry(shape);
-        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        const floorMesh = new THREE.Mesh(floorGeo, customMat);
         floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.y = 0.001;
+        floorMesh.position.y = GENERATED_FLOOR_ELEVATION;
         floorMesh.receiveShadow = true;
-        floorMesh.userData = { isFloor: true, id: fl.id };
+        floorMesh.userData = { isFloor: true, id: fl.id, name: fl.name };
         floorGroupRef.current.add(floorMesh);
       });
 
@@ -1640,7 +1661,7 @@ export default function ThreeViewport({
     }
     const maxDim = Math.max(room.width, room.depth);
     const grid = new THREE.GridHelper(maxDim, maxDim * 2, '#3b82f6', '#334155');
-    grid.position.y = 0.002;
+    grid.position.y = 0.004; // Slightly above generated floors (0.0035m) so grid overlay remains clearly visible when active
     grid.visible = showGrid;
     sceneRef.current.add(grid);
     gridHelperRef.current = grid;
