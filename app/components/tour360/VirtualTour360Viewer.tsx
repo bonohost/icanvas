@@ -26,7 +26,16 @@ import {
   Layers,
   MapPin,
   Crosshair,
-  Sliders
+  Sliders,
+  Trash2,
+  Save,
+  Download,
+  UploadCloud,
+  FolderOpen,
+  RefreshCw,
+  FileJson,
+  AlertTriangle,
+  Move
 } from 'lucide-react';
 import {
   INITIAL_TOUR_SCENES,
@@ -35,6 +44,16 @@ import {
   ObjectAnnotation,
   SphericalPosition
 } from '@/app/data/virtualTourData';
+
+export interface TourSimulation {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  totalHotspots: number;
+  totalAnnotations: number;
+  scenes: Record<string, VirtualTourScene>;
+}
 
 // Helper: Convert spherical position to Cartesian coordinates on inverted equirectangular sphere
 function sphericalToCartesian(pos: SphericalPosition, radius = 480): THREE.Vector3 {
@@ -113,6 +132,18 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
     description: '',
     price: '',
   });
+
+  // Simulations & Local Storage State
+  const [simulations, setSimulations] = useState<TourSimulation[]>([]);
+  const [simulationsModalOpen, setSimulationsModalOpen] = useState<boolean>(false);
+  const [simulationsTab, setSimulationsTab] = useState<'simulations' | 'scene_points' | 'import_export'>('simulations');
+  const [newSimName, setNewSimName] = useState<string>('');
+  const [importJsonText, setImportJsonText] = useState<string>('');
+
+  // 3D Hotspot & Annotation Interactive Dragging State
+  const [draggingItem, setDraggingItem] = useState<{ id: string; type: 'hotspot' | 'annotation' } | null>(null);
+  const dragStateRef = useRef<{ id: string; type: 'hotspot' | 'annotation'; isDragging: boolean } | null>(null);
+  const wasJustDraggingRef = useRef<boolean>(false);
 
   // Current Scene Data
   const currentScene = useMemo(() => scenes[currentSceneId] || scenes.kitchen, [scenes, currentSceneId]);
@@ -404,6 +435,7 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const state = threeRef.current;
       if (!state) return;
+      if (dragStateRef.current?.isDragging) return;
       state.isUserInteracting = true;
 
       const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
@@ -616,6 +648,7 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
   // Raycasting for Editor Mode (Clicking 3D Sphere to capture Yaw, Pitch, U, V)
   const handleCanvasClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!isEditorMode || !threeRef.current || !canvasMountRef.current) return;
+    if (dragStateRef.current?.isDragging || wasJustDraggingRef.current) return;
 
     const state = threeRef.current;
     // Check if user was dragging or just clicking
@@ -637,9 +670,9 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
       const hit = intersects[0];
       if (hit.uv) {
         const u = parseFloat(hit.uv.x.toFixed(3));
-        const v = parseFloat(hit.uv.y.toFixed(3));
+        const v = parseFloat((1 - hit.uv.y).toFixed(3));
         const yaw = parseFloat(((hit.uv.x - 0.5) * 360).toFixed(1));
-        const pitch = parseFloat(((0.5 - hit.uv.y) * 180).toFixed(1));
+        const pitch = parseFloat(((0.5 - v) * 180).toFixed(1));
 
         setEditorPoint({ yaw, pitch, u, v });
         setEditorFormData({
@@ -656,6 +689,312 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
     }
   };
 
+  // Synchronized Scene Updater with LocalStorage persistence
+  const updateScenes = useCallback(
+    (newScenes: Record<string, VirtualTourScene> | ((prev: Record<string, VirtualTourScene>) => Record<string, VirtualTourScene>)) => {
+      setScenes((prev) => {
+        const next = typeof newScenes === 'function' ? newScenes(prev) : newScenes;
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('icanvas_active_tour_draft_v5', JSON.stringify(next));
+          }
+        } catch (e) {
+          console.warn('Erro ao salvar no localStorage:', e);
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  // Load saved simulations and active draft from localStorage on mount
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const savedSimsStr = localStorage.getItem('icanvas_tour_simulations');
+        if (savedSimsStr) {
+          setSimulations(JSON.parse(savedSimsStr));
+        }
+        const activeDraftStr = localStorage.getItem('icanvas_active_tour_draft_v5');
+        if (activeDraftStr) {
+          const parsed = JSON.parse(activeDraftStr);
+          if (parsed && typeof parsed === 'object' && parsed.kitchen) {
+            setScenes(parsed);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar dados do localStorage:', e);
+    }
+  }, []);
+
+  // Delete individual hotspot
+  const handleDeleteHotspot = useCallback(
+    (hotspotId: string) => {
+      updateScenes((prev) => {
+        const active = { ...prev[currentSceneId] };
+        active.navigationHotspots = active.navigationHotspots.filter((h) => h.id !== hotspotId);
+        return { ...prev, [currentSceneId]: active };
+      });
+      showToast('Portal de navegação excluído.');
+    },
+    [currentSceneId, updateScenes, showToast]
+  );
+
+  // Delete individual annotation
+  const handleDeleteAnnotation = useCallback(
+    (annotationId: string) => {
+      updateScenes((prev) => {
+        const active = { ...prev[currentSceneId] };
+        active.objectAnnotations = active.objectAnnotations.filter((a) => a.id !== annotationId);
+        return { ...prev, [currentSceneId]: active };
+      });
+      setSelectedAnnotation((curr) => (curr?.id === annotationId ? null : curr));
+      showToast('Anotação de objeto excluída.');
+    },
+    [currentSceneId, updateScenes, showToast]
+  );
+
+  // -------------------------------------------------------------
+  // 3D Spherical Dragging Handlers (Interactive Repositioning)
+  // -------------------------------------------------------------
+  const handleStartDrag = useCallback(
+    (e: React.PointerEvent, id: string, type: 'hotspot' | 'annotation') => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      if (threeRef.current) {
+        threeRef.current.isUserInteracting = false;
+      }
+
+      dragStateRef.current = { id, type, isDragging: true };
+      setDraggingItem({ id, type });
+    },
+    []
+  );
+
+  const onDragPointerMove = useCallback(
+    (event: PointerEvent) => {
+      const drag = dragStateRef.current;
+      if (!drag || !drag.isDragging || !threeRef.current || !canvasMountRef.current) return;
+
+      const rect = canvasMountRef.current.getBoundingClientRect();
+      const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), threeRef.current.camera);
+
+      const intersects = raycaster.intersectObject(threeRef.current.sphere1);
+      if (intersects.length > 0 && intersects[0].uv) {
+        const uv = intersects[0].uv;
+        const u = parseFloat(uv.x.toFixed(3));
+        const v = parseFloat((1 - uv.y).toFixed(3));
+        const yaw = parseFloat(((uv.x - 0.5) * 360).toFixed(1));
+        const pitch = parseFloat(((0.5 - v) * 180).toFixed(1));
+
+        const newPos: SphericalPosition = {
+          u,
+          v,
+          yaw,
+          pitch,
+          distance: 480,
+        };
+
+        setScenes((prev) => {
+          const active = { ...prev[currentSceneId] };
+          if (drag.type === 'hotspot') {
+            active.navigationHotspots = active.navigationHotspots.map((h) =>
+              h.id === drag.id ? { ...h, position: newPos } : h
+            );
+          } else {
+            active.objectAnnotations = active.objectAnnotations.map((a) =>
+              a.id === drag.id ? { ...a, position: newPos } : a
+            );
+          }
+          return { ...prev, [currentSceneId]: active };
+        });
+      }
+    },
+    [currentSceneId]
+  );
+
+  const onDragPointerUp = useCallback(() => {
+    if (dragStateRef.current?.isDragging) {
+      wasJustDraggingRef.current = true;
+      setTimeout(() => {
+        wasJustDraggingRef.current = false;
+      }, 200);
+
+      dragStateRef.current = null;
+      setDraggingItem(null);
+
+      // Persist to localStorage draft
+      try {
+        if (typeof window !== 'undefined') {
+          setScenes((latest) => {
+            localStorage.setItem('icanvas_active_tour_draft_v5', JSON.stringify(latest));
+            return latest;
+          });
+        }
+      } catch (e) {
+        console.warn('Erro ao salvar nova posição no localStorage:', e);
+      }
+
+      showToast('Posição 3D atualizada e salva!');
+    }
+  }, [showToast]);
+
+  // Window pointer listeners for smooth 3D dragging
+  useEffect(() => {
+    const handleMove = (e: PointerEvent) => onDragPointerMove(e);
+    const handleUp = () => onDragPointerUp();
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+    };
+  }, [onDragPointerMove, onDragPointerUp]);
+
+  // Clear all points of current scene
+  const handleClearCurrentScenePoints = useCallback(() => {
+    if (!window.confirm(`Deseja realmente limpar todos os portais e objetos da cena "${currentScene.title}"?`)) {
+      return;
+    }
+    updateScenes((prev) => {
+      const active = { ...prev[currentSceneId] };
+      active.navigationHotspots = [];
+      active.objectAnnotations = [];
+      return { ...prev, [currentSceneId]: active };
+    });
+    setSelectedAnnotation(null);
+    showToast(`Pontos da cena "${currentScene.title}" foram limpos.`);
+  }, [currentScene.title, currentSceneId, updateScenes, showToast]);
+
+  // Clear all points of the entire tour (all 6 scenes)
+  const handleClearEntireTourPoints = useCallback(() => {
+    if (!window.confirm('ATENÇÃO: Deseja apagar todos os portais e objetos de TODOS os 6 cômodos para começar o mapeamento do zero?')) {
+      return;
+    }
+    updateScenes((prev) => {
+      const next: Record<string, VirtualTourScene> = {};
+      Object.keys(prev).forEach((key) => {
+        next[key] = {
+          ...prev[key],
+          navigationHotspots: [],
+          objectAnnotations: [],
+        };
+      });
+      return next;
+    });
+    setSelectedAnnotation(null);
+    showToast('Todos os pontos do passeio foram apagados. Pronto para novo mapeamento!');
+  }, [updateScenes, showToast]);
+
+  // Reset tour to original factory settings
+  const handleResetToInitialTour = useCallback(() => {
+    if (!window.confirm('Deseja restaurar as configurações e pontos originais de fábrica do Passeio Virtual?')) {
+      return;
+    }
+    updateScenes(INITIAL_TOUR_SCENES);
+    setSelectedAnnotation(null);
+    showToast('Passeio restaurado para o padrão original!');
+  }, [updateScenes, showToast]);
+
+  // Save current simulation to list
+  const handleSaveSimulation = useCallback(
+    (customName?: string) => {
+      const totalH = Object.values(scenes).reduce((acc, s) => acc + s.navigationHotspots.length, 0);
+      const totalA = Object.values(scenes).reduce((acc, s) => acc + s.objectAnnotations.length, 0);
+      const name =
+        (customName || newSimName).trim() ||
+        `Simulação ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+      const newSim: TourSimulation = {
+        id: `sim_${Date.now()}`,
+        name,
+        createdAt: new Date().toLocaleString('pt-BR'),
+        updatedAt: new Date().toLocaleString('pt-BR'),
+        totalHotspots: totalH,
+        totalAnnotations: totalA,
+        scenes,
+      };
+
+      const nextSims = [newSim, ...simulations];
+      setSimulations(nextSims);
+      try {
+        localStorage.setItem('icanvas_tour_simulations', JSON.stringify(nextSims));
+      } catch (e) {
+        console.warn('Erro ao salvar no localStorage:', e);
+      }
+      setNewSimName('');
+      showToast(`Simulação "${name}" salva no LocalStorage!`);
+    },
+    [scenes, newSimName, simulations, showToast]
+  );
+
+  // Load a saved simulation
+  const handleLoadSimulation = useCallback(
+    (sim: TourSimulation) => {
+      updateScenes(sim.scenes);
+      setSelectedAnnotation(null);
+      showToast(`Simulação "${sim.name}" carregada!`);
+    },
+    [updateScenes, showToast]
+  );
+
+  // Delete a simulation from list
+  const handleDeleteSimulation = useCallback(
+    (simId: string) => {
+      const nextSims = simulations.filter((s) => s.id !== simId);
+      setSimulations(nextSims);
+      try {
+        localStorage.setItem('icanvas_tour_simulations', JSON.stringify(nextSims));
+      } catch (e) {
+        console.warn('Erro ao atualizar localStorage:', e);
+      }
+      showToast('Simulação removida da lista local.');
+    },
+    [simulations, showToast]
+  );
+
+  // Download complete JSON file
+  const handleDownloadJSON = useCallback(() => {
+    const jsonStr = JSON.stringify(scenes, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tour360_simulacao_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Download do arquivo JSON iniciado!');
+  }, [scenes, showToast]);
+
+  // Import JSON code
+  const handleImportJSON = useCallback(() => {
+    try {
+      const parsed = JSON.parse(importJsonText);
+      if (typeof parsed !== 'object' || !parsed.kitchen) {
+        showToast('JSON inválido ou formato incompatível.');
+        return;
+      }
+      updateScenes(parsed);
+      setImportJsonText('');
+      setSimulationsModalOpen(false);
+      showToast('Passeio importado e aplicado com sucesso!');
+    } catch (e) {
+      showToast('Erro de sintaxe no JSON colado.');
+    }
+  }, [importJsonText, updateScenes, showToast]);
+
   // Add Item in Editor Mode
   const handleSaveEditorItem = () => {
     if (!editorPoint) return;
@@ -668,7 +1007,7 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
       distance: 480,
     };
 
-    setScenes((prev) => {
+    updateScenes((prev) => {
       const activeScene = { ...prev[currentSceneId] };
 
       if (editorItemType === 'hotspot') {
@@ -821,6 +1160,8 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
         {/* Navigation Hotspots */}
         {currentScene.navigationHotspots?.map((hotspot) => {
           const target = scenes[hotspot.targetSceneId];
+          const isBeingDragged = draggingItem?.id === hotspot.id;
+
           return (
             <div
               key={hotspot.id}
@@ -833,15 +1174,19 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
                 left: 0,
                 willChange: 'transform, opacity',
                 opacity: 0,
-                transition: 'opacity 0.25s ease-out',
+                transition: isBeingDragged ? 'none' : 'opacity 0.25s ease-out',
+                zIndex: isBeingDragged ? 50 : 20,
               }}
               className="group pointer-events-auto flex flex-col items-center cursor-pointer"
-              onClick={() => transitionToScene(hotspot.targetSceneId, hotspot.targetEntryView)}
+              onClick={() => {
+                if (wasJustDraggingRef.current) return;
+                transitionToScene(hotspot.targetSceneId, hotspot.targetEntryView);
+              }}
               onMouseEnter={() => setHoveredHotspot(hotspot)}
               onMouseLeave={() => setHoveredHotspot(null)}
             >
               {/* Destination Hover Preview Thumbnail */}
-              {target && (
+              {target && !isEditorMode && !isBeingDragged && (
                 <div className="absolute bottom-full mb-3 hidden group-hover:flex flex-col items-center p-1.5 bg-slate-950/90 backdrop-blur-xl border border-cyan-400/40 rounded-xl shadow-[0_10px_30px_rgba(6,182,212,0.35)] w-48 transition-all animate-in fade-in zoom-in-95 duration-200">
                   <div className="relative w-full h-24 rounded-lg overflow-hidden mb-1.5">
                     <img src={target.thumbnailUrl} alt={target.title} className="w-full h-full object-cover" />
@@ -857,60 +1202,167 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
                 </div>
               )}
 
-              {/* Pulsing Beacon Button */}
+              {/* Pulsing Beacon Button & Edit Badges */}
               <div className="relative flex items-center justify-center">
                 <span className="absolute w-12 h-12 rounded-full bg-cyan-400/20 animate-ping" />
                 <span className="absolute w-10 h-10 rounded-full bg-cyan-500/30 animate-pulse" />
-                <div className="relative w-11 h-11 rounded-full bg-slate-900/85 backdrop-blur-xl border border-cyan-400/70 shadow-[0_0_20px_rgba(6,182,212,0.6)] flex items-center justify-center transition-all duration-300 group-hover:scale-115 group-hover:border-cyan-300 group-hover:bg-cyan-950">
+                
+                <div
+                  className={`relative w-11 h-11 rounded-full bg-slate-900/85 backdrop-blur-xl border flex items-center justify-center transition-all duration-300 ${
+                    isBeingDragged
+                      ? 'scale-125 border-cyan-300 bg-cyan-950 ring-4 ring-cyan-400/60 shadow-[0_0_25px_rgba(6,182,212,0.9)]'
+                      : isEditorMode
+                      ? 'border-cyan-400/90 shadow-[0_0_20px_rgba(6,182,212,0.7)] ring-2 ring-cyan-500/40 group-hover:scale-110'
+                      : 'border-cyan-400/70 shadow-[0_0_20px_rgba(6,182,212,0.6)] group-hover:scale-115 group-hover:border-cyan-300 group-hover:bg-cyan-950'
+                  }`}
+                >
                   {renderHotspotIcon(hotspot.icon)}
                 </div>
+
+                {/* Top-Left Badge: Delete with Trash Icon (Lixeira) */}
+                {isEditorMode && (
+                  <button
+                    type="button"
+                    title="Excluir este portal"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleDeleteHotspot(hotspot.id);
+                    }}
+                    className="absolute -top-2.5 -left-2.5 z-30 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 border-2 border-white shadow-[0_0_12px_rgba(239,68,68,0.9)] flex items-center justify-center text-white transition-all transform hover:scale-125 active:scale-95 cursor-pointer pointer-events-auto"
+                  >
+                    <Trash2 className="w-3 h-3 text-white" />
+                  </button>
+                )}
+
+                {/* Bottom-Right Badge: 3D Drag / Reposition (Arrastar tridimensional) */}
+                {isEditorMode && (
+                  <button
+                    type="button"
+                    title="Arrastar tridimensionalmente na cena 3D"
+                    onPointerDown={(e) => handleStartDrag(e, hotspot.id, 'hotspot')}
+                    className={`absolute -bottom-2.5 -right-2.5 z-30 w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-slate-950 transition-all transform hover:scale-125 active:scale-95 cursor-grab active:cursor-grabbing pointer-events-auto ${
+                      isBeingDragged
+                        ? 'bg-cyan-300 ring-4 ring-cyan-400/80 shadow-[0_0_15px_rgba(6,182,212,1)] scale-110'
+                        : 'bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.9)]'
+                    }`}
+                  >
+                    <Move className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                  </button>
+                )}
               </div>
 
+              {/* Live Coordinates Pill while dragging */}
+              {isBeingDragged && (
+                <div className="mt-1 px-2.5 py-0.5 rounded-full bg-cyan-950/95 border border-cyan-400 text-[10px] font-mono text-cyan-200 shadow-xl font-bold whitespace-nowrap">
+                  U: {hotspot.position.u} | V: {hotspot.position.v} ({hotspot.position.yaw}°, {hotspot.position.pitch}°)
+                </div>
+              )}
+
               {/* Label Badge */}
-              <div className="mt-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 shadow-lg group-hover:border-cyan-400/60 transition-all">
-                <span className="text-xs font-semibold text-white tracking-wide whitespace-nowrap drop-shadow">
-                  {hotspot.label}
-                </span>
-              </div>
+              {!isBeingDragged && (
+                <div className="mt-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 shadow-lg group-hover:border-cyan-400/60 transition-all">
+                  <span className="text-xs font-semibold text-white tracking-wide whitespace-nowrap drop-shadow">
+                    {hotspot.label}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
 
         {/* Object Annotations (POIs) */}
         {showAnnotations &&
-          currentScene.objectAnnotations?.map((obj) => (
-            <div
-              key={obj.id}
-              ref={(el) => {
-                annotationDomRefs.current[obj.id] = el;
-              }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                willChange: 'transform, opacity',
-                opacity: 0,
-                transition: 'opacity 0.25s ease-out',
-              }}
-              className="group pointer-events-auto flex flex-col items-center cursor-pointer"
-              onClick={() => focusOnAnnotation(obj)}
-            >
-              {/* Pulsing Pin */}
-              <div className="relative flex items-center justify-center">
-                <span className="absolute w-8 h-8 rounded-full bg-amber-400/20 animate-ping" />
-                <div className="relative w-8 h-8 rounded-full bg-slate-900/90 backdrop-blur-lg border border-amber-400/70 shadow-[0_0_15px_rgba(251,191,36,0.6)] flex items-center justify-center transition-all duration-300 group-hover:scale-120 group-hover:border-amber-300 group-hover:bg-amber-950">
-                  <Tag className="w-4 h-4 text-amber-300" />
-                </div>
-              </div>
+          currentScene.objectAnnotations?.map((obj) => {
+            const isBeingDragged = draggingItem?.id === obj.id;
 
-              {/* Object Quick Title */}
-              <div className="mt-1 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/10 shadow group-hover:border-amber-400/50 transition-all max-w-[150px] truncate">
-                <span className="text-[11px] font-medium text-amber-100 truncate block">
-                  {obj.title}
-                </span>
+            return (
+              <div
+                key={obj.id}
+                ref={(el) => {
+                  annotationDomRefs.current[obj.id] = el;
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  willChange: 'transform, opacity',
+                  opacity: 0,
+                  transition: isBeingDragged ? 'none' : 'opacity 0.25s ease-out',
+                  zIndex: isBeingDragged ? 50 : 20,
+                }}
+                className="group pointer-events-auto flex flex-col items-center cursor-pointer"
+                onClick={() => {
+                  if (wasJustDraggingRef.current) return;
+                  focusOnAnnotation(obj);
+                }}
+              >
+                {/* Pulsing Pin & Edit Badges */}
+                <div className="relative flex items-center justify-center">
+                  <span className="absolute w-8 h-8 rounded-full bg-amber-400/20 animate-ping" />
+                  <div
+                    className={`relative w-8 h-8 rounded-full bg-slate-900/90 backdrop-blur-lg border flex items-center justify-center transition-all duration-300 ${
+                      isBeingDragged
+                        ? 'scale-125 border-amber-300 bg-amber-950 ring-4 ring-amber-400/60 shadow-[0_0_20px_rgba(251,191,36,0.9)]'
+                        : isEditorMode
+                        ? 'border-amber-400/90 shadow-[0_0_15px_rgba(251,191,36,0.7)] ring-2 ring-amber-500/40 group-hover:scale-110'
+                        : 'border-amber-400/70 shadow-[0_0_15px_rgba(251,191,36,0.6)] group-hover:scale-120 group-hover:border-amber-300 group-hover:bg-amber-950'
+                    }`}
+                  >
+                    <Tag className="w-4 h-4 text-amber-300" />
+                  </div>
+
+                  {/* Top-Left Badge: Delete with Trash Icon (Lixeira) */}
+                  {isEditorMode && (
+                    <button
+                      type="button"
+                      title="Excluir este objeto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteAnnotation(obj.id);
+                      }}
+                      className="absolute -top-2 -left-2 z-30 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 border border-white shadow-[0_0_10px_rgba(239,68,68,0.9)] flex items-center justify-center text-white transition-all transform hover:scale-125 active:scale-95 cursor-pointer pointer-events-auto"
+                    >
+                      <Trash2 className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  )}
+
+                  {/* Bottom-Right Badge: 3D Drag / Reposition (Arrastar tridimensional) */}
+                  {isEditorMode && (
+                    <button
+                      type="button"
+                      title="Arrastar tridimensionalmente na cena 3D"
+                      onPointerDown={(e) => handleStartDrag(e, obj.id, 'annotation')}
+                      className={`absolute -bottom-2 -right-2 z-30 w-5 h-5 rounded-full border border-white flex items-center justify-center text-slate-950 transition-all transform hover:scale-125 active:scale-95 cursor-grab active:cursor-grabbing pointer-events-auto ${
+                        isBeingDragged
+                          ? 'bg-amber-300 ring-4 ring-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,1)] scale-110'
+                          : 'bg-amber-400 hover:bg-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.9)]'
+                      }`}
+                    >
+                      <Move className="w-3 h-3 text-slate-950 stroke-[2.5]" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Live Coordinates Pill while dragging */}
+                {isBeingDragged && (
+                  <div className="mt-1 px-2.5 py-0.5 rounded-full bg-amber-950/95 border border-amber-400 text-[10px] font-mono text-amber-200 shadow-xl font-bold whitespace-nowrap">
+                    U: {obj.position.u} | V: {obj.position.v} ({obj.position.yaw}°, {obj.position.pitch}°)
+                  </div>
+                )}
+
+                {/* Object Quick Title */}
+                {!isBeingDragged && (
+                  <div className="mt-1 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/10 shadow group-hover:border-amber-400/50 transition-all max-w-[150px] truncate">
+                    <span className="text-[11px] font-medium text-amber-100 truncate block">
+                      {obj.title}
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -940,6 +1392,36 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-950/80 backdrop-blur-2xl border border-white/15 p-1.5 rounded-2xl shadow-xl">
+          {/* Simulations & Points Manager Button */}
+          <button
+            onClick={() => {
+              setSimulationsTab('simulations');
+              setSimulationsModalOpen(true);
+            }}
+            title="Gerenciar Simulações Locais & Versões do Passeio"
+            className="px-2.5 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/35 text-cyan-300 border border-cyan-400/30 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Simulações</span>
+            {simulations.length > 0 && (
+              <span className="bg-cyan-500 text-[10px] font-bold text-slate-950 px-1.5 py-0.2 rounded-full">
+                {simulations.length}
+              </span>
+            )}
+          </button>
+
+          {/* Quick Clear Points Menu Button */}
+          <button
+            onClick={() => {
+              setSimulationsTab('scene_points');
+              setSimulationsModalOpen(true);
+            }}
+            title="Limpar ou Gerenciar Pontos Desta Cena"
+            className="p-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-all active:scale-95"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
           {/* Editor Mode Toggle */}
           <button
             onClick={() => {
@@ -1071,6 +1553,13 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
             >
               <Info className="w-3.5 h-3.5 text-amber-400" />
               Detalhes
+            </button>
+            <button
+              onClick={() => handleDeleteAnnotation(selectedAnnotation.id)}
+              title="Excluir este objeto permanentemente"
+              className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-300 transition-all flex items-center justify-center active:scale-95 border border-red-500/30"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </aside>
@@ -1253,6 +1742,427 @@ export default function VirtualTour360Viewer({ onFullscreenChange }: VirtualTour
               >
                 Salvar Ponto
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Simulations & Point Management Modal                          */}
+      {/* ------------------------------------------------------------- */}
+      {simulationsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-3xl max-h-[88vh] bg-slate-950/95 border border-cyan-500/40 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden text-white">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                    Simulações & Gestão de Pontos 360°
+                  </h2>
+                  <p className="text-[11px] text-gray-400">
+                    Limpe pontos em tempo real, salve versões locais no navegador e exporte o JSON.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSimulationsModalOpen(false)}
+                className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Tabs Navigation */}
+            <div className="flex border-b border-white/10 bg-slate-900/40 px-4 pt-2 gap-2">
+              <button
+                onClick={() => setSimulationsTab('simulations')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  simulationsTab === 'simulations'
+                    ? 'border-cyan-400 text-cyan-300'
+                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                Simulações Salvas ({simulations.length})
+              </button>
+              <button
+                onClick={() => setSimulationsTab('scene_points')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  simulationsTab === 'scene_points'
+                    ? 'border-cyan-400 text-cyan-300'
+                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                Limpar & Gerenciar Pontos
+              </button>
+              <button
+                onClick={() => setSimulationsTab('import_export')}
+                className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  simulationsTab === 'import_export'
+                    ? 'border-cyan-400 text-cyan-300'
+                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <FileJson className="w-3.5 h-3.5" />
+                Exportar / Importar JSON
+              </button>
+            </div>
+
+            {/* Modal Body Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 scrollbar-thin scrollbar-thumb-white/20 flex-1">
+              {/* TAB 1: Minhas Simulações Salvas */}
+              {simulationsTab === 'simulations' && (
+                <div className="space-y-5">
+                  {/* Save current state card */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 to-slate-900/80 border border-cyan-500/30 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+                    <div className="flex-1">
+                      <label className="text-[11px] font-bold text-cyan-300 uppercase block mb-1">
+                        Salvar Nova Simulação Local
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Opção A - Decorado Sem Portais Cozinha"
+                        value={newSimName}
+                        onChange={(e) => setNewSimName(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveSimulation();
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleSaveSimulation()}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all active:scale-95 shrink-0"
+                    >
+                      <Save className="w-4 h-4" />
+                      Salvar Simulação
+                    </button>
+                  </div>
+
+                  {/* List of saved simulations */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                      <span className="font-semibold text-gray-300">Simulações no LocalStorage</span>
+                      <span>Total: {simulations.length}</span>
+                    </div>
+
+                    {simulations.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl border border-dashed border-white/10 bg-slate-900/30 space-y-2">
+                        <FolderOpen className="w-8 h-8 text-gray-500 mx-auto" />
+                        <p className="text-xs text-gray-400">
+                          Nenhuma simulação salva ainda.
+                        </p>
+                        <p className="text-[11px] text-gray-500 max-w-md mx-auto">
+                          Faça alterações nos pontos (adicione ou remova portais e objetos) e salve uma versão acima para restaurá-la a qualquer momento!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {simulations.map((sim) => (
+                          <div
+                            key={sim.id}
+                            className="p-3.5 rounded-2xl bg-slate-900/70 border border-white/10 hover:border-cyan-500/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-white">{sim.name}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 font-mono">
+                                  {sim.totalHotspots} portais • {sim.totalAnnotations} objetos
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-400">
+                                Salvo em: {sim.createdAt}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+                              <button
+                                onClick={() => {
+                                  handleLoadSimulation(sim);
+                                  setSimulationsModalOpen(false);
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-400/30 text-xs font-semibold flex items-center gap-1 transition-all active:scale-95"
+                                title="Carregar esta simulação no Passeio 360"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Carregar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const jsonStr = JSON.stringify(sim.scenes, null, 2);
+                                  navigator.clipboard.writeText(jsonStr);
+                                  showToast(`JSON da simulação "${sim.name}" copiado!`);
+                                }}
+                                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs transition-all"
+                                title="Copiar código JSON desta simulação"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSimulation(sim.id)}
+                                className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/25 text-red-400 text-xs transition-all"
+                                title="Excluir simulação do armazenamento local"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: Limpar & Gerenciar Pontos em Tempo Real */}
+              {simulationsTab === 'scene_points' && (
+                <div className="space-y-6">
+                  {/* Bulk Clear Actions Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3.5 rounded-2xl bg-red-950/20 border border-red-500/30 flex flex-col justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-red-300">
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Limpar Cena Atual
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Remove todos os portais e objetos de <strong>{currentScene.title}</strong>.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleClearCurrentScenePoints}
+                        className="w-full py-2 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-200 border border-red-500/40 text-xs font-semibold transition-all active:scale-95"
+                      >
+                        Limpar Esta Cena
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 flex flex-col justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Limpar Todo o Passeio
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Zera todos os pontos dos 6 cômodos para começar o mapeamento do zero.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleClearEntireTourPoints}
+                        className="w-full py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40 text-xs font-semibold transition-all active:scale-95"
+                      >
+                        Zerar Todos os 6 Cômodos
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Restaurar Padrão
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Recarrega a calibragem padrão original de fábrica de todos os ambientes.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleResetToInitialTour}
+                        className="w-full py-2 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-400/40 text-xs font-semibold transition-all active:scale-95"
+                      >
+                        Restaurar Fábrica
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Scene Hotspots Listing */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-gray-300 px-1">
+                      <span className="flex items-center gap-1.5">
+                        <DoorOpen className="w-4 h-4 text-cyan-400" />
+                        Portais de Navegação em "{currentScene.title}" ({currentScene.navigationHotspots.length})
+                      </span>
+                    </div>
+
+                    {currentScene.navigationHotspots.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-slate-900/40 border border-white/5 text-[11px] text-gray-400 italic text-center">
+                        Nenhum portal nesta cena. Use o "Modo Editor" para adicionar portais clicando na esfera 360°.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {currentScene.navigationHotspots.map((hs) => {
+                          const targetScene = scenes[hs.targetSceneId];
+                          return (
+                            <div
+                              key={hs.id}
+                              className="p-3 rounded-xl bg-slate-900/60 border border-white/10 flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+                                  {renderHotspotIcon(hs.icon)}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-white">{hs.label}</div>
+                                  <div className="text-[10px] text-gray-400">
+                                    Destino: <span className="text-cyan-300 font-medium">{targetScene?.title || hs.targetSceneId}</span> • Coords: U={hs.position.u} V={hs.position.v}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteHotspot(hs.id)}
+                                className="p-2 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-300 transition-all"
+                                title="Excluir este portal"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Active Scene Annotations Listing */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-gray-300 px-1">
+                      <span className="flex items-center gap-1.5">
+                        <Tag className="w-4 h-4 text-amber-400" />
+                        Objetos & Mobiliário em "{currentScene.title}" ({currentScene.objectAnnotations.length})
+                      </span>
+                    </div>
+
+                    {currentScene.objectAnnotations.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-slate-900/40 border border-white/5 text-[11px] text-gray-400 italic text-center">
+                        Nenhum objeto marcado nesta cena. Ative o "Modo Editor" e clique nos móveis para marcar especificações e preços.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {currentScene.objectAnnotations.map((obj) => (
+                          <div
+                            key={obj.id}
+                            className="p-3 rounded-xl bg-slate-900/60 border border-white/10 flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+                                <Tag className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-white flex items-center gap-2">
+                                  {obj.title}
+                                  {obj.price && (
+                                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">
+                                      {obj.price}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  Categoria: <span className="text-amber-200">{obj.category}</span> • U={obj.position.u} V={obj.position.v}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setSimulationsModalOpen(false);
+                                  focusOnAnnotation(obj);
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 text-xs font-medium"
+                              >
+                                Ver no 3D
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAnnotation(obj.id)}
+                                className="p-2 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-300 transition-all"
+                                title="Excluir este objeto"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: Exportar / Importar JSON */}
+              {simulationsTab === 'import_export' && (
+                <div className="space-y-6">
+                  {/* Export Options */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-gray-300 uppercase block">
+                      Exportar Configuração Atual
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        onClick={handleDownloadJSON}
+                        className="p-4 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 transition-all flex items-center gap-3 text-left group"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-cyan-500/20 group-hover:bg-cyan-500/30 text-cyan-300 flex items-center justify-center shrink-0">
+                          <Download className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-cyan-200">
+                            Baixar Arquivo .JSON
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            Download direto do arquivo com todas as 6 cenas e coordenadas.
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={handleCopyTourJSON}
+                        className="p-4 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-white/15 hover:border-cyan-400 transition-all flex items-center gap-3 text-left group"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-white/10 group-hover:bg-cyan-500/20 text-cyan-300 flex items-center justify-center shrink-0">
+                          {copySuccess ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white group-hover:text-cyan-200">
+                            Copiar para Área de Transferência
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            Copia o código JSON formatado para colar em arquivos ou no chat.
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Import Option */}
+                  <div className="space-y-3 pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-gray-300 uppercase block">
+                        Importar Código JSON de um Passeio
+                      </label>
+                      <span className="text-[10px] text-gray-400">Substitui a configuração ativa</span>
+                    </div>
+
+                    <textarea
+                      rows={6}
+                      value={importJsonText}
+                      onChange={(e) => setImportJsonText(e.target.value)}
+                      placeholder='Cole aqui o JSON gerado (deve conter as chaves dos ambientes como "kitchen", "living_room", etc.)...'
+                      className="w-full bg-slate-950 border border-white/15 rounded-2xl p-3 text-xs font-mono text-cyan-200 focus:outline-none focus:border-cyan-400 resize-none"
+                    />
+
+                    <button
+                      onClick={handleImportJSON}
+                      disabled={!importJsonText.trim()}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 disabled:pointer-events-none text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      Importar e Aplicar Passeio em Tempo Real
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

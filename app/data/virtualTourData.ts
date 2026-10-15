@@ -98,19 +98,6 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           yaw: -60,
           pitch: -5
         }
-      },
-      {
-        id: "hs_1792019502796",
-        targetSceneId: "living_room",
-        label: "Ir para Sala de Estar Central",
-        icon: "door",
-        position: {
-          yaw: -72.4,
-          pitch: 8.1,
-          u: 0.299,
-          v: 0.455,
-          distance: 480
-        }
       }
     ],
     objectAnnotations: [
@@ -165,10 +152,11 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           555
         ],
         position: {
-          u: 0.516,
-          v: 0.517,
-          yaw: 5.9,
-          pitch: -3.1
+          u: 0.521,
+          v: 0.486,
+          yaw: 7.4,
+          pitch: 2.5,
+          distance: 480
         }
       },
       {
@@ -330,10 +318,11 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           530
         ],
         position: {
-          u: 0.486,
-          v: 0.645,
-          yaw: -5,
-          pitch: -26.1
+          u: 0.49,
+          v: 0.609,
+          yaw: -3.6,
+          pitch: -19.6,
+          distance: 480
         }
       },
       {
@@ -349,10 +338,11 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           695
         ],
         position: {
-          u: 0.655,
-          v: 0.454,
-          yaw: 55.8,
-          pitch: 8.3
+          u: 0.641,
+          v: 0.409,
+          yaw: 50.8,
+          pitch: 16.5,
+          distance: 480
         }
       }
     ]
@@ -370,47 +360,29 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
     },
     navigationHotspots: [
       {
-        id: "balcony_to_kitchen",
+        id: "hs_1792021366470",
         targetSceneId: "kitchen",
-        label: "Entrar na Cozinha Gourmet",
+        label: "Ir para Cozinha Gourmet",
         icon: "door",
-        box2d: [
-          325,
-          425,
-          675,
-          690
-        ],
         position: {
-          u: 0.557,
-          v: 0.5,
-          yaw: 20.7,
-          pitch: 0
-        },
-        targetEntryView: {
-          yaw: -110,
-          pitch: -10
+          yaw: -113.5,
+          pitch: 0.3,
+          u: 0.185,
+          v: 0.498,
+          distance: 480
         }
       },
       {
-        id: "balcony_to_living",
+        id: "hs_1792021383028",
         targetSceneId: "living_room",
-        label: "Entrar na Sala de Estar",
+        label: "Ir para Sala de Estar Central",
         icon: "door",
-        box2d: [
-          310,
-          755,
-          700,
-          965
-        ],
         position: {
-          u: 0.86,
-          v: 0.505,
-          yaw: 129.6,
-          pitch: -0.9
-        },
-        targetEntryView: {
-          yaw: -55,
-          pitch: 0
+          u: 0.24,
+          v: 0.532,
+          yaw: -93.4,
+          pitch: -5.7,
+          distance: 480
         }
       }
     ],
@@ -516,36 +488,15 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           290
         ],
         position: {
-          u: 0.145,
-          v: 0.495,
-          yaw: -127.8,
-          pitch: 0.9
+          u: 0.299,
+          v: 0.52,
+          yaw: -72.5,
+          pitch: -3.5,
+          distance: 480
         },
         targetEntryView: {
           yaw: 165,
           pitch: 0
-        }
-      },
-      {
-        id: "hallway_to_master_suite",
-        targetSceneId: "master_suite",
-        label: "Entrar na Suíte Master",
-        icon: "door",
-        box2d: [
-          325,
-          465,
-          675,
-          595
-        ],
-        position: {
-          u: 0.53,
-          v: 0.5,
-          yaw: 10.8,
-          pitch: 0
-        },
-        targetEntryView: {
-          yaw: 0,
-          pitch: -5
         }
       },
       {
@@ -580,6 +531,19 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           pitch: 2.7,
           u: 0.524,
           v: 0.485,
+          distance: 480
+        }
+      },
+      {
+        id: "hs_1792022963742",
+        targetSceneId: "kitchen",
+        label: "Ir para Cozinha Gourmet",
+        icon: "stairs",
+        position: {
+          yaw: -96.2,
+          pitch: 1.4,
+          u: 0.233,
+          v: 0.492,
           distance: 480
         }
       }
@@ -641,63 +605,6 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
         }
       },
       {
-        id: "suite_to_hallway",
-        targetSceneId: "hallway",
-        label: "Voltar para o Hall Íntimo",
-        icon: "door",
-        box2d: [
-          275,
-          825,
-          710,
-          915
-        ],
-        position: {
-          u: 0.87,
-          v: 0.492,
-          yaw: 133.2,
-          pitch: 1.4
-        },
-        targetEntryView: {
-          yaw: -125,
-          pitch: 0
-        }
-      },
-      {
-        id: "suite_to_balcony",
-        targetSceneId: "balcony",
-        label: "Ir para a Varanda Externa",
-        icon: "arrow",
-        box2d: [
-          325,
-          585,
-          645,
-          765
-        ],
-        position: {
-          u: 0.675,
-          v: 0.485,
-          yaw: 63,
-          pitch: 2.7
-        },
-        targetEntryView: {
-          yaw: -75,
-          pitch: 0
-        }
-      },
-      {
-        id: "hs_1792019456942",
-        targetSceneId: "kitchen",
-        label: "Ir para Cozinha Gourmet",
-        icon: "door",
-        position: {
-          yaw: -130.4,
-          pitch: -6.1,
-          u: 0.138,
-          v: 0.534,
-          distance: 480
-        }
-      },
-      {
         id: "hs_1792019603049",
         targetSceneId: "hallway",
         label: "Ir para Hall Íntimo e Galeria",
@@ -725,10 +632,11 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           560
         ],
         position: {
-          u: 0.427,
-          v: 0.62,
-          yaw: -26.1,
-          pitch: -21.6
+          u: 0.616,
+          v: 0.581,
+          yaw: 41.9,
+          pitch: -14.6,
+          distance: 480
         }
       },
       {
@@ -744,10 +652,11 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
           650
         ],
         position: {
-          u: 0.592,
-          v: 0.635,
-          yaw: 33.3,
-          pitch: -24.3
+          u: 0.509,
+          v: 0.6,
+          yaw: 3.1,
+          pitch: -17.9,
+          distance: 480
         }
       },
       {
@@ -784,28 +693,6 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
     },
     navigationHotspots: [
       {
-        id: "bath_to_suite_left",
-        targetSceneId: "master_suite",
-        label: "Voltar para a Suíte Master",
-        icon: "door",
-        box2d: [
-          210,
-          0,
-          775,
-          102
-        ],
-        position: {
-          u: 0.051,
-          v: 0.492,
-          yaw: -161.6,
-          pitch: 1.4
-        },
-        targetEntryView: {
-          yaw: -25,
-          pitch: -10
-        }
-      },
-      {
         id: "bath_to_hallway",
         targetSceneId: "hallway",
         label: "Sair para a Galeria / Hall",
@@ -828,37 +715,15 @@ export const INITIAL_TOUR_SCENES: Record<string, VirtualTourScene> = {
         }
       },
       {
-        id: "bath_to_suite_right",
+        id: "hs_1792023099569",
         targetSceneId: "master_suite",
-        label: "Voltar para a Suíte Master",
-        icon: "door",
-        box2d: [
-          215,
-          930,
-          780,
-          998
-        ],
+        label: "Ir para Suíte Master",
+        icon: "stairs",
         position: {
-          u: 0.964,
-          v: 0.497,
-          yaw: 167,
-          pitch: 0.5
-        },
-        targetEntryView: {
-          yaw: -25,
-          pitch: -10
-        }
-      },
-      {
-        id: "hs_1792019437765",
-        targetSceneId: "kitchen",
-        label: "Ir para Cozinha Gourmet",
-        icon: "door",
-        position: {
-          yaw: -174.5,
-          pitch: -7.7,
-          u: 0.015,
-          v: 0.543,
+          yaw: -170.3,
+          pitch: 3.3,
+          u: 0.027,
+          v: 0.482,
           distance: 480
         }
       }
